@@ -1,0 +1,59 @@
+{
+  "canisters": {
+    "governance": {
+      "type": "custom",
+      "wasm": "src/governance/governance.wasm",
+      "candid": "src/governance/governance.did"
+    },
+    "ledger": {
+      "type": "custom",
+      "wasm": "src/ledger/ledger.wasm",
+      "candid": "src/ledger/ledger.did"
+    },
+    "ledger_candid": {
+      "type": "custom",
+      "wasm": "src/ledger_candid/ledger_candid.wasm",
+      "candid": "src/ledger_candid/ledger_candid.did"
+    },
+    "deposits": {
+      "dependencies": [
+        "ledger",
+        "ledger_candid"
+      ],
+      "main": "src/deposits/deposits.mo",
+      "type": "motoko"
+    },
+    "token": {
+      "main": "src/token/token.mo",
+      "type": "motoko"
+    },
+    "website": {
+      "dependencies": [
+        "deposits",
+        "token"
+      ],
+      "frontend": {
+        "entrypoint": "src/website/src/index.html"
+      },
+      "source": [
+        "src/website/public",
+        "dist/website/"
+      ],
+      "type": "assets"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": "vessel sources"
+    }
+  },
+  "dfx": "0.8.4",
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:8000",
+      "type": "ephemeral"
+    }
+  },
+  "version": 1
+}
