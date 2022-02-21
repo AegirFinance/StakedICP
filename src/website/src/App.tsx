@@ -4,7 +4,7 @@ import * as deposits from "../../declarations/deposits";
 import * as token from "../../declarations/token";
 import React from 'react';
 import { BrowserRouter } from "react-router-dom";
-import { APR, DepositForm, Flex, Header, Statistics, TestnetBanner } from './components';
+import { APR, DepositForm, Flex, Header, PreviewPassword, Statistics, TestnetBanner } from './components';
 import { globalCss, keyframes, styled } from './stitches.config';
 import { Provider as WalletProvider } from "./wallet";
 
@@ -32,22 +32,24 @@ export default function App() {
     <div>
       <WalletProvider autoConnect whitelist={[deposits.canisterId, token.canisterId].filter(x => !!x) as string[]} host={process.env.NETWORK}>
         <BrowserRouter>
-          <TestnetBanner />
-          <Header />
-          <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
-              <APR />
-              <Features />
-          </Flex>
-          <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
-            <div>
-              <DepositForm />
-              <Subtitle>Statistics</Subtitle>
-              <Statistics />
-              <Subtitle>FAQ</Subtitle>
-              <FAQ />
-            </div>
-          </Flex>
-        </BrowserRouter>,
+	  <PreviewPassword>
+            <TestnetBanner />
+            <Header />
+            <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
+                <APR />
+                <Features />
+            </Flex>
+            <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
+              <div>
+                <DepositForm />
+                <Subtitle>Statistics</Subtitle>
+                <Statistics />
+                <Subtitle>FAQ</Subtitle>
+                <FAQ />
+              </div>
+            </Flex>
+	  </PreviewPassword>
+        </BrowserRouter>
       </WalletProvider>
     </div>
   );
