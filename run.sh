@@ -100,7 +100,7 @@ echo
 dfx canister install ledger_candid --mode=reinstall
 
 dfx canister install token --mode=reinstall --argument "$(cat << EOM
-("", "Staked ICP", "stICP", 8, 1, "$(dfx canister id deposits)", 10_000)
+("", "Staked ICP", "stICP", 8, 100_000_000, "$(dfx canister id deposits)", 10_000)
 EOM
 )"
 
