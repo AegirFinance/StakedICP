@@ -18,12 +18,13 @@
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "paths": { "*": ["./types/*"] },
+    "paths": {
+      "*": [ "./types/*" ]
+    },
     "downlevelIteration": true
   },
   "include": [
     "./src/website/**/*",
-    "./src/declarations/**/*",
     "./types/**/*"
   ],
   "exclude": [
