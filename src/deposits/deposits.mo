@@ -5,6 +5,7 @@ import Buffer "mo:base/Buffer";
 import Debug "mo:base/Debug";
 import Hash "mo:base/Hash";
 import Iter "mo:base/Iter";
+import Nat "mo:base/Nat";
 import Nat64 "mo:base/Nat64";
 import Option "mo:base/Option";
 import P "mo:base/Prelude";
@@ -159,42 +160,87 @@ shared(init_msg) actor class Deposits(args: {
             account = stakingNeuronAccountId_
         });
 
-        let beforeSupply : Nat64 = Nat64.fromNat(await token.totalSupply());
-
-        // TODO: This won't account for burns
-        let toApply = neuronBalance.e8s - beforeSupply;
-
-        if (toApply == 0) {
-            return {
-                timestamp = now;
-                supply = {
-                    before = { e8s = beforeSupply };
-                    after = { e8s = beforeSupply };
-                };
-                applied = { e8s = toApply };
-                remainder = { e8s = 0 : Nat64 };
-            };
-        };
-
-        assert(toApply > 0);
-
-        let remainder = await token.applyInterest(Nat64.toNat(toApply));
-        let afterSupply = await token.totalSupply();
-
-        let result : ApplyInterestResult = {
-            timestamp = now;
-            supply = {
-              before = { e8s = beforeSupply };
-              after = { e8s = Nat64.fromNat(afterSupply) };
-            };
-            applied = { e8s = toApply };
-            remainder = { e8s = Nat64.fromNat(remainder) };
-        };
+        let result = await applyInterestToToken(now, Nat64.toNat(neuronBalance.e8s));
 
         appliedInterest.add(result);
 
         return result;
     };
+
+    private func getAllHolders(): async [(Principal, Nat)] {
+        let info = await token.getTokenInfo();
+        // *2 here is because this is not atomic, so if anyone joins in the
+        // meantime.
+        return await token.getHolders(0, info.holderNumber*2);
+    };
+
+    private func applyInterestToToken(now: Time.Time, neuronBalance: Nat): async ApplyInterestResult {
+        let holders = await getAllHolders();
+
+        // Calculate everything
+        var beforeSupply : Nat = 0;
+        for (i in Iter.range(0, holders.size() - 1)) {
+            let (_, balance) = holders[i];
+            beforeSupply += balance;
+        };
+
+        // TODO: This won't account for burns
+        assert(neuronBalance >= beforeSupply);
+        let interest = neuronBalance - beforeSupply;
+
+        if (interest == 0) {
+            return {
+                timestamp = now;
+                supply = {
+                    before = { e8s = Nat64.fromNat(beforeSupply) };
+                    after = { e8s = Nat64.fromNat(beforeSupply) };
+                };
+                applied = { e8s = 0 : Nat64 };
+                remainder = { e8s = 0 : Nat64 };
+            };
+        };
+        assert(interest > 0);
+
+        var remainder = interest;
+
+        var mints : [(Principal, Nat)] = [];
+        var afterSupply : Nat = 0;
+        for (i in Iter.range(0, holders.size() - 1)) {
+            let (to, balance) = holders[i];
+            let share = (interest * balance) / beforeSupply;
+            if (share > 0) {
+                mints := Array.append(mints, [(to, share)]);
+            };
+            assert(share <= remainder);
+            remainder -= share;
+            afterSupply += balance + share;
+        };
+        assert(afterSupply >= beforeSupply);
+        assert(interest >= remainder);
+        assert(afterSupply == beforeSupply + interest - remainder);
+
+        // Do the mints
+        for ((to, share) in Array.vals(mints)) {
+            let result = switch (await token.mint(to, share)) {
+                case (#err(_)) {
+                    assert(false);
+                    loop {};
+                };
+                case (#ok(x)) { x };
+            }
+        };
+
+        return {
+            timestamp = now;
+            supply = {
+                before = { e8s = Nat64.fromNat(beforeSupply) };
+                after = { e8s = Nat64.fromNat(afterSupply) };
+            };
+            applied = { e8s = Nat64.fromNat(afterSupply - beforeSupply) };
+            remainder = { e8s = Nat64.fromNat(remainder) };
+        };
+    };
+
 
     public query func lastAprBips() : async Nat64 {
       if (appliedInterest.size() == 0) {

@@ -208,40 +208,6 @@ shared(init_msg) actor class Token(
         return #ok(txid);
     };
 
-
-    // TODO: Check this math more here. Naturals?
-    public shared(msg) func applyInterest(interest: Nat): async Nat {
-        assert(msg.caller == owner_);
-        let now = Time.now();
-
-        // Calculate everything
-        let initialSupply = totalSupply_;
-        let remainder = Nat.rem(interest, initialSupply);
-        var newSupply : Nat = interest - remainder;
-        if (newSupply == 0) {
-          return remainder;
-        };
-        assert(newSupply > 0);
-
-        let holders = Iter.toArray(balances.entries());
-        var newBalances : [(Principal, Nat, Nat)] = [];
-        for (i in Iter.range(0, holders.size() - 1)) {
-          let (to, balance) = holders[i];
-          // TODO: Could this overflow?
-          let share = (interest * balance) / initialSupply;
-          newBalances := Array.append(newBalances, [(to, balance, share)]);
-        };
-
-        // Do the updates
-        totalSupply_ += newSupply;
-        for ((to, balance, share) in Array.vals(newBalances)) {
-          balances.put(to, balance + share);
-          let txid = addRecord(?msg.caller, #interest, blackhole, to, share, 0, now, #succeeded);
-        };
-
-        return remainder;
-    };
-
     public shared(msg) func burn(amount: Nat): async TxReceipt {
         let caller_balance = _balanceOf(msg.caller);
         if(caller_balance < amount) {
