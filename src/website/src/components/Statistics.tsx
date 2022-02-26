@@ -1,6 +1,6 @@
 import React from 'react';
 import { idlFactory, canisterId } from '../../../declarations/token';
-import { Token } from "../../../declarations/token/token.did.d.js";
+import { Token, TokenInfo } from "../../../declarations/token/token.did.d.js";
 import { getBackendActor }  from '../agent';
 import * as format from "../format";
 import { useAsyncEffect } from "../hooks";
@@ -19,7 +19,7 @@ const Wrapper = styled('div', {
 });
 
 export function Statistics() {
-  const [stats, setStats] = React.useState<any|null>(null);
+  const [stats, setStats] = React.useState<TokenInfo|null>(null);
 
   useAsyncEffect(async () => {
     // TODO: Have to use dfinity agent here, as we dont need the user's plug wallet connected.
@@ -28,15 +28,8 @@ export function Statistics() {
     const contract = await getBackendActor<Token>({canisterId, interfaceFactory: idlFactory});
     console.debug("contract:", {contract});
 
-    const [meta, stakers] = await Promise.all([
-      contract.getMetadata(),
-      contract.getHoldersSize(),
-    ]);
-    console.debug({meta, stakers});
-    setStats({
-      ...meta,
-      stakers,
-    });
+    const tokenInfo = await contract.getTokenInfo();
+    setStats(tokenInfo);
   }, []);
 
   return (
@@ -47,7 +40,7 @@ export function Statistics() {
           <DataTableLabel>Total Supply</DataTableLabel>
           <DataTableValue>
             {stats !== null
-              ? `${format.units(stats.totalSupply || 0, 8)} stICP`
+              ? `${format.units(stats.metadata.totalSupply || 0, 8)} stICP`
               : <ActivityIndicator />}
           </DataTableValue>
         </DataTableRow>
@@ -55,7 +48,7 @@ export function Statistics() {
           <DataTableLabel>Stakers</DataTableLabel>
           <DataTableValue>
             {stats !== null
-              ? `${stats.stakers || 0}`
+              ? `${stats.holderNumber || 0}`
               : <ActivityIndicator />}
           </DataTableValue>
         </DataTableRow>

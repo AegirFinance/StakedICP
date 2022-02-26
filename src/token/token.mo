@@ -414,10 +414,6 @@ shared(init_msg) actor class Token(
         return Array.freeze(res);
     };
 
-    public query func getHoldersSize() : async Nat {
-        return balances.size();
-    };
-
     public query func getAllowanceSize() : async Nat {
         var size : Nat = 0;
         for ((k, v) in allowances.entries()) {
