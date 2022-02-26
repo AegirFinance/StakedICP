@@ -270,8 +270,11 @@ function FAQ() {
         </AccordionHeader>
         <AccordionContent>
           <p>
-          To prevent manipulation and vote-buying, stICP holders cannot directly vote on NNS proposals. All ICP held by StakedICP follows the Internet Computer Association neuron on NNS proposal voting.
+          To prevent manipulation and vote-buying, stICP holders cannot directly vote on NNS proposals. All ICP held by StakedICP follows the <a href="https://www.ic.community/followee-neuron-for-icp-maximalist-network/">ICP Maximalist Network neuron</a> to maximize rewards.
           </p>
+	  <p>
+	  All held ICP is locked securely in the StakedICP neuron: <a href="https://dashboard.internetcomputer.org/neuron/???">???</a>.
+	  </p>
         </AccordionContent>
       </AccordionItem>
     </AccordionRoot>
