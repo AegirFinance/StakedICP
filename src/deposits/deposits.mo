@@ -222,11 +222,11 @@ shared(init_msg) actor class Deposits(args: {
         // Do the mints
         for ((to, share) in Array.vals(mints)) {
             let result = switch (await token.mint(to, share)) {
-                case (#err(_)) {
+                case (#Err(_)) {
                     assert(false);
                     loop {};
                 };
-                case (#ok(x)) { x };
+                case (#Ok(x)) { x };
             }
         };
 

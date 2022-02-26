@@ -17,7 +17,6 @@ module {
         #transfer;
         #transferFrom;
         #approve;
-        #interest;
     };
     public type TransactionStatus = {
         #succeeded;
