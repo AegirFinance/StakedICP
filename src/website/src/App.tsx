@@ -69,7 +69,7 @@ function Features() {
         <p>Interest accrues daily. No more merge-maturity.</p>
       </Feature>
       <Feature>
-        <h2>No Lock-in</h2>
+        <h2>No Lock-in (Soon)</h2>
         <p>Sell your stICP for ICP at any time.</p>
       </Feature>
       <Feature>
