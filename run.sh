@@ -99,8 +99,9 @@ echo
 
 dfx canister install ledger_candid --mode=reinstall
 
+LOGO="data:image/jpeg;base64,$(base64 -w0 logo.png)"
 dfx canister install token --mode=reinstall --argument "$(cat << EOM
-("", "Staked ICP", "stICP", 8, 100_000_000, principal "$(dfx canister id deposits)", 10_000)
+("${LOGO}", "Staked ICP", "stICP", 8, 100_000_000, principal "$(dfx canister id deposits)", 10_000)
 EOM
 )"
 
