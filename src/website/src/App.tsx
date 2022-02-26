@@ -144,11 +144,11 @@ function FAQ() {
         </AccordionHeader>
         <AccordionContent>
           <p>
-          stICP is a token that represents staked ICP in StakedICP, combining the value of initial deposit + staking rewards. stICP tokens are minted upon deposit and burned when redeemed. stICP token balances are pegged 1:1 to the ICP that are staked by StakedICP. stICP token’s balances are updated when staking rewards accrue every day.
+          stICP is a token that represents staked ICP in the StakedICP neuron, combining the value of initial deposit + staking rewards. stICP tokens are minted upon deposit and burned when redeemed. stICP token balances are pegged 1:1 to the ICP that are staked by StakedICP. stICP token’s balances are updated daily when staking rewards accrue.
           </p>
 
           <p>
-          stETH tokens can be used as one would use ICP, allowing you to earn ICP.0 staking rewards whilst benefiting from e.g. yields across decentralised finance products.
+          stETH tokens are a standard <a href="https://github.com/Psychedelic/DIP20">DIP20 token</a>, allowing you to earn ICP staking rewards while benefitting from e.g. yields across decentralised finance products.
           </p>
         </AccordionContent>
       </AccordionItem>
@@ -220,7 +220,7 @@ function FAQ() {
               <li>
               StakedICP key management risk
                 <br />
-                ICp staked via StakedICP is held across multiple accounts backed by a multi-signature threshold scheme to minimise custody risk. If signatories across a certain threshold lose their key shares, get hacked or go rogue, we risk funds becoming locked.
+                ICP staked via StakedICP is locked securely in the StakedICP neuron to minimise custody risk. If neuron account keys are lost, or get hacked, we risk funds becoming locked.
               </li>
 
               <li>
