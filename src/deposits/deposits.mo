@@ -137,7 +137,6 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func accountId() : async Text {
-        requireOwner(msg.caller);
         return AId.toText(aId());
     };
 
@@ -184,7 +183,7 @@ shared(init_msg) actor class Deposits(args: {
             beforeSupply += balance;
         };
 
-        // TODO: This won't account for burns
+        // TODO: This won't account for burns, or new deposits
         assert(neuronBalance >= beforeSupply);
         let interest = neuronBalance - beforeSupply;
 
@@ -221,6 +220,8 @@ shared(init_msg) actor class Deposits(args: {
 
         // Do the mints
         for ((to, share) in Array.vals(mints)) {
+            Debug.print("minting: " # debug_show(share) # " to " # debug_show(to));
+
             let result = switch (await token.mint(to, share)) {
                 case (#Err(_)) {
                     assert(false);
