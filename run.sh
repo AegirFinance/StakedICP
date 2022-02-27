@@ -2,6 +2,12 @@
 
 set -e
 
+MODE="${1:-install}"
+
+canister_exists() {
+  (dfx canister status "$1" 2>&1 | grep 'Module hash: 0x')
+}
+
 echo
 echo == Dependencies.
 echo
@@ -35,7 +41,7 @@ echo
 
 echo Skipping.
 # TODO: Fix this. Disabled for now..
-# (dfx canister status governance 2>&1 | grep 'Status: Running') || (
+# (canister_exists governance) || (
 # read -r -d '' MSG << EOM
 # (
 #   record {
@@ -71,7 +77,7 @@ echo
 echo == Install Ledger
 echo
 
-(dfx canister status ledger 2>&1 | grep 'Status: Running') || (
+(canister_exists ledger) || (
   ln -sf ledger.private.did src/ledger/ledger.did
 
   CURRENT_ACC=$(dfx identity whoami)
@@ -97,17 +103,19 @@ echo
 echo == Install.
 echo
 
-dfx canister install ledger_candid --mode=reinstall
+dfx canister install ledger_candid --mode="$MODE"
 
 LOGO="data:image/jpeg;base64,$(base64 -w0 logo.png)"
-dfx canister install token --mode=reinstall --argument "$(cat << EOM
+dfx canister install token --mode="$MODE" --argument "$(cat << EOM
 ("${LOGO}", "Staked ICP", "stICP", 8, 100_000_000, principal "$(dfx canister id deposits)", 10_000)
 EOM
 )"
 
+DEPOSITS_EXISTS="$(canister_exists deposits && echo "true" || true)"
+
 NEURON_ID="0" # TODO: Create a neuron
 NEURON_ACCOUNTID="$(dfx ledger account-id)" # TODO: Create a neuron
-dfx canister install deposits --mode=reinstall --argument "$(cat << EOM
+dfx canister install deposits --mode="$MODE" --argument "$(cat << EOM
 (record {
   governance             = principal "$(dfx canister id governance)";
   ledger                 = principal "$(dfx canister id ledger)";
@@ -119,6 +127,19 @@ dfx canister install deposits --mode=reinstall --argument "$(cat << EOM
 })
 EOM
 )"
+
+if [ -z "$DEPOSITS_EXISTS" ]; then
+  ACCOUNT_ID="$(dfx canister call deposits accountId | tr -d '()"')"
+  # TODO: Use a real neuron here. For now we use the canister account as a stand-in for the neuron for now. This
+  # acts like we have always immediately deposited all deposits to the neuron.
+  echo "setStakingNeuronAccountId $ACCOUNT_ID"
+  dfx canister call deposits setStakingNeuronAccountId "$ACCOUNT_ID"
+
+  # Transfer the initial 1icp neuron minimum into the contract to simulate that.
+  echo "transfer 1 ICP -> $ACCOUNT_ID"
+  dfx ledger transfer "$ACCOUNT_ID" --memo 0 --amount "1.00"
+  dfx ledger balance "$ACCOUNT_ID"
+fi
 
 echo
 echo == Deploy.
