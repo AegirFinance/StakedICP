@@ -114,7 +114,6 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func stakingNeuronId(): async NeuronId {
-        requireOwner(msg.caller);
         return stakingNeuronId_;
     };
 
@@ -124,7 +123,6 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func stakingNeuronAccountId(): async Text {
-        requireOwner(msg.caller);
         return AId.toText(stakingNeuronAccountId_);
     };
 
@@ -257,6 +255,8 @@ shared(init_msg) actor class Deposits(args: {
       return ((10_000 * last.supply.after.e8s) / last.supply.before.e8s) - 10_000;
     };
 
+    // DEPRECATED: withdrawPendingDeposits is left, incase someone somehow
+    // transfers to the canister instead of the neuron directly.
     public shared(msg) func withdrawPendingDeposits(to: Text) : async WithdrawPendingDepositsResult {
         requireOwner(msg.caller);
 
@@ -295,7 +295,7 @@ shared(init_msg) actor class Deposits(args: {
         let invoice : Invoice = {
           memo = nextInvoiceId;
           from = msg.caller;
-          to = await accountId();
+          to = await stakingNeuronAccountId();
           state = #Waiting;
           block = null;
           createdAt = Time.now();
@@ -403,16 +403,19 @@ shared(init_msg) actor class Deposits(args: {
                           // Disburse the new tokens
                           let result = await token.mint(invoice.from, Nat64.toNat(t.amount.e8s));
 
-                          // Refresh the neuron balance
-                          // TODO: Do this when we do deposit-straight-to-neuron
-                          // await governance.manage_neuron({
-                          //     command = {
-                          //       ClaimOrRefresh = { by = { NeuronIdOrSubaccount = {} } };
-                          //     };
-                          //     neuron_id_or_subaccount = {
-                          //         NeuronId = staking_neuron_id_;
-                          //     };
-                          // });
+                          // Refresh the neuron balance, if we deposited directly
+                          let neuronAccount = await stakingNeuronAccountId();
+                          let canisterAccount = await accountId();
+                          if (Hex.equal(invoice.to, neuronAccount) and not Hex.equal(canisterAccount, neuronAccount)) {
+                              Debug.print("refreshing: " # debug_show(neuronAccount));
+                              let refresh = await governance.manage_neuron({
+                                  id = null;
+                                  command = ?#ClaimOrRefresh({ by = ?#NeuronIdOrSubaccount({}) });
+                                  neuron_id_or_subaccount = ?#NeuronId(await stakingNeuronId());
+                              });
+                          } else {
+                              Debug.print("NOT refreshing: " # debug_show(neuronAccount));
+			  };
 
                           return ();
                         };
