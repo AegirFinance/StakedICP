@@ -36,15 +36,6 @@ if [[ "$LEDGER_CANISTER_ID" != "ryjl3-tyaaa-aaaaa-aaaba-cai" ]]; then
 fi
 
 echo
-echo == Install Governance
-echo
-
-(canister_exists governance) || (
-  MSG="$(cat src/governance/initial-governance.hex)"
-  dfx deploy governance --argument-type raw --argument "$MSG"
-)
-
-echo
 echo == Install Ledger
 echo
 
@@ -62,6 +53,15 @@ echo
   dfx deploy ledger --argument '(record {minting_account = "'${MINT_ACC}'"; initial_values = vec { record { "'${LEDGER_ACC}'"; record { e8s=100_000_000_000 } }; }; send_whitelist = vec {}})'
 
   ln -sf ledger.public.did src/ledger/ledger.did
+)
+
+echo
+echo == Install Governance
+echo
+
+(canister_exists governance) || (
+  MSG="$(cat src/governance/initial-governance.hex)"
+  dfx deploy governance --argument-type raw --argument "$MSG"
 )
 
 echo
