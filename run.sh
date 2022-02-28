@@ -82,10 +82,27 @@ dfx canister install token --mode="$MODE" --argument "$(cat << EOM
 EOM
 )"
 
-DEPOSITS_EXISTS="$(canister_exists deposits && echo "true" || true)"
+NEURON_ACCOUNT_ID="94d4eddb1a4f1ef7a99bc5e89b21a1554303258884c35b5daba251fcf409d465"
+NEURON_MEMO="5577006791947779410"
 
-NEURON_ID="0" # TODO: Create a neuron
-NEURON_ACCOUNTID="$(dfx ledger account-id)" # TODO: Create a neuron
+existing_neuron_id() {
+  (dfx canister call governance \
+	  list_neurons \
+	  '(record { neuron_ids = vec {}; include_neurons_readable_by_caller = true})' \
+	  | grep -o "id = [0-9_]\+" \
+	  | grep -o "[0-9_]\+") \
+	  || echo ""
+}
+
+if [ -z "$(existing_neuron_id)" ]; then
+  # Create a neuron
+  dfx ledger transfer "$NEURON_ACCOUNT_ID" --memo "$NEURON_MEMO" --amount "1.00"
+  dfx canister call governance claim_or_refresh_neuron_from_account "(record { controller = opt principal \"$(dfx identity get-principal)\" ; memo = $NEURON_MEMO : nat64 })"
+fi
+
+NEURON_ID="$(existing_neuron_id)"
+echo "staking neuron id: $NEURON_ID"
+
 dfx canister install deposits --mode="$MODE" --argument "$(cat << EOM
 (record {
   governance             = principal "$(dfx canister id governance)";
@@ -94,23 +111,10 @@ dfx canister install deposits --mode="$MODE" --argument "$(cat << EOM
   token                  = principal "$(dfx canister id token)";
   owners                 = vec { principal "$(dfx identity get-principal)" };
   stakingNeuronId        = record { id = ${NEURON_ID} : nat64 };
-  stakingNeuronAccountId = "${NEURON_ACCOUNTID}";
+  stakingNeuronAccountId = "${NEURON_ACCOUNT_ID}";
 })
 EOM
 )"
-
-if [ -z "$DEPOSITS_EXISTS" ]; then
-  ACCOUNT_ID="$(dfx canister call deposits accountId | tr -d '()"')"
-  # TODO: Use a real neuron here. For now we use the canister account as a stand-in for the neuron for now. This
-  # acts like we have always immediately deposited all deposits to the neuron.
-  echo "setStakingNeuronAccountId $ACCOUNT_ID"
-  dfx canister call deposits setStakingNeuronAccountId "$ACCOUNT_ID"
-
-  # Transfer the initial 1icp neuron minimum into the contract to simulate that.
-  echo "transfer 1 ICP -> $ACCOUNT_ID"
-  dfx ledger transfer "$ACCOUNT_ID" --memo 0 --amount "1.00"
-  dfx ledger balance "$ACCOUNT_ID"
-fi
 
 echo
 echo == Deploy.
