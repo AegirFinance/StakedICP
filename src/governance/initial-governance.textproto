@@ -1,0 +1,19 @@
+neurons: []
+proposals: []
+to_claim_transfers: []
+wait_for_quiet_threshold_seconds: 300
+economics: {
+	maximum_node_provider_rewards_e8s: 1,
+	max_proposals_to_keep_per_topic: 100,
+	minimum_icp_xdr_rate: 100,
+	neuron_management_fee_per_proposal_e8s: 1000000,
+	neuron_minimum_stake_e8s: 100000000,
+	neuron_spawn_dissolve_delay_seconds: 604800,
+	reject_cost_e8s: 100000000,
+	transaction_fee_e8s: 10000
+}
+genesis_timestamp_seconds: 0
+in_flight_commands: []
+node_providers: []
+default_followees: []
+short_voting_period_seconds: 60

@@ -39,39 +39,10 @@ echo
 echo == Install Governance
 echo
 
-echo Skipping.
-# TODO: Fix this. Disabled for now..
-# (canister_exists governance) || (
-# read -r -d '' MSG << EOM
-# (
-#   record {
-#       default_followees = vec {};
-#       wait_for_quiet_threshold_seconds = 300 : nat64;
-#       metrics = null;
-#       node_providers = vec {};
-#       economics = opt record {
-#         max_proposals_to_keep_per_topic = 100 : nat32;
-#         maximum_node_provider_rewards_e8s = 1 : nat64;
-#         minimum_icp_xdr_rate = 100 : nat64;
-#         neuron_management_fee_per_proposal_e8s = 1_000_000 : nat64;
-#         neuron_minimum_stake_e8s = 100_000_000 : nat64;
-#         neuron_spawn_dissolve_delay_seconds = 604_800 : nat64;
-#         reject_cost_e8s = 100_000_000 : nat64;
-#         transaction_fee_e8s = 10_000 : nat64;
-#       };
-#       latest_reward_event = null;
-#       to_claim_transfers = vec {};
-#       short_voting_period_seconds = 60 : nat64;
-#       proposals = vec {};
-#       in_flight_commands = vec {};
-#       neurons = vec {};
-#       genesis_timestamp_seconds = 0 : nat64;
-#   },
-# )
-# EOM
-
-#   dfx deploy governance --argument "$MSG"
-# )
+(canister_exists governance) || (
+  MSG="$(cat src/governance/initial-governance.hex)"
+  dfx deploy governance --argument-type raw --argument "$MSG"
+)
 
 echo
 echo == Install Ledger
