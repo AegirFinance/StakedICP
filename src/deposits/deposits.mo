@@ -42,6 +42,7 @@ shared(init_msg) actor class Deposits(args: {
         };
         applied : Ledger.ICP;
         remainder : Ledger.ICP;
+	totalHolders: Nat;
     };
 
     type WithdrawPendingDepositsResult = {
@@ -194,6 +195,7 @@ shared(init_msg) actor class Deposits(args: {
                 };
                 applied = { e8s = 0 : Nat64 };
                 remainder = { e8s = 0 : Nat64 };
+		totalHolders = holders.size();
             };
         };
         assert(interest > 0);
@@ -237,6 +239,7 @@ shared(init_msg) actor class Deposits(args: {
             };
             applied = { e8s = Nat64.fromNat(afterSupply - beforeSupply) };
             remainder = { e8s = Nat64.fromNat(remainder) };
+	    totalHolders = holders.size();
         };
     };
 
