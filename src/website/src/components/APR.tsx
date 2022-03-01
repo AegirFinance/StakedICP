@@ -1,3 +1,4 @@
+import { BigNumber } from "@ethersproject/bignumber";
 import React from 'react';
 import { idlFactory, canisterId } from '../../../declarations/deposits';
 import { Deposits } from "../../../declarations/deposits/deposits.did.d.js";
@@ -8,25 +9,29 @@ import { styled } from '../stitches.config';
 import { HelpDialog } from './HelpDialog';
 
 export function APR() {
-  const [apr, setAPR] = React.useState<bigint|null>(null);
+  const [apy, setAPY] = React.useState<bigint|null>(null);
 
   useAsyncEffect(async () => {
     // TODO: Have to use dfinity agent here, as we dont need the user's plug wallet connected.
     if (!canisterId) throw new Error("Canister not deployed");
     const contract = await getBackendActor<Deposits>({canisterId, interfaceFactory: idlFactory});
 
-    const result = await contract.lastAprBips();
-    setAPR(result);
+    // TODO: Do this with bigint all the way through for more precision.
+    const microbips = await contract.lastAprMicrobips();
+    // apy = (((1+(microbips / 100_000_000))^365.25) - 1)
+    const apy = Math.pow(1 + (new Number(microbips) / 100_000_000), 365.25) - 1;
+    // display it with two decimals, so 0.218 = 21.80%
+    setAPY(BigNumber.from(Math.round(apy * 10_000)).toBigInt());
   }, []);
 
-  if (!apr) {
+  if (!apy) {
     return <Wrapper />;
   }
 
   return (
     <Wrapper>
       <Label>Stake ICP, earn up to</Label>
-      <h1>{format.units(apr, 2)}% APR <HelpDialog aria-label="APR Details">
+      <h1>{format.units(apy, 2)}% APY <HelpDialog aria-label="APY Details">
         <p>
           The rates shown on this page are only provided for your reference: The actual rates will fluctuate according to many different factors, including token prices, trading volume, liquidity, amount staked, and more.
         </p>

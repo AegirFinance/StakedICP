@@ -243,19 +243,24 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
+    // 1 microbip is 0.000000001%
+    // convert to apy % with:
+    // (((1+(lastAprMicrobips / 100_000_000))^365.25) - 1)*100
+    // e.g. 53900 microbips = 21.75%
+    public query func lastAprMicrobips() : async Nat64 {
+        let centibips : Nat64 = 100_000_000;
+        if (appliedInterest.size() == 0) {
+            // Never applied interest
+            return 0;
+        };
 
-    public query func lastAprBips() : async Nat64 {
-      if (appliedInterest.size() == 0) {
-        // Never applied interest
-        return 0;
-      };
+        let last = appliedInterest.get(appliedInterest.size()-1);
 
-      let last = appliedInterest.get(appliedInterest.size()-1);
+        // Should never happen, because initial supply is 1, but...
+        assert last.supply.before.e8s > 0;
 
-      // Should never happen, because initial supply is 1, but...
-      assert last.supply.before.e8s > 0;
-
-      return ((10_000 * last.supply.after.e8s) / last.supply.before.e8s) - 10_000;
+	// convert to 
+        return ((centibips * last.supply.after.e8s) / last.supply.before.e8s) - centibips;
     };
 
     // DEPRECATED: withdrawPendingDeposits is left, incase someone somehow
