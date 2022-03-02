@@ -4,6 +4,7 @@ import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
 import Debug "mo:base/Debug";
 import Hash "mo:base/Hash";
+import Int "mo:base/Int";
 import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Nat64 "mo:base/Nat64";
@@ -84,6 +85,7 @@ shared(init_msg) actor class Deposits(args: {
 
     private stable var appliedInterestEntries : [ApplyInterestResult] = [];
     private var appliedInterest : Buffer.Buffer<ApplyInterestResult> = Buffer.Buffer(0);
+    private stable var meanAprMicrobips : Nat64 = 0;
 
     private func isOwner(candidate : Principal) : Bool {
         let found = Array.find(owners, func(p : Principal) : Bool {
@@ -149,18 +151,15 @@ shared(init_msg) actor class Deposits(args: {
         });
     };
 
-    public shared(msg) func applyInterest() : async ApplyInterestResult {
+    public shared(msg) func applyInterest(interest: Nat) : async ApplyInterestResult {
         requireOwner(msg.caller);
 
         let now = Time.now();
 
-        let neuronBalance = await ledger.account_balance({
-            account = stakingNeuronAccountId_
-        });
-
-        let result = await applyInterestToToken(now, Nat64.toNat(neuronBalance.e8s));
+        let result = await applyInterestToToken(now, interest);
 
         appliedInterest.add(result);
+        updateMeanAprMicrobips();
 
         return result;
     };
@@ -172,7 +171,7 @@ shared(init_msg) actor class Deposits(args: {
         return await token.getHolders(0, info.holderNumber*2);
     };
 
-    private func applyInterestToToken(now: Time.Time, neuronBalance: Nat): async ApplyInterestResult {
+    private func applyInterestToToken(now: Time.Time, interest: Nat): async ApplyInterestResult {
         let holders = await getAllHolders();
 
         // Calculate everything
@@ -181,10 +180,6 @@ shared(init_msg) actor class Deposits(args: {
             let (_, balance) = holders[i];
             beforeSupply += balance;
         };
-
-        // TODO: This won't account for burns, or new deposits
-        assert(neuronBalance >= beforeSupply);
-        let interest = neuronBalance - beforeSupply;
 
         if (interest == 0) {
             return {
@@ -244,23 +239,45 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     // 1 microbip is 0.000000001%
-    // convert to apy % with:
+    // convert the result to apy % with:
     // (((1+(lastAprMicrobips / 100_000_000))^365.25) - 1)*100
-    // e.g. 53900 microbips = 21.75%
-    public query func lastAprMicrobips() : async Nat64 {
-        let centibips : Nat64 = 100_000_000;
-        if (appliedInterest.size() == 0) {
+    // e.g. 53900 microbips = 21.75% APY
+    private func updateMeanAprMicrobips() {
+        let microbips : Nat64 = 100_000_000;
+
+	let size = appliedInterest.size();
+	if (size == 0) {
             // Never applied interest
-            return 0;
+            meanAprMicrobips := 0;
+            return;
+	};
+
+	var total : Nat64 = 0;
+	var count : Int = 7;
+	if (size < count) {
+	    count := size;
+	};
+
+	let last = size - 1;
+        for (i in Iter.range(0, count - 1)) {
+            let interest = appliedInterest.get(last - i);
+
+            // Should always be true, because initial supply is 1, but...
+	    if (interest.supply.before.e8s > 0) {
+	        // convert to 
+                let aprMicrobips = ((microbips * interest.supply.after.e8s) / interest.supply.before.e8s) - microbips;
+	        Debug.print("aprMicrobips[" # debug_show(last - i) # "]: " # debug_show(aprMicrobips));
+
+	        total := total + aprMicrobips;
+	    }
         };
 
-        let last = appliedInterest.get(appliedInterest.size()-1);
+	Debug.print("meanAprMicrobips: " # debug_show(total) # " / " # debug_show(count));
+	meanAprMicrobips := total / Nat64.fromNat(Int.abs(count));
+    };
 
-        // Should never happen, because initial supply is 1, but...
-        assert last.supply.before.e8s > 0;
-
-	// convert to 
-        return ((centibips * last.supply.after.e8s) / last.supply.before.e8s) - centibips;
+    public query func aprMicrobips() : async Nat64 {
+        return meanAprMicrobips;
     };
 
     // DEPRECATED: withdrawPendingDeposits is left, incase someone somehow

@@ -17,9 +17,9 @@ export function APR() {
     const contract = await getBackendActor<Deposits>({canisterId, interfaceFactory: idlFactory});
 
     // TODO: Do this with bigint all the way through for more precision.
-    const microbips = await contract.lastAprMicrobips();
+    const microbips : number = new Number(await contract.aprMicrobips()).valueOf();
     // apy = (((1+(microbips / 100_000_000))^365.25) - 1)
-    const apy = Math.pow(1 + (new Number(microbips) / 100_000_000), 365.25) - 1;
+    const apy = Math.pow(1 + (microbips / 100_000_000), 365.25) - 1;
     // display it with two decimals, so 0.218 = 21.80%
     setAPY(BigNumber.from(Math.round(apy * 10_000)).toBigInt());
   }, []);
@@ -37,7 +37,7 @@ export function APR() {
         </p>
         <br />
         <p>
-          Reward rates are adjusted roughly every 24 hours, based on the past 24 hours’ trading activity.
+          Reward rates are adjusted roughly every 24 hours, based on the past 7 days’ activity.
         </p>
         </HelpDialog></h1>
       
