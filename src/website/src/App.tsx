@@ -1,5 +1,5 @@
 import * as Accordion from '@radix-ui/react-accordion';
-import { ChevronDownIcon } from '@radix-ui/react-icons';
+import { ChevronDownIcon, GitHubLogoIcon, TwitterLogoIcon } from '@radix-ui/react-icons';
 import * as deposits from "../../declarations/deposits";
 import * as token from "../../declarations/token";
 import React from 'react';
@@ -46,6 +46,7 @@ export default function App() {
                 <Statistics />
                 <Subtitle>FAQ</Subtitle>
                 <FAQ />
+                <Links />
               </div>
             </Flex>
 	  </PreviewPassword>
@@ -342,3 +343,11 @@ const AccordionChevron = styled(ChevronDownIcon, {
   '[data-state=open] &': { transform: 'rotate(180deg)' },
 });
 
+function Links() {
+  return (
+    <Flex css={{flexDirection:"row", justifyContent: "center", alignItems:"center", padding: "$2", '& > *': {margin: '$2'}}}>
+      <a href="https://github.com/AegirFinance" title="Github"><GitHubLogoIcon /></a>
+      <a href="https://twitter.com/StakedICP" title="Twitter"><TwitterLogoIcon /></a>
+    </Flex>
+  );
+}
