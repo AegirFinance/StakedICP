@@ -1,4 +1,4 @@
-import { QuestionIcon } from '@primer/octicons-react'
+import { QuestionMarkCircledIcon } from '@radix-ui/react-icons'
 import * as Popover from '@radix-ui/react-popover';
 import React from 'react';
 import { styled } from '../stitches.config';
@@ -11,7 +11,7 @@ export type HelpDialogOptions = {
 export function HelpDialog(options: HelpDialogOptions) {
   return (
     <Popover.Root>
-      <StyledTrigger><QuestionIcon aria-label={options['aria-label']} fill="currentColor" /></StyledTrigger>
+      <StyledTrigger><QuestionMarkCircledIcon aria-label={options['aria-label']} fill="currentColor" /></StyledTrigger>
       <StyledContent>
         {options.children}
         <StyledArrow />
@@ -24,7 +24,8 @@ const StyledTrigger = styled(Popover.Trigger, {
   display: 'inline-block',
   backgroundColor: 'transparent',
   border: 0,
-
+  height: 15,
+  width: 15,
 });
 
 const StyledContent = styled(Popover.Content, {

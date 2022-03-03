@@ -25,7 +25,6 @@
     "@dfinity/candid": "",
     "@dfinity/principal": "",
     "@ethersproject/bignumber": "^5.5.0",
-    "@primer/octicons-react": "^16.3.1",
     "@radix-ui/colors": "^0.1.8",
     "@radix-ui/react-accordion": "^0.1.5",
     "@radix-ui/react-alert-dialog": "^0.1.5",
