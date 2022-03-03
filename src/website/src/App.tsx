@@ -274,7 +274,7 @@ function FAQ() {
           To prevent manipulation and vote-buying, stICP holders cannot directly vote on NNS proposals. All ICP held by StakedICP follows the <a href="https://www.ic.community/followee-neuron-for-icp-maximalist-network/">ICP Maximalist Network neuron</a> to maximize rewards.
           </p>
 	  <p>
-	  All held ICP is locked securely in the StakedICP neuron: <a href="https://dashboard.internetcomputer.org/neuron/???">???</a>.
+	  All held ICP is locked securely in the StakedICP neuron: <a href="https://dashboard.internetcomputer.org/neuron/16136654443876485299">16136654443876485299</a>.
 	  </p>
         </AccordionContent>
       </AccordionItem>
