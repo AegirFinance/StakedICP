@@ -242,7 +242,7 @@ function FAQ() {
         </AccordionHeader>
         <AccordionContent>
           <p>
-          StakedICP applies a 10% fee on a user's staking rewards. This fee is used to ensure ongoing development and support, as well as a coverage fund.
+          StakedICP applies a 10% fee on a user's staking rewards. This fee is used to ensure ongoing development and support, and grow the ecosystem.
           </p>
         </AccordionContent>
       </AccordionItem>
