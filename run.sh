@@ -65,59 +65,7 @@ echo
 )
 
 echo
-echo == Build.
+echo == Deploy
 echo
 
-dfx build
-
-echo
-echo == Install.
-echo
-
-dfx canister install ledger_candid --mode="$MODE"
-
-LOGO="data:image/jpeg;base64,$(base64 -w0 logo.png)"
-dfx canister install token --mode="$MODE" --argument "$(cat << EOM
-("${LOGO}", "Staked ICP", "stICP", 8, 100_000_000, principal "$(dfx canister id deposits)", 10_000)
-EOM
-)"
-
-NEURON_ACCOUNT_ID="94d4eddb1a4f1ef7a99bc5e89b21a1554303258884c35b5daba251fcf409d465"
-NEURON_MEMO="5577006791947779410"
-
-existing_neuron_id() {
-  (dfx canister call governance \
-	  list_neurons \
-	  '(record { neuron_ids = vec {}; include_neurons_readable_by_caller = true})' \
-	  | grep -o "id = [0-9_]\+" \
-	  | grep -o "[0-9_]\+") \
-	  || echo ""
-}
-
-if [ -z "$(existing_neuron_id)" ]; then
-  # Create a neuron
-  dfx ledger transfer "$NEURON_ACCOUNT_ID" --memo "$NEURON_MEMO" --amount "1.00"
-  dfx canister call governance claim_or_refresh_neuron_from_account "(record { controller = opt principal \"$(dfx identity get-principal)\" ; memo = $NEURON_MEMO : nat64 })"
-fi
-
-NEURON_ID="$(existing_neuron_id)"
-echo "staking neuron id: $NEURON_ID"
-
-dfx canister install deposits --mode="$MODE" --argument "$(cat << EOM
-(record {
-  governance             = principal "$(dfx canister id governance)";
-  ledger                 = principal "$(dfx canister id ledger)";
-  ledgerCandid           = principal "$(dfx canister id ledger_candid)";
-  token                  = principal "$(dfx canister id token)";
-  owners                 = vec { principal "$(dfx identity get-principal)" };
-  stakingNeuronId        = record { id = ${NEURON_ID} : nat64 };
-  stakingNeuronAccountId = "${NEURON_ACCOUNT_ID}";
-})
-EOM
-)"
-
-echo
-echo == Deploy.
-echo
-
-npm start
+./deploy.sh "local" "$MODE"
