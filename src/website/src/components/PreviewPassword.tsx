@@ -22,7 +22,7 @@ export function PreviewPassword({children}: {children?: React.ReactNode}) {
     }
   }, [password]);
 
-  if (isLoggedIn) {
+  if (isLoggedIn || process.env.NODE_ENV === "development") {
     return (
       <>{children}</>
     );
