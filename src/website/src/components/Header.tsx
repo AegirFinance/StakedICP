@@ -1,4 +1,5 @@
 import React, { SVGProps } from 'react';
+import { Link } from "react-router-dom";
 import * as token from "../../../declarations/token";
 import { styled } from '../stitches.config';
 import { ConnectButton, useAccount, useBalance } from "../wallet";
@@ -39,7 +40,7 @@ export function Header() {
 
   return (
     <Wrapper>
-      <Logo style={{height: "2.5rem", marginRight: "auto"}} />
+      <Link to="/" style={{marginRight: "auto"}}><Logo style={{height: "2.5rem"}} /></Link>
       {account && (
         [sticp, icp].map((b, i) =>
           <Balance key={i}>{b ? `${b.formatted} ${b.symbol}` : <ActivityIndicator /> }</Balance>

@@ -116,6 +116,7 @@ module.exports = {
       },
     },
     hot: true,
+    historyApiFallback: true,
     contentBase: path.resolve(__dirname, "./src/website"),
     watchContentBase: true
   },
