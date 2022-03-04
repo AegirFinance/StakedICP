@@ -41,7 +41,7 @@ function Features() {
     <Flex css={{flexDirection:"row", flexWrap: "wrap", alignItems:"space-around", padding: "$4", maxWidth: 1024}}>
       <Feature>
         <h2>Auto-Compounding</h2>
-        <p>Interest accrues daily. No more merge-maturity.</p>
+        <p>Interest accrues daily. No more manual merge-maturity.</p>
       </Feature>
       <Feature>
         <h2>No Lock-in (Soon)</h2>
