@@ -9,6 +9,7 @@ import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Nat64 "mo:base/Nat64";
 import Option "mo:base/Option";
+import Order "mo:base/Order";
 import P "mo:base/Prelude";
 import Principal "mo:base/Principal";
 import Text "mo:base/Text";
@@ -151,14 +152,29 @@ shared(init_msg) actor class Deposits(args: {
         });
     };
 
-    public shared(msg) func applyInterest(interest: Nat) : async ApplyInterestResult {
+    private func sortInterestByTime(a: ApplyInterestResult, b: ApplyInterestResult): Order.Order {
+      Int.compare(a.timestamp, b.timestamp)
+    };
+
+    // Buffers have not sort, implement it ourselves.
+    private func sortBuffer<A>(buf: Buffer.Buffer<A>, cmp: (A, A) -> Order.Order): Buffer.Buffer<A> {
+        let result = Buffer.Buffer<A>(buf.size());
+        for (x in Array.sort(buf.toArray(), cmp).vals()) {
+            result.add(x);
+        };
+        result
+    };
+
+    public shared(msg) func applyInterest(interest: Nat, when: ?Time.Time) : async ApplyInterestResult {
         requireOwner(msg.caller);
 
-        let now = Time.now();
+        let now = Option.get(when, Time.now());
 
         let result = await applyInterestToToken(now, interest);
 
         appliedInterest.add(result);
+        appliedInterest := sortBuffer(appliedInterest, sortInterestByTime);
+
         updateMeanAprMicrobips();
 
         return result;
