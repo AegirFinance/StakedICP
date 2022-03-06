@@ -22,7 +22,6 @@ const TableWrapper = styled('div', {
     borderCollapse: 'separate',
     borderRadius: '$1',
     backgroundColor: '$slate3',
-    backgroundColor: '$slate3',
   },
   td: {
     padding: '$2',
