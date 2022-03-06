@@ -30,8 +30,7 @@ shared(init_msg) actor class Deposits(args: {
     ledgerCandid: Principal;
     token: Principal;
     owners: [Principal];
-    stakingNeuronId: { id : Nat64 };
-    stakingNeuronAccountId: Text;
+    stakingNeuron: ?{ id : { id : Nat64 }; accountId : Text };
 }) = this {
 
     type NeuronId = { id : Nat64; };
@@ -68,21 +67,33 @@ shared(init_msg) actor class Deposits(args: {
         #Staked;
     };
 
+    public type StakingNeuron = {
+        id : NeuronId;
+        accountId : AId.AccountIdentifier;
+    };
+
     private stable var governance : Governance.Interface = actor(Principal.toText(args.governance));
     private stable var ledger : Ledger.Self = actor(Principal.toText(args.ledger));
     private stable var ledgerCandid : LedgerCandid.Self = actor(Principal.toText(args.ledgerCandid));
 
     private stable var owners : [Principal] = args.owners;
     private stable var token : Token.Token = actor(Principal.toText(args.token));
-    private stable var stakingNeuronId_ : NeuronId = args.stakingNeuronId;
+    private stable var stakingNeuron_ : ?StakingNeuron = switch (args.stakingNeuron) {
+        case (null) { null };
+        case (?n) {
+            ?{
+                id = n.id;
+                accountId = switch (AId.fromText(n.accountId)) {
+                    case (#err(_)) { P.unreachable() };
+                    case (#ok(x)) { x };
+                };
+            };
+        };
+    };
 
     private stable var nextInvoiceId : Nat64 = 0;
     private stable var invoices : Trie.Trie<Nat64, Invoice> = Trie.empty();
 
-    private stable var stakingNeuronAccountId_ : AId.AccountIdentifier = switch (AId.fromText(args.stakingNeuronAccountId)) {
-      case (#err(_)) { P.unreachable() };
-      case (#ok(x)) { x };
-    };
 
     private stable var appliedInterestEntries : [ApplyInterestResult] = [];
     private var appliedInterest : Buffer.Buffer<ApplyInterestResult> = Buffer.Buffer(0);
@@ -117,24 +128,29 @@ shared(init_msg) actor class Deposits(args: {
         token := actor(Principal.toText(_token));
     };
 
-    public shared(msg) func stakingNeuronId(): async NeuronId {
-        return stakingNeuronId_;
+    public shared(msg) func stakingNeuron(): async ?{ id : NeuronId ; accountId : Text } {
+        return switch (stakingNeuron_) {
+            case (null) { null };
+            case (?n) {
+                ?{
+                    id = n.id;
+                    accountId = AId.toText(n.accountId);
+                }
+            };
+        };
     };
 
-    public shared(msg) func setStakingNeuronId(id: NeuronId) {
+    public shared(msg) func setStakingNeuron(n: { id : NeuronId ; accountId : Text }) {
         requireOwner(msg.caller);
-        stakingNeuronId_ := id;
-    };
-
-    public shared(msg) func stakingNeuronAccountId(): async Text {
-        return AId.toText(stakingNeuronAccountId_);
-    };
-
-    public shared(msg) func setStakingNeuronAccountId(_stakingNeuronAccountId: Text) {
-        requireOwner(msg.caller);
-        stakingNeuronAccountId_ := switch (AId.fromText(_stakingNeuronAccountId)) {
-            case (#err(_)) { P.unreachable() };
-            case (#ok(x)) { x };
+        stakingNeuron_ := ?{
+            id = n.id;
+            accountId = switch (AId.fromText(n.accountId)) {
+                case (#err(_)) {
+                    assert(false);
+                    loop {};
+                };
+                case (#ok(x)) { x };
+            };
         };
     };
 
@@ -313,19 +329,25 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func createInvoice() : async Invoice {
-        nextInvoiceId += 1;
+        let to = await stakingNeuron();
+        switch (to) {
+            case (null) { P.unreachable() };
+            case (?to) {
+                nextInvoiceId += 1;
 
-        let invoice : Invoice = {
-          memo = nextInvoiceId;
-          from = msg.caller;
-          to = await stakingNeuronAccountId();
-          state = #Waiting;
-          block = null;
-          createdAt = Time.now();
-          receivedAt = null;
-        };
-        invoices := Trie.replace(invoices, invoiceKey(invoice.memo), Nat64.equal, ?invoice).0;
-        return invoice;
+                let invoice : Invoice = {
+                  memo = nextInvoiceId;
+                  from = msg.caller;
+                  to = to.accountId;
+                  state = #Waiting;
+                  block = null;
+                  createdAt = Time.now();
+                  receivedAt = null;
+                };
+                invoices := Trie.replace(invoices, invoiceKey(invoice.memo), Nat64.equal, ?invoice).0;
+                return invoice;
+            };
+        }
     };
 
     public shared(msg) func getInvoice(memo: Nat64) : async ?Invoice {
@@ -427,17 +449,18 @@ shared(init_msg) actor class Deposits(args: {
                           let result = await token.mint(invoice.from, Nat64.toNat(t.amount.e8s));
 
                           // Refresh the neuron balance, if we deposited directly
-                          let neuronAccount = await stakingNeuronAccountId();
-                          let canisterAccount = await accountId();
-                          if (Hex.equal(invoice.to, neuronAccount) and not Hex.equal(canisterAccount, neuronAccount)) {
-                              Debug.print("refreshing: " # debug_show(neuronAccount));
-                              let refresh = await governance.manage_neuron({
-                                  id = null;
-                                  command = ?#ClaimOrRefresh({ by = ?#NeuronIdOrSubaccount({}) });
-                                  neuron_id_or_subaccount = ?#NeuronId(await stakingNeuronId());
-                              });
-                          } else {
-                              Debug.print("NOT refreshing: " # debug_show(neuronAccount));
+                          switch (await stakingNeuron()) {
+                              case (null) {
+                                  Debug.print("Staking neuron not configured for invoice: " # debug_show(invoice.memo));
+                              };
+                              case (?neuron) {
+                                  Debug.print("Staking neuron refreshing: " # debug_show(neuron.id));
+                                  let refresh = await governance.manage_neuron({
+                                      id = null;
+                                      command = ?#ClaimOrRefresh({ by = ?#NeuronIdOrSubaccount({}) });
+                                      neuron_id_or_subaccount = ?#NeuronId(neuron.id);
+                                  });
+                              };
                           };
 
                           return ();

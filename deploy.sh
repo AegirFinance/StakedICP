@@ -8,10 +8,10 @@ MODE="${2:-install}"
 
 existing_neuron_id() {
   (dfx canister call governance \
-	  list_neurons \
-	  '(record { neuron_ids = vec {}; include_neurons_readable_by_caller = true})' \
-	  | grep -o "id = [0-9_]\+" \
-	  | grep -o "[0-9_]\+") \
+    list_neurons \
+    '(record { neuron_ids = vec {}; include_neurons_readable_by_caller = true})' \
+    | grep -o "id = [0-9_]\+" \
+    | grep -o "[0-9_]\+") \
 }
 
 make_neuron() {
@@ -98,8 +98,10 @@ canister install deposits --mode="$MODE" --argument "$(cat << EOM
   ledgerCandid           = principal "$(canister id ledger_candid)";
   token                  = principal "$(canister id token)";
   owners                 = vec { $OWNERS };
-  stakingNeuronId        = record { id = ${NEURON_ID} : nat64 };
-  stakingNeuronAccountId = "${NEURON_ACCOUNT_ID}";
+  stakingNeuron          = opt record {
+    id = record { id = ${NEURON_ID} : nat64 };
+    accountId = "${NEURON_ACCOUNT_ID}";
+  };
 })
 EOM
 )"
