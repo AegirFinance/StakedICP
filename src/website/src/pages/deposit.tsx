@@ -41,15 +41,15 @@ function Features() {
     <Flex css={{flexDirection:"row", flexWrap: "wrap", alignItems:"space-around", padding: "$4", maxWidth: 1024}}>
       <Feature>
         <h2>Auto-Compounding</h2>
-        <p>Interest accrues daily. No more manual merge-maturity.</p>
+        <p>ICP is staked for 8 years, and interest accrues daily to maximize your returns. No more manual merge-maturity.</p>
       </Feature>
       <Feature>
         <h2>No Lock-in (Soon)</h2>
         <p>Sell your stICP for ICP at any time.</p>
       </Feature>
       <Feature>
-        <h2>Maximum Return</h2>
-        <p>ICP is staked for 8 years, and compounds daily to maximize your return.</p>
+        <h2>ICP Native</h2>
+        <p>No bridging or swapping. All ICP stays on-chain.</p>
       </Feature>
     </Flex>
   );
