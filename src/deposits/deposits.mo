@@ -22,7 +22,7 @@ import Hex "mo:encoding/Hex";
 import Governance "Governance";
 import Ledger "Ledger";
 import LedgerCandid "LedgerCandid";
-import Token "../token/token"
+import Token "../token/token";
 
 shared(init_msg) actor class Deposits(args: {
     governance: Principal;
