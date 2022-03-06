@@ -1,4 +1,4 @@
-import ActorSpec "../utils/ActorSpec";
+import ActorSpec "../util/ActorSpec";
 type Group = ActorSpec.Group;
 
 let assertTrue = ActorSpec.assertTrue;
