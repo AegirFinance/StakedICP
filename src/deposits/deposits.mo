@@ -39,11 +39,11 @@ shared(init_msg) actor class Deposits(args: {
     type ApplyInterestResult = {
         timestamp : Time.Time;
         supply : {
-            before : Ledger.ICP;
-            after : Ledger.ICP;
+            before : Ledger.Tokens;
+            after : Ledger.Tokens;
         };
-        applied : Ledger.ICP;
-        remainder : Ledger.ICP;
+        applied : Ledger.Tokens;
+        remainder : Ledger.Tokens;
         totalHolders: Nat;
     };
 
@@ -69,8 +69,8 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     private stable var governance : Governance.Interface = actor(Principal.toText(args.governance));
-    private stable var ledger : Ledger.Interface = actor(Principal.toText(args.ledger));
-    private stable var ledgerCandid : LedgerCandid.Interface = actor(Principal.toText(args.ledgerCandid));
+    private stable var ledger : Ledger.Self = actor(Principal.toText(args.ledger));
+    private stable var ledgerCandid : LedgerCandid.Self = actor(Principal.toText(args.ledgerCandid));
 
     private stable var owners : [Principal] = args.owners;
     private stable var token : Token.Token = actor(Principal.toText(args.token));
@@ -146,9 +146,9 @@ shared(init_msg) actor class Deposits(args: {
         return AId.fromPrincipal(Principal.fromActor(this), null);
     };
 
-    private func balance() : async Ledger.ICP {
+    private func balance() : async Ledger.Tokens {
         return await ledger.account_balance({
-            account = aId();
+            account = Blob.toArray(aId());
         });
     };
 
@@ -288,7 +288,7 @@ shared(init_msg) actor class Deposits(args: {
             assert(false);
             loop {};
           };
-          case (#ok(x)) { x };
+          case (#ok(x)) { Blob.toArray(x) };
         };
 
         let pendingAmount = await balance();
