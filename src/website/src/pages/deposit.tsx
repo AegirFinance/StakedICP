@@ -123,7 +123,7 @@ function FAQ() {
           </p>
 
           <p>
-          stETH tokens are a standard <a href="https://github.com/Psychedelic/DIP20">DIP20 token</a>, allowing you to earn ICP staking rewards while benefitting from e.g. yields across decentralised finance products.
+          stICP tokens are a standard <a href="https://github.com/Psychedelic/DIP20">DIP20 token</a>, allowing you to earn ICP staking rewards while benefitting from e.g. yields across decentralised finance products. They do not confer any voting or governance rights.
           </p>
         </AccordionContent>
       </AccordionItem>
@@ -176,7 +176,7 @@ function FAQ() {
                 Smart contract security
                 </p>
                 <p>
-                There is an inherent risk that StakedICP could contain a smart contract vulnerability or bug. The StakedICP code will be open-sourced, audited and covered by an extensive bug bounty program to minimise this risk.
+                There is an inherent risk that StakedICP could contain a smart contract vulnerability or bug. The StakedICP code is not audited. In the future, the StakedICP code will be open-sourced, audited and covered by an extensive bug bounty program to minimise this risk. Use at your own risk.
                 </p>
               </li>
 
