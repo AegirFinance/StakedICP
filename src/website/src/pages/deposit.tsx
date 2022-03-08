@@ -231,7 +231,7 @@ function FAQ() {
         </AccordionHeader>
         <AccordionContent>
           <p>
-          To ensure maximum staking rewards, all ICP earned while staked, is automatically merged into the StakedICP neuron(s). While there's currently no way to withdraw ICP from staking, stICp holders may soon exchange their stICP to ICP on liquidity pools.
+          To ensure maximum staking rewards, all ICP earned while staked, is automatically merged into the StakedICP neuron(s). While there's currently no way to withdraw ICP from staking, stICP holders may soon exchange their stICP to ICP on liquidity pools.
           </p>
         </AccordionContent>
       </AccordionItem>
