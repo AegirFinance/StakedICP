@@ -1,10 +1,8 @@
-import * as Accordion from '@radix-ui/react-accordion';
-import { ChevronDownIcon, GitHubLogoIcon, TwitterLogoIcon } from '@radix-ui/react-icons';
 import * as deposits from "../../declarations/deposits";
 import * as token from "../../declarations/token";
 import React from 'react';
-import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
-import { Flex, PreviewPassword, TestnetBanner } from './components';
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { GeoipModal, PreviewPassword } from './components';
 import { globalCss } from './stitches.config';
 import { Provider as WalletProvider } from "./wallet";
 import * as Pages from "./pages";
@@ -33,6 +31,7 @@ export default function App() {
     <div>
       <PreviewPassword>
         <WalletProvider autoConnect whitelist={[deposits.canisterId, token.canisterId].filter(x => !!x) as string[]} host={process.env.NETWORK}>
+          <GeoipModal />
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Pages.Deposit />} />

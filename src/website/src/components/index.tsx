@@ -6,6 +6,7 @@ export * from "./DataTable";
 export * from "./DepositForm";
 export * from "./Dialog";
 export * from "./Flex";
+export * from "./GeoipModal";
 export * from "./Header";
 export * from "./HelpDialog";
 export * from "./Input";
