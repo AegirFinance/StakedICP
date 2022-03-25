@@ -26,4 +26,4 @@ read -r -d '' MSG << EOM
 )
 EOM
 
-dfx canister --no-wallet --network "$NETWORK" call governance manage_neuron "$MSG"
+dfx canister --network "$NETWORK" call governance manage_neuron "$MSG"
