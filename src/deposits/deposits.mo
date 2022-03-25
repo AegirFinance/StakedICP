@@ -1,5 +1,4 @@
 import Array "mo:base/Array";
-import Binary "mo:encoding/Binary";
 import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
 import Debug "mo:base/Debug";
@@ -15,10 +14,9 @@ import Principal "mo:base/Principal";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
 import Trie "mo:base/Trie";
-import CRC32 "mo:hash/CRC32";
-import AId "mo:principal/blob/AccountIdentifier";
-import Hex "mo:encoding/Hex";
 
+import Account      "./Account";
+import Hex          "./Hex";
 import Governance "Governance";
 import Ledger "Ledger";
 import LedgerCandid "LedgerCandid";
@@ -54,7 +52,7 @@ shared(init_msg) actor class Deposits(args: {
     public type Invoice = {
       memo: Nat64;
       from: Principal;
-      to: Hex.Hex;
+      to: Text;
       state: InvoiceState;
       block: ?Nat64;
       createdAt : Time.Time;
@@ -69,7 +67,7 @@ shared(init_msg) actor class Deposits(args: {
 
     public type StakingNeuron = {
         id : NeuronId;
-        accountId : AId.AccountIdentifier;
+        accountId : Account.AccountIdentifier;
     };
 
     private stable var governance : Governance.Interface = actor(Principal.toText(args.governance));
@@ -83,7 +81,7 @@ shared(init_msg) actor class Deposits(args: {
         case (?n) {
             ?{
                 id = n.id;
-                accountId = switch (AId.fromText(n.accountId)) {
+                accountId = switch (Account.fromText(n.accountId)) {
                     case (#err(_)) { P.unreachable() };
                     case (#ok(x)) { x };
                 };
@@ -134,7 +132,7 @@ shared(init_msg) actor class Deposits(args: {
             case (?n) {
                 ?{
                     id = n.id;
-                    accountId = AId.toText(n.accountId);
+                    accountId = Account.toText(n.accountId);
                 }
             };
         };
@@ -144,7 +142,7 @@ shared(init_msg) actor class Deposits(args: {
         requireOwner(msg.caller);
         stakingNeuron_ := ?{
             id = n.id;
-            accountId = switch (AId.fromText(n.accountId)) {
+            accountId = switch (Account.fromText(n.accountId)) {
                 case (#err(_)) {
                     assert(false);
                     loop {};
@@ -155,16 +153,16 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func accountId() : async Text {
-        return AId.toText(aId());
+        return Account.toText(accountIdBlob());
     };
 
-    private func aId() : AId.AccountIdentifier {
-        return AId.fromPrincipal(Principal.fromActor(this), null);
+    private func accountIdBlob() : Account.AccountIdentifier {
+        return Account.fromPrincipal(Principal.fromActor(this), Account.defaultSubaccount());
     };
 
     private func balance() : async Ledger.Tokens {
         return await ledger.account_balance({
-            account = Blob.toArray(aId());
+            account = Blob.toArray(accountIdBlob());
         });
     };
 
@@ -299,7 +297,7 @@ shared(init_msg) actor class Deposits(args: {
     public shared(msg) func withdrawPendingDeposits(to: Text) : async WithdrawPendingDepositsResult {
         requireOwner(msg.caller);
 
-        let toBlob = switch (AId.fromText(to)) {
+        let toBlob = switch (Account.fromText(to)) {
           case (#err(_)) {
             assert(false);
             loop {};
