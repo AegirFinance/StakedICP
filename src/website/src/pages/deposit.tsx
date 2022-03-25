@@ -1,34 +1,36 @@
 import * as Accordion from '@radix-ui/react-accordion';
 import { ChevronDownIcon, GitHubLogoIcon, TwitterLogoIcon } from '@radix-ui/react-icons';
 import React from 'react';
-import { BrowserRouter } from "react-router-dom";
-import * as deposits from "../../../declarations/deposits";
-import * as token from "../../../declarations/token";
-import { APR, DepositForm, Flex, Header, Layout, PreviewPassword, Statistics, TestnetBanner } from '../components';
-import { globalCss, keyframes, styled } from '../stitches.config';
-import { Provider as WalletProvider } from "../wallet";
+import { APR, DepositForm, Flex, Header, Layout, Statistics } from '../components';
+import { keyframes, styled } from '../stitches.config';
 
 export function Deposit() {
   return (
-    <Layout>
-      <Header />
-      <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
-        <APR />
-        <Features />
-      </Flex>
-      <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
-        <div>
-          <DepositForm />
-          <Subtitle>Statistics</Subtitle>
-          <Statistics />
-          <Subtitle>FAQ</Subtitle>
-          <FAQ />
-          <Links />
-        </div>
-      </Flex>
-    </Layout>
+    <Wrapper>
+      <Layout>
+        <Header />
+        <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
+          <APR />
+          <Features />
+        </Flex>
+        <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
+          <div>
+            <DepositForm />
+            <Subtitle>Statistics</Subtitle>
+            <Statistics />
+            <Subtitle>FAQ</Subtitle>
+            <FAQ />
+            <Links />
+          </div>
+        </Flex>
+      </Layout>
+    </Wrapper>
   );
 }
+
+const Wrapper = styled('div', {
+  background: "radial-gradient(circle farthest-corner at 20% 20%, rgba(18,165,148,.16), rgba(242,145,2,.07) 25%, rgba(166,103,10,0) 63%)",
+});
 
 const Subtitle = styled('h2', {
   alignSelf: 'flex-start',
