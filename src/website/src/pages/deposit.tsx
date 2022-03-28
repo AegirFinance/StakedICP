@@ -259,7 +259,7 @@ function FAQ() {
 }
 
 const AccordionRoot = styled(Accordion.Root, {
-  width: '400px',
+  width: '390px',
   maxWidth: '100%',
 });
 

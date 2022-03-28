@@ -9,6 +9,7 @@ import { ActivityIndicator } from "./ActivityIndicator"
 const Wrapper = styled('header', {
   display: "flex",
   flexDirection: "row",
+  flexWrap: "wrap",
   alignItems: "center",
   padding: '$2 $4',
 });
