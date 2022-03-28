@@ -2,7 +2,7 @@
 
 set -e
 
-MODE="${1:-install}"
+)MODE="${1:-install}"
 
 canister_exists() {
   (dfx canister status "$1" 2>&1 | grep 'Module hash: 0x')
@@ -69,3 +69,15 @@ echo == Deploy
 echo
 
 ./deploy.sh "local" "$MODE"
+
+echo
+echo == Initial Data
+echo
+
+dfx canister call deposits applyInterest "(58000: nat64, null)"
+
+echo
+echo == Serve Website
+echo
+
+npm run start

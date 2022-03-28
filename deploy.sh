@@ -106,12 +106,10 @@ canister install deposits --mode="$MODE" --argument "$(cat << EOM
 EOM
 )"
 
-echo
-echo == Install website.
-echo
+if [[ "$NETWORK" != "local" ]]; then
+  echo
+  echo == Install website.
+  echo
 
-if [[ "$NETWORK" == "local" ]]; then
-  npm run start
-else
   canister install website --mode="$MODE"
 fi
