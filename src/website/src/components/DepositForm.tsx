@@ -31,6 +31,7 @@ export function DepositForm() {
 
   return (
     <Wrapper>
+      <h3>Deposit</h3>
       <Input
         type="text"
         name="amount" 
