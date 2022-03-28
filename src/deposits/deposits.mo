@@ -179,12 +179,12 @@ shared(init_msg) actor class Deposits(args: {
         result
     };
 
-    public shared(msg) func applyInterest(interest: Nat, when: ?Time.Time) : async ApplyInterestResult {
+    public shared(msg) func applyInterest(interest: Nat64, when: ?Time.Time) : async ApplyInterestResult {
         requireOwner(msg.caller);
 
         let now = Option.get(when, Time.now());
 
-        let result = await applyInterestToToken(now, interest);
+        let result = await applyInterestToToken(now, Nat64.toNat(interest));
 
         appliedInterest.add(result);
         appliedInterest := sortBuffer(appliedInterest, sortInterestByTime);
