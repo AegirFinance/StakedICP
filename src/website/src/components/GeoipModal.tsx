@@ -1,5 +1,6 @@
 import axios from 'axios';
 import React from 'react';
+import { Link } from "react-router-dom";
 import { Button } from "./Button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "./Dialog";
 import { Flex } from './Flex';
@@ -59,14 +60,20 @@ export function GeoipModal() {
   return (
     <Dialog open={!!countryName}>
         <DialogContent>
-          <DialogTitle>Warning</DialogTitle>
+          <DialogTitle>Are you in {countryName}?</DialogTitle>
           <DialogDescription>
-            StakedICP is unable to provide services to users in {countryName}.
+          <p>It appears you are accessing StakedICP from {countryName}.</p>
+
+          <p>Pursuant to the <Link to="/terms-of-use">Terms of Use</Link>, citizens and residents of {countryName} are not permitted to use StakedICP's Services.</p>
+
+          <p>If you are either of those, you must cease activity, close any positions, and withdraw all balances from the platform immediately.</p>
+
+          <p>Persons detected using StakedICP in violation of the Terms of Service will be blocked from using the services, and may have any Fiat, Digital Tokens, funds, proceeds or other property, frozen and potentially confiscated. We may provide you a short grace period to allow for the withdrawal of property or provide you an opportunity to demonstrate to our satisfaction that you are not in violation, before blocking all services; if permitted and appropriate under applicable law anr our policies. For more information, please see the <Link to="/terms-of-use">Terms of Use</Link>.</p>
           </DialogDescription>
           <Flex css={{ justifyContent: 'flex-end'}}>
             <DialogClose asChild>
               <Button variant="error" css={{marginRight: 25}} onClick={() => setCountryName(null)}>
-              Ok
+              I am not a citizen or resident of {countryName}
               </Button>
             </DialogClose>
           </Flex>
