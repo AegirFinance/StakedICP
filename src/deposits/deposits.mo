@@ -292,40 +292,6 @@ shared(init_msg) actor class Deposits(args: {
         return meanAprMicrobips;
     };
 
-    // DEPRECATED: withdrawPendingDeposits is left, incase someone somehow
-    // transfers to the canister instead of the neuron directly.
-    public shared(msg) func withdrawPendingDeposits(to: Text) : async WithdrawPendingDepositsResult {
-        requireOwner(msg.caller);
-
-        let toBlob = switch (Account.fromText(to)) {
-          case (#err(_)) {
-            assert(false);
-            loop {};
-          };
-          case (#ok(x)) { Blob.toArray(x) };
-        };
-
-        let pendingAmount = await balance();
-        // TODO: Should we assert we have >1 icp to save on fees? or some smaller amount?
-        assert(pendingAmount.e8s > 1_000_000);
-
-        let fee = { e8s = 10_000 : Nat64 };
-        let args : Ledger.TransferArgs = {
-            memo            = 1; // TODO: Does this need to be something specific?
-            amount          = { e8s = pendingAmount.e8s - fee.e8s };
-            fee             = fee;
-            from_subaccount = null;
-            to              = toBlob;
-            created_at_time = null;
-        };
-        let result = await ledger.transfer(args);
-
-        return {
-            args = args;
-            result = result;
-        };
-    };
-
     public shared(msg) func createInvoice() : async Invoice {
         let to = await stakingNeuron();
         switch (to) {
