@@ -106,6 +106,18 @@ canister install deposits --mode="$MODE" --argument "$(cat << EOM
 EOM
 )"
 
+echo
+echo == Install metrics.
+echo
+
+canister install metrics --mode="$MODE" --argument "$(cat <<EOM
+(record {
+  deposits = principal "$(canister id deposits)";
+  token    = principal "$(canister id token)";
+})
+EOM
+)"
+
 if [[ "$NETWORK" != "local" ]]; then
   echo
   echo == Install website.

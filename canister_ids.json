@@ -16,5 +16,8 @@
   },
   "ledger_candid": {
     "ic": "ockk2-xaaaa-aaaai-aaaua-cai"
+  },
+  "metrics": {
+    "ic": "gp6lu-paaaa-aaaap-qaatq-cai"
   }
 }

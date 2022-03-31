@@ -23,6 +23,15 @@
       "main": "src/DIP20/motoko/src/token.mo",
       "type": "motoko"
     },
+    "metrics": {
+      "dependencies": [
+        "deposits",
+        "ledger",
+        "token"
+      ],
+      "main": "src/metrics/metrics.mo",
+      "type": "motoko"
+    },
     "website": {
       "dependencies": [
         "deposits",

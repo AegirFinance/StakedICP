@@ -138,6 +138,17 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
+    public shared(msg) func stakingNeuronBalance(): async ?Nat64 {
+        return switch (stakingNeuron_) {
+            case (null) { null };
+            case (?n) {
+                ?(await ledger.account_balance({
+                    account = Blob.toArray(n.accountId);
+                })).e8s;
+            };
+        };
+    };
+
     public shared(msg) func setStakingNeuron(n: { id : NeuronId ; accountId : Text }) {
         requireOwner(msg.caller);
         stakingNeuron_ := ?{
