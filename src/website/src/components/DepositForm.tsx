@@ -159,10 +159,10 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
         </DialogContent>
       ) : state === "confirm" ? (
         <DialogContent>
-          <DialogTitle>Are you absolutely sure?</DialogTitle>
+          <DialogTitle>Are you sure?</DialogTitle>
           <DialogDescription>
-            This action cannot be undone. Your ICP will immediately be
-            converted to stICP, and cannot be converted back to ICP.
+            This action cannot be undone. Your {amount} ICP will immediately be
+            converted to {amount} stICP, and cannot be converted back to ICP.
           </DialogDescription>
           <Flex css={{ justifyContent: 'flex-end'}}>
             <DialogClose asChild>
