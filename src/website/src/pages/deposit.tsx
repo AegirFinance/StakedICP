@@ -127,6 +127,10 @@ function FAQ() {
           <p>
           stICP tokens are a standard <a href="https://github.com/Psychedelic/DIP20">DIP20 token</a>, allowing you to earn ICP staking rewards while benefitting from e.g. yields across decentralised finance products. They do not confer any voting or governance rights.
           </p>
+
+          <p>
+          The stICP transaction fee is set at 0.0001. The same as normal ICP.
+          </p>
         </AccordionContent>
       </AccordionItem>
 
