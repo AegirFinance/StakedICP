@@ -20,7 +20,7 @@
       "type": "motoko"
     },
     "token": {
-      "main": "src/token/token.mo",
+      "main": "src/DIP20/motoko/src/token.mo",
       "type": "motoko"
     },
     "website": {
