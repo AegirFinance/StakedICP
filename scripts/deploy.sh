@@ -114,6 +114,7 @@ canister install metrics --mode="$MODE" --argument "$(cat <<EOM
 (record {
   deposits = principal "$(canister id deposits)";
   token    = principal "$(canister id token)";
+  auth     = opt "$(echo -n $METRICS_AUTH | base64)";
 })
 EOM
 )"

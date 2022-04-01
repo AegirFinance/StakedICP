@@ -16,6 +16,7 @@ import Ledger "canister:ledger";
 shared(init_msg) actor class Metrics(args: {
     deposits: Principal;
     token: Principal;
+    auth: ?Text;
 }) = this {
 
     private stable var deposits : Deposits.Deposits = actor(Principal.toText(args.deposits));
@@ -49,6 +50,43 @@ shared(init_msg) actor class Metrics(args: {
     };
 
     public query func http_request(request: HttpRequest) : async HttpResponse {
+        let headers : [HeaderField] = [("Content-Type", "text/plain"), ("WWW-Authenticate", "Basic realm=\"Metrics\", charset=\"UTF-8\"")];
+        switch (args.auth) {
+            case (null) { };
+            case (?auth) {
+                var found = "";
+                for ((key, value) in request.headers.vals()) {
+                    if (key == "authorization") {
+                        found := value;
+                    }
+                };
+
+                let expected = "Basic " # auth;
+                if (found != expected) {
+                    return {
+                        status_code = 401;
+                        headers = headers;
+                        body = Text.encodeUtf8("Not authorized.");
+                    };
+                }
+            };
+        };
+
+        switch (request.url) {
+            case ("/metrics") {
+                return metrics();
+            };
+            case (_) {
+                return {
+                    status_code = 404;
+                    headers = headers;
+                    body = Text.encodeUtf8("Not found");
+                };
+            };
+        };
+    };
+
+    private func metrics() : HttpResponse {
         let metrics: Buffer.Buffer<Text> = Buffer.Buffer(0);
 
         // Get the neuron balance
