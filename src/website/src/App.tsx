@@ -31,8 +31,8 @@ export default function App() {
     <div>
       <PreviewPassword>
         <WalletProvider autoConnect whitelist={[deposits.canisterId, token.canisterId].filter(x => !!x) as string[]} host={process.env.NETWORK}>
-          <GeoipModal />
           <BrowserRouter>
+            <GeoipModal />
             <Routes>
               <Route path="/" element={<Pages.Deposit />} />
               <Route path="/terms-of-use" element={<Pages.TermsOfUse />} />

@@ -62,6 +62,10 @@ const StyledDescription = styled(DialogPrimitive.Description, {
   color: mauve.mauve11,
   fontSize: 15,
   lineHeight: 1.5,
+  '& > p': {
+    marginTop: '$2',
+    marginBottom: '$2',
+  }
 });
 
 // Exports
