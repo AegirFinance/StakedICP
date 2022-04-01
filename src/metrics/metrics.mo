@@ -1,6 +1,7 @@
 import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
 import ExperimentalCycles "mo:base/ExperimentalCycles";
+import Int "mo:base/Int";
 import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
 import Principal "mo:base/Principal";
@@ -23,6 +24,7 @@ shared(init_msg) actor class Metrics(args: {
     private stable var neuronBalanceE8s : ?Nat64 = null;
     private stable var aprMicrobips : ?Nat64 = null;
     private stable var tokenInfo : ?TokenInfo = null;
+    private stable var lastUpdatedAt : ?Time.Time = null;
 
     type HeaderField = ( Text, Text );
 
@@ -93,6 +95,15 @@ shared(init_msg) actor class Metrics(args: {
         metrics.add("# HELP canister_balance_e8s canister balance for a token in e8s");
         metrics.add("canister_balance_e8s{token=\"cycles\",canister=\"metrics\"} " # Nat.toText(ExperimentalCycles.balance()));
 
+        switch (lastUpdatedAt) {
+            case (null) { };
+            case (?lastUpdatedAt) {
+                metrics.add("# TYPE last_updated_at gauge");
+                metrics.add("# HELP last_updated_at timestamp in ns, of last time the metrics were updated");
+                metrics.add("last_updated_at " # Int.toText(lastUpdatedAt));
+            };
+        };
+
         let body = Text.join("\n", metrics.vals());
         return {
             status_code = 200;
@@ -105,5 +116,6 @@ shared(init_msg) actor class Metrics(args: {
         neuronBalanceE8s := await deposits.stakingNeuronBalance();
         aprMicrobips := ?(await deposits.aprMicrobips());
         tokenInfo := ?(await token.getTokenInfo());
+        lastUpdatedAt := ?(Time.now());
     };
 };
