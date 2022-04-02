@@ -16,7 +16,7 @@ declare module "plug" {
     disconnect(): Promise<void>;
     batchTransactions(transactions: Transaction[]): Promise<boolean>;
     requestBalance(accountId?: number | null): Promise<Balance[]>;
-    requestTransfer(params: RequestTransferParams): Promise<bigint>;
+    requestTransfer(params: RequestTransferParams): Promise<{ height: bigint }>;
     requestConnect(params: RequestConnectParams): Promise<any>;
     createActor<T>({
       canisterId,

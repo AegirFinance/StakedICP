@@ -137,7 +137,7 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
         throw new Error("Transfer failed");
       }
 
-      await depositsCanister.notify({ memo: memo.toString() as any, block_height });
+      await depositsCanister.notify({ memo, block_height });
 
       // Bump the cachebuster to refresh balances
       setGlobalState(x => ({...x, cacheBuster: x.cacheBuster+1}));

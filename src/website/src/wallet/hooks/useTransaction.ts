@@ -32,7 +32,7 @@ export function useTransaction({ request }: Config = {}) {
         if (!connector) throw new Error("Connector not found");
 
         setState(x => ({ ...x, loading: true }));
-        const height = await connector.transfer({
+        const { height } = await connector.transfer({
           ...config_.request,
           amount: BigNumber.from(config_.request.amount).toNumber(),
         });

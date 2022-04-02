@@ -73,7 +73,7 @@ export class PlugConnector {
     return this.plug.getPrincipal();
   }
 
-  async transfer(params: RequestTransferParams): Promise<bigint> {
+  async transfer(params: RequestTransferParams): Promise<{ height: bigint }> {
     if (!this.plug) {
       throw new Error("Plug wallet not found");
     }

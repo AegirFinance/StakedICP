@@ -14,7 +14,7 @@ export interface Connector {
   getBalances(accountId?: string): Promise<Balance[]>;
   createActor<T>(options: CreateActor<T>): Promise<ActorSubclass<T>>;
   getPrincipal: () => Promise<Principal>;
-  transfer(params: RequestTransferParams): Promise<bigint>
+  transfer(params: RequestTransferParams): Promise<{ height: bigint }>;
 }
 
 export type Data = {
