@@ -151,9 +151,21 @@ shared(init_msg) actor class Metrics(args: {
     };
 
     system func heartbeat() : async () {
-        neuronBalanceE8s := await deposits.stakingNeuronBalance();
-        aprMicrobips := ?(await deposits.aprMicrobips());
-        tokenInfo := ?(await token.getTokenInfo());
+        try {
+            neuronBalanceE8s := await deposits.stakingNeuronBalance();
+        } catch (e) {
+        };
+
+        try {
+            aprMicrobips := ?(await deposits.aprMicrobips());
+        } catch (e) {
+        };
+
+        try {
+            tokenInfo := ?(await token.getTokenInfo());
+        } catch (e) {
+        };
+
         lastUpdatedAt := ?(Time.now());
     };
 };
