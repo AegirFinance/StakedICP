@@ -363,6 +363,37 @@ shared(init_msg) actor class Deposits(args: {
         return { hash = Hash.hash(Nat64.toNat(x)); key = x };
     };
 
+    public shared(msg) func cancelInvoice(memo: Nat64) : async ?Invoice {
+      switch (Trie.find(invoices, invoiceKey(memo), Nat64.equal)) {
+        case (null) {
+          return null;
+        };
+        case (?invoice) {
+          if (invoice.from != msg.caller and not isOwner(msg.caller)) {
+            // can only cancel your own invoices.
+            return null;
+          };
+          if (invoice.state != #Waiting) {
+            // can only cancel waiting invoices
+            return ?invoice;
+          };
+          // Mark this as done. This will be committed when we await the mint, below.
+          let newInvoice : Invoice = {
+              memo = invoice.memo;
+              from = invoice.from;
+              to = invoice.to;
+              state = #Cancelled;
+              block = invoice.block;
+              createdAt = invoice.createdAt;
+              receivedAt = invoice.receivedAt;
+          };
+          invoices := Trie.replace(invoices, invoiceKey(invoice.memo), Nat64.equal, ?newInvoice).0;
+          return ?newInvoice;
+        };
+      };
+      return null;
+    };
+
     public type TransactionNotification = {
         memo : Nat64;
         block_height : Nat64;

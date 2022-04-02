@@ -103,10 +103,15 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
 
   const onOpenChange = React.useCallback((open: boolean) => {
     setState("confirm");
+    if (!open && invoice && depositsCanister && state !== "complete") {
+      depositsCanister.cancelInvoice(invoice.memo);
+      setInvoice(undefined);
+    }
     parentOnOpenChange(open);
-  }, [setState, parentOnOpenChange]);
+  }, [setState, parentOnOpenChange, !!invoice, depositsCanister]);
 
   const deposit = React.useCallback(async () => {
+    let invoice: Invoice | undefined;
     try {
       if (!amount) {
         throw new Error("Amount missing");
@@ -117,7 +122,7 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
 
       setState("pending");
 
-      const invoice = await depositsCanister.createInvoice();
+      invoice = await depositsCanister.createInvoice();
       setInvoice(invoice);
       if (!invoice) {
           throw new Error("Error creating the invoice");
@@ -148,7 +153,9 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
       setInvoice(undefined);
     } catch (err) {
       setState("rejected");
-      throw err;
+      if (invoice && depositsCanister) {
+        await depositsCanister.cancelInvoice(invoice.memo);
+      }
     }
   }, [amount]);
 
