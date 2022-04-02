@@ -4,6 +4,7 @@ import ExperimentalCycles "mo:base/ExperimentalCycles";
 import Int "mo:base/Int";
 import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
+import Option "mo:base/Option";
 import Principal "mo:base/Principal";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
@@ -151,21 +152,44 @@ shared(init_msg) actor class Metrics(args: {
     };
 
     system func heartbeat() : async () {
+        // Only fire once per minute.
+        let second = 1000_000_000;
+        let now = Time.now();
+        let elapsedSeconds = (now - Option.get(lastUpdatedAt, (now - (60*second)))) / second;
+        if (elapsedSeconds < 60) {
+            return ();
+        };
+
+        let balance = refreshStakingNeuronBalance();
+        let apr = refreshAprMicrobips();
+        let tokenInfo = refreshTokenInfo();
+
+        await balance;
+        await apr;
+        await tokenInfo;
+
+        lastUpdatedAt := ?now;
+    };
+
+    private func refreshStakingNeuronBalance() : async () {
         try {
             neuronBalanceE8s := await deposits.stakingNeuronBalance();
         } catch (e) {
         };
+    };
 
+    private func refreshAprMicrobips() : async () {
         try {
             aprMicrobips := ?(await deposits.aprMicrobips());
         } catch (e) {
         };
+    };
 
+    private func refreshTokenInfo() : async () {
         try {
             tokenInfo := ?(await token.getTokenInfo());
         } catch (e) {
         };
-
-        lastUpdatedAt := ?(Time.now());
     };
+
 };
