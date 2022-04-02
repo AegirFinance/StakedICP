@@ -1,6 +1,6 @@
 import React from 'react';
 import * as deposits from "../../../declarations/deposits";
-import { Deposits } from "../../../declarations/deposits/deposits.did";
+import { Deposits, Invoice } from "../../../declarations/deposits/deposits.did";
 import { styled } from '../stitches.config';
 import { ConnectButton, useAccount, useCanister, useContext, useTransaction } from "../wallet";
 import { Button } from "./Button";
@@ -96,6 +96,7 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
   });
   const [state, setState] = React.useState<"confirm" | "pending" | "complete" | "rejected">("confirm");
   const error = React.useMemo(() => amount < MINIMUM_DEPOSIT && `Minimum deposit is ${MINIMUM_DEPOSIT} ICP`, [amount])
+  const [invoice, setInvoice] = React.useState<Invoice | undefined>();
 
   const onOpenChange = React.useCallback((open: boolean) => {
     setState("confirm");
@@ -105,13 +106,20 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
   const deposit = React.useCallback(async () => {
     try {
       if (!amount) {
-        throw new Error("Deposits canister missing");
+        throw new Error("Amount missing");
       }
       if (!depositsCanister) {
         throw new Error("Deposits canister missing");
       }
+
       setState("pending");
-      const { memo, to } = await depositsCanister.createInvoice();
+
+      const invoice = await depositsCanister.createInvoice();
+      setInvoice(invoice);
+      if (!invoice) {
+          throw new Error("Error creating the invoice");
+      }
+      const { to, memo } = invoice;
 
       const { data: block_height } = await sendTransaction({
         request: {
@@ -132,6 +140,7 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
       // Bump the cachebuster to refresh balances
       setGlobalState(x => ({...x, cacheBuster: x.cacheBuster+1}));
       setState("complete");
+      setInvoice(undefined);
     } catch (err) {
       setState("rejected");
       throw err;
@@ -176,9 +185,15 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
       ) : state === "pending" ? (
         <DialogContent>
           <DialogTitle>Transfer Pending</DialogTitle>
-          <DialogDescription>
-            Converting {amount} ICP to {amount} stICP...
-          </DialogDescription>
+          {!invoice ? (
+              <DialogDescription>
+                Creating invoice...
+              </DialogDescription>
+          ) : (
+              <DialogDescription>
+                Converting {amount} ICP to {amount} stICP...
+              </DialogDescription>
+          )}
           <Flex css={{ justifyContent: 'flex-end'}}>
             <DialogClose asChild onClick={() => onOpenChange(false)}>
               <Button variant="cancel">Close</Button>
