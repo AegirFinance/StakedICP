@@ -30,7 +30,10 @@ export function DepositForm() {
   const [showTransferDialog, setShowTransferDialog] = React.useState(false);
 
   return (
-    <Wrapper>
+    <Wrapper onSubmit={e => {
+        e.preventDefault();
+        setShowTransferDialog(!!(principal && amount));
+    }}>
       <h3>Deposit</h3>
       <Input
         type="text"
