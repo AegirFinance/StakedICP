@@ -121,17 +121,19 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
       }
       const { to, memo } = invoice;
 
-      const { data: block_height } = await sendTransaction({
+      const { data: block_height, error } = await sendTransaction({
         request: {
           to,
           // TODO: Better number handling here than floats.
           amount: amount*100000000,
           opts: {
-            memo: memo !== undefined ? `${memo}` : memo,
+            memo: memo.toString(),
           },
         },
       });
-      if (!block_height) {
+      if (error) {
+        throw error;
+      } else if (block_height === undefined) {
         throw new Error("Transfer failed");
       }
 
@@ -216,7 +218,10 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
         <DialogContent>
           <DialogTitle>Transfer Failed</DialogTitle>
           <DialogDescription>
-            Failed to convert {amount} ICP to {amount} stICP.
+            <p>Failed to convert {amount} ICP to {amount} stICP.</p>
+            {!!invoice && (
+              <p>Please contact support with invoice number: {invoice.memo}</p>
+            )}
           </DialogDescription>
           <Flex css={{ justifyContent: 'flex-end'}}>
             <DialogClose asChild onClick={() => onOpenChange(false)}>
