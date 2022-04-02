@@ -2,11 +2,9 @@ import { Principal } from "@dfinity/principal";
 import React from 'react';
 import * as contract from "../../../../declarations/token";
 import { Token } from "../../../../declarations/token/token.did.js";
-import { Connector } from "../connectors";
 import { useContext } from "../context";
 import * as format from "../../format";
 import { useAsyncEffect } from "../../hooks";
-import { useAccount } from "./useAccount";
 import { useCacheBuster } from "./useCacheBuster";
 
 export type Config = {
@@ -52,6 +50,7 @@ export function useBalance({
     formatUnits?: Config['formatUnits']
     token?: Config['token']
   }) => {
+      setState(initialState);
       try {
         const config_ = config ?? {
           addressOrName: addressOrName ?? principal,
