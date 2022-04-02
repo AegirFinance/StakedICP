@@ -6,6 +6,8 @@ NETWORK="${1:-local}"
 
 MODE="${2:-install}"
 
+CANISTER="${3}"
+
 existing_neuron_id() {
   (dfx canister call governance \
     list_neurons \
@@ -56,6 +58,9 @@ esac
 echo "Network:           $NETWORK"
 echo "Mode:              $MODE"
 echo "Staking Neuron ID: $NEURON_ID"
+if [ -n "$CANISTER" ]; then
+    echo "Canister:          $CANISTER"
+fi
 
 canister() {
   dfx canister $DFX_OPTS "$@"
@@ -77,6 +82,8 @@ echo
 
 dfx build --network "$NETWORK"
 
+if [[ "$CANISTER" == "" ]] || [[ "$CANISTER" == "token" ]]; then
+
 echo
 echo == Install token.
 echo
@@ -86,6 +93,11 @@ canister install token --mode="$MODE" --argument "$(cat << EOM
 ("${LOGO}", "Staked ICP", "stICP", 8, 100_000_000, principal "$(canister id deposits)", 10_000)
 EOM
 )"
+
+fi
+
+
+if [[ "$CANISTER" == "" ]] || [[ "$CANISTER" == "deposits" ]]; then
 
 echo
 echo == Install deposits.
@@ -106,6 +118,10 @@ canister install deposits --mode="$MODE" --argument "$(cat << EOM
 EOM
 )"
 
+fi
+
+if [[ "$CANISTER" == "" ]] || [[ "$CANISTER" == "metrics" ]]; then
+
 echo
 echo == Install metrics.
 echo
@@ -119,10 +135,16 @@ canister install metrics --mode="$MODE" --argument "$(cat <<EOM
 EOM
 )"
 
+fi
+
+if [[ "$CANISTER" == "" ]] || [[ "$CANISTER" == "website" ]]; then
+
 if [[ "$NETWORK" != "local" ]]; then
   echo
   echo == Install website.
   echo
 
   canister install website --mode="$MODE"
+fi
+
 fi
