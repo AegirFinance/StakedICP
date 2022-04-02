@@ -137,7 +137,7 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
         throw new Error("Transfer failed");
       }
 
-      await depositsCanister.notify({ memo, block_height });
+      await depositsCanister.notify({ memo: memo.toString() as any, block_height });
 
       // Bump the cachebuster to refresh balances
       setGlobalState(x => ({...x, cacheBuster: x.cacheBuster+1}));
@@ -220,7 +220,7 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
           <DialogDescription>
             <p>Failed to convert {amount} ICP to {amount} stICP.</p>
             {!!invoice && (
-              <p>Please contact support with invoice number: {invoice.memo}</p>
+              <p>Please contact support with invoice number: {invoice.memo.toString()}</p>
             )}
           </DialogDescription>
           <Flex css={{ justifyContent: 'flex-end'}}>
