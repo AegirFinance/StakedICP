@@ -196,10 +196,12 @@ shared(init_msg) actor class Metrics(args: {
 
         let balance = refreshStakingNeuronBalance();
         let apr = refreshAprMicrobips();
+        let invoice = refreshInvoices();
         let tokenInfo = refreshTokenInfo();
 
         await balance;
         await apr;
+        await invoice;
         await tokenInfo;
 
         lastUpdatedAt := ?now;
