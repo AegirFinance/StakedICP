@@ -37,7 +37,6 @@ const Balance = styled('span', {
 export function Header() {
   const [{data: account}] = useAccount();
   const [{data: sticp}] = useBalance({ token: token.canisterId });
-  const [{data: icp}] = useBalance();
 
   return (
     <Wrapper>
@@ -46,7 +45,7 @@ export function Header() {
         <Logo style={{height: "2.5rem"}} />
       </Link>
       {account && (
-        [sticp, icp].map((b, i) =>
+        [sticp].map((b, i) =>
           <Balance key={i}>{b ? `${b.formatted} ${b.symbol}` : <ActivityIndicator /> }</Balance>
         )
       )}
