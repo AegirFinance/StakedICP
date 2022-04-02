@@ -18,7 +18,7 @@
     "prebuild": "npm run copy:types",
     "start": "webpack serve --mode development --env development",
     "prestart": "npm run copy:types",
-    "copy:types": "rsync -avr .dfx/$(echo ${DFX_NETWORK:-'**'})/canisters/** --exclude='public/' --exclude='idl/' --exclude='*.wasm' --delete src/declarations"
+    "copy:types": "rsync -avr .dfx/$(echo ${DFX_NETWORK:-'local'})/canisters/** --exclude='public/' --exclude='idl/' --exclude='*.wasm' --delete src/declarations"
   },
   "dependencies": {
     "@dfinity/agent": "",
