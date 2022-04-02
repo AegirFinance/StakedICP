@@ -12,6 +12,7 @@
 .dfx/
 .vessel/
 .temp/
+/temp/
 
 # frontend code
 node_modules/
