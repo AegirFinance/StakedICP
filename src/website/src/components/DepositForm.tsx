@@ -119,7 +119,7 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
           // TODO: Better number handling here than floats.
           amount: amount*100000000,
           opts: {
-            memo,
+            memo: memo !== undefined ? `${memo}` : memo,
           },
         },
       });

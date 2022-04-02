@@ -49,7 +49,7 @@ declare module "plug" {
     amount: number;
     opts?: {
       fee?: bigint;
-      memo?: bigint;
+      memo?: string;
       from_subaccount?: number;
       created_at_time?: TimeStamp;
     };
