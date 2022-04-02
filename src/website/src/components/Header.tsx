@@ -41,7 +41,10 @@ export function Header() {
 
   return (
     <Wrapper>
-      <Link to="/" style={{marginRight: "auto"}}><Logo style={{height: "2.5rem"}} /></Link>
+      <Link to="/" style={{marginRight: "auto", display: "flex", alignItems: "center"}}>
+        <img height="28" width="28" style={{marginRight: "0.75rem"}} src="./logo192.png" />
+        <Logo style={{height: "2.5rem"}} />
+      </Link>
       {account && (
         [sticp, icp].map((b, i) =>
           <Balance key={i}>{b ? `${b.formatted} ${b.symbol}` : <ActivityIndicator /> }</Balance>
