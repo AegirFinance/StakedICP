@@ -1,5 +1,6 @@
 import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
+import Error "mo:base/Error";
 import ExperimentalCycles "mo:base/ExperimentalCycles";
 import Int "mo:base/Int";
 import Nat64 "mo:base/Nat64";
@@ -27,6 +28,8 @@ shared(init_msg) actor class Metrics(args: {
     private stable var aprMicrobips : ?Nat64 = null;
     private stable var tokenInfo : ?TokenInfo = null;
     private stable var lastUpdatedAt : ?Time.Time = null;
+
+    private var errors: Buffer.Buffer<(Time.Time, Text, Error)> = Buffer.Buffer(0);
 
     type HeaderField = ( Text, Text );
 
@@ -76,6 +79,9 @@ shared(init_msg) actor class Metrics(args: {
         switch (request.url) {
             case ("/metrics") {
                 return metrics();
+            };
+            case ("/errors") {
+                return showErrors();
             };
             case (_) {
                 return {
@@ -151,6 +157,21 @@ shared(init_msg) actor class Metrics(args: {
         };
     };
 
+    private func showErrors() : HttpResponse {
+        let output: Buffer.Buffer<Text> = Buffer.Buffer(0);
+
+        for ((time, key, error) in errors.vals()) {
+            output.add(debug_show(time) # "," # key # "," # Error.message(error));
+        };
+
+        let body = Text.join("\n", output.vals());
+        return {
+            status_code = 200;
+            headers = [("Content-Type", "text/plain")];
+            body = Text.encodeUtf8(body);
+        };
+    };
+
     system func heartbeat() : async () {
         // Only fire once per minute.
         let second = 1000_000_000;
@@ -175,6 +196,7 @@ shared(init_msg) actor class Metrics(args: {
         try {
             neuronBalanceE8s := await deposits.stakingNeuronBalance();
         } catch (e) {
+            errors.add((Time.now(), "staking-neuron-balance", e));
         };
     };
 
@@ -182,6 +204,7 @@ shared(init_msg) actor class Metrics(args: {
         try {
             aprMicrobips := ?(await deposits.aprMicrobips());
         } catch (e) {
+            errors.add((Time.now(), "apr-microbips", e));
         };
     };
 
@@ -189,6 +212,7 @@ shared(init_msg) actor class Metrics(args: {
         try {
             tokenInfo := ?(await token.getTokenInfo());
         } catch (e) {
+            errors.add((Time.now(), "token-info", e));
         };
     };
 
