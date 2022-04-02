@@ -1,12 +1,14 @@
 import Array "mo:base/Array";
+import AssocList "mo:base/AssocList";
 import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
 import Debug "mo:base/Debug";
 import Hash "mo:base/Hash";
 import Int "mo:base/Int";
 import Iter "mo:base/Iter";
-import Nat "mo:base/Nat";
+import List "mo:base/List";
 import Nat64 "mo:base/Nat64";
+import Nat "mo:base/Nat";
 import Option "mo:base/Option";
 import Order "mo:base/Order";
 import P "mo:base/Prelude";
@@ -62,7 +64,7 @@ shared(init_msg) actor class Deposits(args: {
     public type InvoiceState = {
         #Waiting;
         #Received;
-        #Staked;
+        #Cancelled;
     };
 
     public type StakingNeuron = {
@@ -323,6 +325,22 @@ shared(init_msg) actor class Deposits(args: {
                 return invoice;
             };
         }
+    };
+
+    public type InvoicesByState = [(Text, Nat64)];
+
+    public query func invoicesByState() : async InvoicesByState {
+        var counts : AssocList.AssocList<Text, Nat64> = List.nil();
+        for ((_, invoice) in Trie.iter(invoices)) {
+            let key = switch (invoice.state) {
+                case (#Waiting) { "waiting" };
+                case (#Received) { "received" };
+                case (#Cancelled) { "cancelled" };
+            };
+            let newValue = Option.get(AssocList.find(counts, key, Text.equal), 0 : Nat64) + 1;
+            counts := AssocList.replace(counts, key, Text.equal, ?newValue).0;
+        };
+        return List.toArray(counts);
     };
 
     public shared(msg) func getInvoice(memo: Nat64) : async ?Invoice {

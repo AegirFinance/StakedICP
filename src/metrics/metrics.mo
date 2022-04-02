@@ -26,6 +26,7 @@ shared(init_msg) actor class Metrics(args: {
 
     private stable var neuronBalanceE8s : ?Nat64 = null;
     private stable var aprMicrobips : ?Nat64 = null;
+    private stable var invoices : ?[(Text, Nat64)] = null;
     private stable var tokenInfo : ?TokenInfo = null;
     private stable var lastUpdatedAt : ?Time.Time = null;
 
@@ -114,6 +115,18 @@ shared(init_msg) actor class Metrics(args: {
                 metrics.add("apr_microbips " # Nat64.toText(aprMicrobips));
             };
         };
+
+        switch (invoices) {
+            case (null) { };
+            case (?invoices) {
+                metrics.add("# TYPE invoices gauge");
+                metrics.add("# HELP invoices total number of invoices by state");
+                for ((state, count) in invoices.vals()) {
+                    metrics.add("invoices{state=\"" # state # "\"} " # Nat64.toText(count));
+                }
+            };
+        };
+
 
         switch (tokenInfo) {
             case (null) { };
@@ -205,6 +218,14 @@ shared(init_msg) actor class Metrics(args: {
             aprMicrobips := ?(await deposits.aprMicrobips());
         } catch (e) {
             errors.add((Time.now(), "apr-microbips", e));
+        };
+    };
+
+    private func refreshInvoices() : async () {
+        try {
+            invoices := ?(await deposits.invoicesByState());
+        } catch (e) {
+            errors.add((Time.now(), "invoices", e));
         };
     };
 
