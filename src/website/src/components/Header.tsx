@@ -30,6 +30,9 @@ const Logo = (props: SVGProps<SVGSVGElement>) => (
 )
 
 const Balance = styled('span', {
+  display: "flex",
+  flexDirection: "row",
+  flexWrap: "no-wrap",
   margin: "1rem",
 });
 
@@ -45,9 +48,7 @@ export function Header() {
         <Logo style={{height: "2.5rem"}} />
       </Link>
       {account && (
-        [sticp].map((b, i) =>
-          <Balance key={i}>{b ? `${b.formatted} ${b.symbol}` : <ActivityIndicator /> }</Balance>
-        )
+        <Balance>{sticp ? sticp.formatted : <ActivityIndicator css={{marginRight: "1ch"}} /> } stICP</Balance>
       )}
       <ConnectButton />
     </Wrapper>
