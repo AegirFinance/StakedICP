@@ -33,6 +33,16 @@ shared(init_msg) actor class Deposits(args: {
     stakingNeuron: ?{ id : { id : Nat64 }; accountId : Text };
 }) = this {
 
+    // Makes date math simpler
+    let second : Int = 1_000_000_000;
+    let minute : Int = 60 * second;
+    let hour : Int = 60 * minute;
+    let day : Int = 24 * hour;
+
+    // For apr calcs
+    let microbips : Nat64 = 100_000_000;
+
+
     type NeuronId = { id : Nat64; };
 
     type ApplyInterestResult = {
@@ -293,11 +303,37 @@ shared(init_msg) actor class Deposits(args: {
         };
 
         let last = appliedInterest.get(appliedInterest.size() - 1);
+
         // supply.before should always be > 0, because initial supply is 1, but...
         assert(last.supply.before.e8s > 0);
 
-        let microbips : Nat64 = 100_000_000;
-        meanAprMicrobips := ((microbips * last.supply.after.e8s) / last.supply.before.e8s) - microbips;
+        // 7 days from the last time we applied interest, truncated to the utc day start.
+        let start = ((last.timestamp - (day * 6)) / day) * day;
+
+        // sum all interest applications that are in that period.
+        var i : Nat = appliedInterest.size();
+        var sum : Nat64 = 0;
+        var earliest : Time.Time  = last.timestamp;
+        label range while (i > 0) {
+            i := i - 1;
+            let interest = appliedInterest.get(i);
+            if (interest.timestamp < start) {
+                break range;
+            };
+            sum := sum + ((microbips * interest.supply.after.e8s) / interest.supply.before.e8s) - microbips;
+            earliest := interest.timestamp;
+        };
+        // truncate to start of first day where we found an application.
+        // (in case we didn't have 7 days of applications)
+        earliest := (earliest / day) * day;
+        // end of last day
+        let latest = ((last.timestamp / day) * day) + day;
+        // Find the number of days we've spanned
+        let span = Nat64.fromNat(Int.abs((latest - earliest) / day));
+
+        // Find the mean
+        meanAprMicrobips := sum / span;
+
         Debug.print("meanAprMicrobips: " # debug_show(meanAprMicrobips));
     };
 

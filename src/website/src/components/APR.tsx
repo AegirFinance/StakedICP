@@ -37,7 +37,7 @@ export function APR() {
         </p>
         <br />
         <p>
-          Reward rates are adjusted roughly every 24 hours, based on the past 24 hours’ activity.
+          Reward rates are adjusted roughly every 24 hours, based on the past 7 days’ activity.
         </p>
         </HelpDialog></h1>
       
