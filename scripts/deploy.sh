@@ -23,7 +23,7 @@ make_neuron() {
   (
     dfx ledger transfer "$NEURON_ACCOUNT_ID" --memo "$NEURON_MEMO" --amount "1.00"
     dfx canister call governance claim_or_refresh_neuron_from_account "(record { controller = opt principal \"$(dfx identity get-principal)\" ; memo = $NEURON_MEMO : nat64 })"
-  ) > 2
+  ) >&2
   existing_neuron_id
 }
 
@@ -80,7 +80,7 @@ echo
 echo == Build.
 echo
 
-dfx build --network "$NETWORK"
+dfx build --network "$NETWORK" $CANISTER
 
 if [[ "$CANISTER" == "" ]] || [[ "$CANISTER" == "token" ]]; then
 
