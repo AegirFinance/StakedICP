@@ -1,6 +1,8 @@
+ import { ActorSubclass } from "@dfinity/agent";
 import React from 'react';
 import * as deposits from "../../../declarations/deposits";
-import { Deposits, Invoice } from "../../../declarations/deposits/deposits.did";
+import { Deposits } from "../../../declarations/deposits/deposits.did";
+import { useAsyncEffect } from '../hooks';
 import { styled } from '../stitches.config';
 import { ConnectButton, useAccount, useCanister, useContext, useTransaction } from "../wallet";
 import { Button } from "./Button";
@@ -27,12 +29,38 @@ export function DepositForm() {
   const [{ data: account }] = useAccount();
   const principal = account?.principal;
   const [amount, setAmount] = React.useState("");
+  const deposit = React.useMemo(() => {
+    if (!amount) {
+        return 0;
+    }
+    const parsed = Number.parseFloat(amount);
+    if (parsed === NaN || parsed === +Infinity || parsed === -Infinity) {
+        return 0;
+    }
+    return parsed;
+  }, [amount]);
   const [showTransferDialog, setShowTransferDialog] = React.useState(false);
+  const [depositAddress, setDepositAddress] = React.useState("");
+  const depositsCanister = useCanister<Deposits>({
+    // TODO: handle missing canister id better
+    canisterId: deposits.canisterId ?? "",
+    interfaceFactory: deposits.idlFactory,
+  });
+
+  useAsyncEffect(async () => {
+      setDepositAddress("");
+      if (!principal || !depositsCanister) {
+          return;
+      }
+      const update = depositsCanister.depositIcp();
+      setDepositAddress(await depositsCanister.getDepositAddress());
+      await update;
+  }, [principal, !!depositsCanister]);
 
   return (
     <Wrapper onSubmit={e => {
         e.preventDefault();
-        setShowTransferDialog(!!(principal && amount));
+        setShowTransferDialog(!!(principal && deposit >= MINIMUM_DEPOSIT));
     }}>
       <h3>Deposit</h3>
       <Input
@@ -46,18 +74,20 @@ export function DepositForm() {
       {principal ? (
         <TransferDialog
           open={showTransferDialog}
-          amount={Number.parseFloat(amount)}
+          rawAmount={amount}
+          amount={deposit}
+          depositAddress={depositAddress}
+          depositsCanister={depositsCanister}
           onOpenChange={(open: boolean) => {
-            setShowTransferDialog(!!(principal && amount && open));
+            setShowTransferDialog(!!(principal && deposit && open));
           }} />
       ) : (
         <ConnectButton />
       )}
       <DataTable>
         <DataTableRow>
-          {/* TODO: Account for transaction fees here */}
           <DataTableLabel>You will receive</DataTableLabel>
-          <DataTableValue>{amount || 0} stICP</DataTableValue>
+          <DataTableValue>{deposit >= MINIMUM_DEPOSIT ? Number.parseFloat(amount) - FEE : 0} stICP</DataTableValue>
         </DataTableRow>
         <DataTableRow>
           <DataTableLabel>Exchange rate</DataTableLabel>
@@ -65,7 +95,7 @@ export function DepositForm() {
         </DataTableRow>
         <DataTableRow>
           <DataTableLabel>Transaction cost</DataTableLabel>
-          <DataTableValue>0.0001 ICP</DataTableValue>
+          <DataTableValue>{FEE} ICP</DataTableValue>
         </DataTableRow>
         <DataTableRow>
           {/* TODO: Add help text here, or better explanation */}
@@ -82,36 +112,36 @@ export function DepositForm() {
 }
 
 interface TransferDialogParams {
+  rawAmount: string;
   amount: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  depositAddress: string;
+  depositsCanister?: ActorSubclass<Deposits>;
 }
 
-const MINIMUM_DEPOSIT = 0.0001;
+const MINIMUM_DEPOSIT = 0.001;
+const FEE = 0.0001;
 
-function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: TransferDialogParams) {
+function TransferDialog({
+    rawAmount,
+    amount,
+    open,
+    onOpenChange: parentOnOpenChange,
+    depositAddress,
+    depositsCanister,
+}: TransferDialogParams) {
   const { setState: setGlobalState } = useContext();
   const [_, sendTransaction] = useTransaction();
-  const depositsCanister = useCanister<Deposits>({
-    // TODO: handle missing canister id better
-    canisterId: deposits.canisterId ?? "",
-    interfaceFactory: deposits.idlFactory,
-  });
   const [state, setState] = React.useState<"confirm" | "pending" | "complete" | "rejected">("confirm");
-  const error = React.useMemo(() => amount < MINIMUM_DEPOSIT && `Minimum deposit is ${MINIMUM_DEPOSIT} ICP`, [amount])
-  const [invoice, setInvoice] = React.useState<Invoice | undefined>();
+  const error = React.useMemo(() => rawAmount && amount < MINIMUM_DEPOSIT && `Minimum deposit is ${MINIMUM_DEPOSIT} ICP`, [rawAmount, amount])
 
   const onOpenChange = React.useCallback((open: boolean) => {
     setState("confirm");
-    if (!open && invoice && depositsCanister && state !== "complete") {
-      depositsCanister.cancelInvoice(invoice.memo);
-      setInvoice(undefined);
-    }
     parentOnOpenChange(open);
-  }, [setState, parentOnOpenChange, !!invoice, depositsCanister]);
+  }, [setState, parentOnOpenChange]);
 
   const deposit = React.useCallback(async () => {
-    let invoice: Invoice | undefined;
     try {
       if (!amount) {
         throw new Error("Amount missing");
@@ -122,21 +152,16 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
 
       setState("pending");
 
-      invoice = await depositsCanister.createInvoice();
-      setInvoice(invoice);
-      if (!invoice) {
-          throw new Error("Error creating the invoice");
+      let to = depositAddress || await depositsCanister.getDepositAddress()
+      if (!to) {
+        throw new Error("Failed to get the deposit address");
       }
-      const { to, memo } = invoice;
 
       const { data: block_height, error } = await sendTransaction({
         request: {
           to,
           // TODO: Better number handling here than floats.
           amount: amount*100000000,
-          opts: {
-            memo: memo.toString(),
-          },
         },
       });
       if (error) {
@@ -145,24 +170,20 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
         throw new Error("Transfer failed");
       }
 
-      await depositsCanister.notify({ memo, block_height });
+      await depositsCanister.depositIcp();
 
       // Bump the cachebuster to refresh balances
       setGlobalState(x => ({...x, cacheBuster: x.cacheBuster+1}));
       setState("complete");
-      setInvoice(undefined);
     } catch (err) {
       setState("rejected");
-      if (invoice && depositsCanister) {
-        await depositsCanister.cancelInvoice(invoice.memo);
-      }
     }
   }, [amount]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button>Deposit</Button>
+        <Button disabled={!!error} variant={!!error ? "error" : undefined}>{error || "Deposit"}</Button>
       </DialogTrigger>
       {error ? (
         <DialogContent>
@@ -197,15 +218,9 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
       ) : state === "pending" ? (
         <DialogContent>
           <DialogTitle>Transfer Pending</DialogTitle>
-          {!invoice ? (
-              <DialogDescription>
-                Creating invoice...
-              </DialogDescription>
-          ) : (
-              <DialogDescription>
-                Converting {amount} ICP to {amount} stICP...
-              </DialogDescription>
-          )}
+            <DialogDescription>
+              Converting {amount} ICP to {amount} stICP...
+            </DialogDescription>
           <Flex css={{ justifyContent: 'flex-end'}}>
             <DialogClose asChild onClick={() => onOpenChange(false)}>
               <Button variant="cancel">Close</Button>
@@ -229,9 +244,6 @@ function TransferDialog({amount, open, onOpenChange: parentOnOpenChange}: Transf
           <DialogTitle>Transfer Failed</DialogTitle>
           <DialogDescription>
             <p>Failed to convert {amount} ICP to {amount} stICP.</p>
-            {!!invoice && (
-              <p>Please contact support with invoice number: {invoice.memo.toString()}</p>
-            )}
           </DialogDescription>
           <Flex css={{ justifyContent: 'flex-end'}}>
             <DialogClose asChild onClick={() => onOpenChange(false)}>

@@ -26,7 +26,7 @@ shared(init_msg) actor class Metrics(args: {
 
     private stable var neuronBalanceE8s : ?Nat64 = null;
     private stable var aprMicrobips : ?Nat64 = null;
-    private stable var invoices : ?[(Text, Nat64)] = null;
+    private stable var depositsBalanceE8s : ?Nat64 = null;
     private stable var tokenInfo : ?TokenInfo = null;
     private stable var lastUpdatedAt : ?Time.Time = null;
 
@@ -116,17 +116,14 @@ shared(init_msg) actor class Metrics(args: {
             };
         };
 
-        switch (invoices) {
+        switch (depositsBalanceE8s) {
             case (null) { };
-            case (?invoices) {
-                metrics.add("# TYPE invoices gauge");
-                metrics.add("# HELP invoices total number of invoices by state");
-                for ((state, count) in invoices.vals()) {
-                    metrics.add("invoices{state=\"" # state # "\"} " # Nat64.toText(count));
-                }
+            case (?depositsBalanceE8s) {
+                metrics.add("# TYPE canister_balance_e8s gauge");
+                metrics.add("# HELP canister_balance_e8s canister balance for a token in e8s");
+                metrics.add("canister_balance_e8s{token=\"ICP\",canister=\"deposits\"} " # Nat64.toText(depositsBalanceE8s));
             };
         };
-
 
         switch (tokenInfo) {
             case (null) { };
@@ -196,12 +193,12 @@ shared(init_msg) actor class Metrics(args: {
 
         let balance = refreshStakingNeuronBalance();
         let apr = refreshAprMicrobips();
-        let invoice = refreshInvoices();
+        let depositsBalance = refreshDepositsBalance();
         let tokenInfo = refreshTokenInfo();
 
         await balance;
         await apr;
-        await invoice;
+        await depositsBalance;
         await tokenInfo;
 
         lastUpdatedAt := ?now;
@@ -223,11 +220,11 @@ shared(init_msg) actor class Metrics(args: {
         };
     };
 
-    private func refreshInvoices() : async () {
+    private func refreshDepositsBalance() : async () {
         try {
-            invoices := ?(await deposits.invoicesByState());
+            depositsBalanceE8s := ?(await deposits.balance()).e8s;
         } catch (e) {
-            errors.add((Time.now(), "invoices", e));
+            errors.add((Time.now(), "deposits-balance", e));
         };
     };
 

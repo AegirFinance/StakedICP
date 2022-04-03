@@ -32,6 +32,8 @@ shared(init_msg) actor class Deposits(args: {
     owners: [Principal];
     stakingNeuron: ?{ id : { id : Nat64 }; accountId : Text };
 }) = this {
+    // Cost to transfer ICP on the ledger
+    let icpFee: Nat = 10_000;
 
     // Makes date math simpler
     let second : Int = 1_000_000_000;
@@ -45,6 +47,22 @@ shared(init_msg) actor class Deposits(args: {
 
     type NeuronId = { id : Nat64; };
 
+    // Copied from Token due to compiler weirdness
+    type TxReceipt = {
+        #Ok: Nat;
+        #Err: {
+            #InsufficientAllowance;
+            #InsufficientBalance;
+            #ErrorOperationStyle;
+            #Unauthorized;
+            #LedgerTrap;
+            #ErrorTo;
+            #Other: Text;
+            #BlockUsed;
+            #AmountTooSmall;
+        };
+    };
+
     type ApplyInterestResult = {
         timestamp : Time.Time;
         supply : {
@@ -54,27 +72,12 @@ shared(init_msg) actor class Deposits(args: {
         applied : Ledger.Tokens;
         remainder : Ledger.Tokens;
         totalHolders: Nat;
+        flush : ?TxReceipt;
     };
 
     type WithdrawPendingDepositsResult = {
       args : Ledger.TransferArgs;
       result : Ledger.TransferResult;
-    };
-
-    public type Invoice = {
-      memo: Nat64;
-      from: Principal;
-      to: Text;
-      state: InvoiceState;
-      block: ?Nat64;
-      createdAt : Time.Time;
-      receivedAt : ?Time.Time;
-    };
-
-    public type InvoiceState = {
-        #Waiting;
-        #Received;
-        #Cancelled;
     };
 
     public type StakingNeuron = {
@@ -101,9 +104,8 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
-    private stable var nextInvoiceId : Nat64 = 0;
-    private stable var invoices : Trie.Trie<Nat64, Invoice> = Trie.empty();
-
+    private stable var balances : Trie.Trie<Principal, Nat64> = Trie.empty();
+    private stable var pendingMints : Trie.Trie<Principal, Nat64> = Trie.empty();
 
     private stable var appliedInterestEntries : [ApplyInterestResult] = [];
     private var appliedInterest : Buffer.Buffer<ApplyInterestResult> = Buffer.Buffer(0);
@@ -183,10 +185,14 @@ shared(init_msg) actor class Deposits(args: {
         return Account.fromPrincipal(Principal.fromActor(this), Account.defaultSubaccount());
     };
 
-    private func balance() : async Ledger.Tokens {
-        return await ledger.account_balance({
+    public func balance() : async Ledger.Tokens {
+        var sum = (await ledger.account_balance({
             account = Blob.toArray(accountIdBlob());
-        });
+        })).e8s;
+        for ((_, amount) in Trie.iter(balances)) {
+            sum := sum + amount;
+        };
+        return { e8s = sum };
     };
 
     private func sortInterestByTime(a: ApplyInterestResult, b: ApplyInterestResult): Order.Order {
@@ -244,6 +250,7 @@ shared(init_msg) actor class Deposits(args: {
                 applied = { e8s = 0 : Nat64 };
                 remainder = { e8s = 0 : Nat64 };
                 totalHolders = holders.size();
+                flush = null;
             };
         };
         assert(interest > 0);
@@ -268,16 +275,10 @@ shared(init_msg) actor class Deposits(args: {
 
         // Do the mints
         for ((to, share) in Array.vals(mints)) {
-            Debug.print("minting: " # debug_show(share) # " to " # debug_show(to));
-
-            let result = switch (await token.mint(to, share)) {
-                case (#Err(_)) {
-                    assert(false);
-                    loop {};
-                };
-                case (#Ok(x)) { x };
-            }
+            Debug.print("interest: " # debug_show(share) # " to " # debug_show(to));
+            ignore queueMint(to, Nat64.fromNat(share));
         };
+        let flush = await flushAllMints();
 
         return {
             timestamp = now;
@@ -288,6 +289,7 @@ shared(init_msg) actor class Deposits(args: {
             applied = { e8s = Nat64.fromNat(afterSupply - beforeSupply) };
             remainder = { e8s = Nat64.fromNat(remainder) };
             totalHolders = holders.size();
+            flush = ?flush;
         };
     };
 
@@ -341,208 +343,129 @@ shared(init_msg) actor class Deposits(args: {
         return meanAprMicrobips;
     };
 
-    public shared(msg) func createInvoice() : async Invoice {
-        let to = await stakingNeuron();
-        switch (to) {
-            case (null) { P.unreachable() };
-            case (?to) {
-                nextInvoiceId += 1;
+    // ===== DEPOSIT FUNCTIONS =====
+    // Return the account ID specific to this user's subaccount
+    public shared(msg) func getDepositAddress(): async Text {
+        Account.toText(Account.fromPrincipal(Principal.fromActor(this), Account.principalToSubaccount(msg.caller)));
+    };
 
-                let invoice : Invoice = {
-                  memo = nextInvoiceId;
-                  from = msg.caller;
-                  to = to.accountId;
-                  state = #Waiting;
-                  block = null;
-                  createdAt = Time.now();
-                  receivedAt = null;
-                };
-                invoices := Trie.replace(invoices, invoiceKey(invoice.memo), Nat64.equal, ?invoice).0;
-                return invoice;
+    public type DepositErr = {
+        #BalanceLow;
+        #TransferFailure;
+    };
+
+    public type DepositReceipt = {
+        #Ok: Nat;
+        #Err: DepositErr;
+    };
+
+    private func principalKey(p: Principal) : Trie.Key<Principal> {
+        return {
+            key = p;
+            hash = Principal.hash(p);
+        };
+    };
+
+    // After user transfers ICP to the target subaccount
+    public shared(msg) func depositIcp(): async DepositReceipt {
+        let neuron = stakingNeuron_;
+        let to = switch (neuron) {
+            case (null) {
+                // contract not configured.
+                assert(false);
+                loop {};
             };
-        }
-    };
-
-    public type InvoicesByState = [(Text, Nat64)];
-
-    public query func invoicesByState() : async InvoicesByState {
-        var counts : AssocList.AssocList<Text, Nat64> = List.nil();
-        for ((_, invoice) in Trie.iter(invoices)) {
-            let key = switch (invoice.state) {
-                case (#Waiting) { "waiting" };
-                case (#Received) { "received" };
-                case (#Cancelled) { "cancelled" };
+            case (?neuron) {
+                Blob.toArray(neuron.accountId)
             };
-            let newValue = Option.get(AssocList.find(counts, key, Text.equal), 0 : Nat64) + 1;
-            counts := AssocList.replace(counts, key, Text.equal, ?newValue).0;
         };
-        return List.toArray(counts);
-    };
 
-    public shared(msg) func getInvoice(memo: Nat64) : async ?Invoice {
-        switch (Trie.find(invoices, invoiceKey(memo), Nat64.equal)) {
-          case (null) {
-            return null;
-          };
-          case (?invoice) {
-            if (invoice.from != msg.caller and not isOwner(msg.caller)) {
-              return null;
-            } else {
-              return ?invoice;
-            }
-          };
-        }
-    };
+        // Calculate target subaccount
+        let subaccount = Account.principalToSubaccount(msg.caller);
+        let source_account = Account.fromPrincipal(Principal.fromActor(this), subaccount);
 
-    // Create a trie key from a superhero identifier.
-    private func invoiceKey(x : Nat64) : Trie.Key<Nat64> {
-        return { hash = Hash.hash(Nat64.toNat(x)); key = x };
-    };
+        // Check ledger for value
+        let balance = await ledger.account_balance({ account = Blob.toArray(source_account) });
 
-    public shared(msg) func cancelInvoice(memo: Nat64) : async ?Invoice {
-      switch (Trie.find(invoices, invoiceKey(memo), Nat64.equal)) {
-        case (null) {
-          return null;
+        let key = principalKey(msg.caller);
+        balances := Trie.put(balances, key, Principal.equal, balance.e8s).0;
+
+        // Transfer to staking neuron
+        if (Nat64.toNat(balance.e8s) <= icpFee) {
+            return #Err(#BalanceLow);
         };
-        case (?invoice) {
-          if (invoice.from != msg.caller and not isOwner(msg.caller)) {
-            // can only cancel your own invoices.
-            return null;
-          };
-          if (invoice.state != #Waiting) {
-            // can only cancel waiting invoices
-            return ?invoice;
-          };
-          // Mark this as done. This will be committed when we await the mint, below.
-          let newInvoice : Invoice = {
-              memo = invoice.memo;
-              from = invoice.from;
-              to = invoice.to;
-              state = #Cancelled;
-              block = invoice.block;
-              createdAt = invoice.createdAt;
-              receivedAt = invoice.receivedAt;
-          };
-          invoices := Trie.replace(invoices, invoiceKey(invoice.memo), Nat64.equal, ?newInvoice).0;
-          return ?newInvoice;
-        };
-      };
-      return null;
-    };
+        let fee = { e8s = Nat64.fromNat(icpFee) };
+        let amount = { e8s = balance.e8s - fee.e8s };
+        let icp_receipt = await ledger.transfer({
+            memo : Nat64    = 0;
+            from_subaccount = ?Blob.toArray(subaccount);
+            to              = to;
+            amount          = amount;
+            fee             = fee;
+            created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
+        });
 
-    public type TransactionNotification = {
-        memo : Nat64;
-        block_height : Nat64;
-    };
-
-    // Handle deposits & mint token
-    public shared(msg) func notify(notification : TransactionNotification) : async () {
-      let found = Trie.find(invoices, invoiceKey(notification.memo), Nat64.equal);
-      switch (found) {
-        case (null) {
-          // not found
-          assert(false);
-          loop {};
-        };
-        case (?invoice) {
-          if (invoice.from != msg.caller and not isOwner(msg.caller)) {
-            // can only notify on your own invoices.
-            assert(false);
-            loop {};
-          };
-          switch ((invoice.state, invoice.block)) {
-            case ((#Waiting, null)) {
-              let block = await ledgerCandid.block(notification.block_height);
-              switch (block) {
-                case (#Err(_)) {
-                  assert(false);
-                  loop {};
-                };
-                case (#Ok(r)) {
-                  switch (r) {
-                    case (#Err(_)) {
-                      assert(false);
-                      loop {};
-                    };
-                    case (#Ok(b)) {
-                      // Verify the transaction is the right one
-                      let transaction = b.transaction;
-                      assert(transaction.memo == notification.memo);
-                      let transfer = transaction.transfer;
-                      switch (transfer) {
-                        case (#Send(t)) {
-                          // Verify the transfer went to this canister.
-                          assert(Hex.equal(t.to, invoice.to));
-                          // Mark this as done. This will be committed when we await the mint, below.
-                          let newInvoice : Invoice = {
-                            memo = invoice.memo;
-                            from = invoice.from;
-                            to = invoice.to;
-                            state = #Received;
-                            block = ?notification.block_height;
-                            createdAt = invoice.createdAt;
-                            receivedAt = ?Nat64.toNat(transaction.created_at_time.timestamp_nanos);
-                          };
-
-                          // Make sure the invoice hasn't changed since we talked to ledgerCandid.
-                          let isUnchanged : Bool = Option.get(
-                            Option.map(
-                              Trie.find(invoices, invoiceKey(notification.memo), Nat64.equal),
-                              func(found : Invoice) : Bool {
-                                found.memo == invoice.memo
-                                  and found.from == invoice.from
-                                  and found.to == invoice.to
-                                  and found.state == #Waiting
-                                  and found.block == null
-                                  and found.receivedAt == null
-                              }
-                            ),
-                            false
-                          );
-                          if (isUnchanged != true) {
-                            assert(false);
-                            loop {};
-                          };
-
-                          invoices := Trie.replace(invoices, invoiceKey(invoice.memo), Nat64.equal, ?newInvoice).0;
-                          // Disburse the new tokens
-                          let result = await token.mint(invoice.from, Nat64.toNat(t.amount.e8s));
-
-                          // Refresh the neuron balance, if we deposited directly
-                          switch (await stakingNeuron()) {
-                              case (null) {
-                                  Debug.print("Staking neuron not configured for invoice: " # debug_show(invoice.memo));
-                              };
-                              case (?neuron) {
-                                  Debug.print("Staking neuron refreshing: " # debug_show(neuron.id));
-                                  let refresh = await governance.manage_neuron({
-                                      id = null;
-                                      command = ?#ClaimOrRefresh({ by = ?#NeuronIdOrSubaccount({}) });
-                                      neuron_id_or_subaccount = ?#NeuronId(neuron.id);
-                                  });
-                              };
-                          };
-
-                          return ();
-                        };
-                        case (_) {
-                          assert(false);
-                          loop {};
-                        };
-                      };
-                    };
-                  };
-                };
-              };
+        switch icp_receipt {
+            case ( #Err _) {
+                return #Err(#TransferFailure);
             };
-            case (_) {
-              // Already processed.
-              return ();
-            };
-          };
+            case _ {};
         };
-      };
-      return ();
+
+        balances := Trie.put(balances, key, Principal.equal, 0 : Nat64).0;
+
+        // Mint the new tokens
+        ignore queueMint(msg.caller, amount.e8s);
+        ignore await flushMint(msg.caller);
+
+        // Refresh the neuron balance, if we deposited directly
+        switch (neuron) {
+            case (null) {
+                Debug.print("Staking neuron not configured for deposit");
+            };
+            case (?neuron) {
+                Debug.print("Staking neuron refreshing: " # debug_show(neuron.id));
+                let refresh = await governance.manage_neuron({
+                    id = null;
+                    command = ?#ClaimOrRefresh({ by = ?#NeuronIdOrSubaccount({}) });
+                    neuron_id_or_subaccount = ?#NeuronId(neuron.id);
+                });
+            };
+        };
+
+        return #Ok(Nat64.toNat(amount.e8s));
+    };
+
+    // First we queue them locally, in case the async mint call fails.
+    private func queueMint(to : Principal, amount : Nat64) : Nat64 {
+        let key = principalKey(to);
+        let existing = Option.get(Trie.find(pendingMints, key, Principal.equal), 0 : Nat64);
+        let total = existing + amount;
+        pendingMints := Trie.replace(pendingMints, key, Principal.equal, ?total).0;
+        return total;
+    };
+
+    private func flushMint(to : Principal) : async TxReceipt {
+        let key = principalKey(to);
+        let total = Option.get(Trie.find(pendingMints, key, Principal.equal), 0 : Nat64);
+        if (total == 0) {
+            return #Err(#AmountTooSmall);
+        };
+        Debug.print("minting: " # debug_show(total) # " to " # debug_show(to));
+        let result = await token.mint(to, Nat64.toNat(total));
+        pendingMints := Trie.remove(pendingMints, key, Principal.equal).0;
+        return result;
+    };
+
+    private func flushAllMints() : async TxReceipt {
+        let size = Trie.size(pendingMints);
+        for ((to, _) in Trie.iter(pendingMints)) {
+            switch (await flushMint(to)) {
+                case (#Ok(_)) { };
+                case (err) { return err };
+            };
+        };
+        return #Ok(size);
     };
 
     /*
