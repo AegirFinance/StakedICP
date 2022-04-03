@@ -56,14 +56,6 @@ echo
 )
 
 echo
-echo == Install Ledger Candid
-echo
-
-(canister_exists ledger_candid) || (
-  dfx deploy ledger_candid
-)
-
-echo
 echo == Install Governance
 echo
 

@@ -14,9 +14,6 @@
   "ledger": {
     "ic": "ryjl3-tyaaa-aaaaa-aaaba-cai"
   },
-  "ledger_candid": {
-    "ic": "ockk2-xaaaa-aaaai-aaaua-cai"
-  },
   "geoip": {
     "ic": "gp6lu-paaaa-aaaap-qaatq-cai"
   },

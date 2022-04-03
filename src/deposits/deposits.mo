@@ -21,7 +21,6 @@ import Account      "./Account";
 import Hex          "./Hex";
 import Governance "Governance";
 import Ledger "Ledger";
-import LedgerCandid "LedgerCandid";
 import Token "../DIP20/motoko/src/token";
 
 shared(init_msg) actor class Deposits(args: {
@@ -87,7 +86,6 @@ shared(init_msg) actor class Deposits(args: {
 
     private stable var governance : Governance.Interface = actor(Principal.toText(args.governance));
     private stable var ledger : Ledger.Self = actor(Principal.toText(args.ledger));
-    private stable var ledgerCandid : LedgerCandid.Self = actor(Principal.toText(args.ledgerCandid));
 
     private stable var owners : [Principal] = args.owners;
     private stable var token : Token.Token = actor(Principal.toText(args.token));

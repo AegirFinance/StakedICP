@@ -107,7 +107,7 @@ canister install deposits --mode="$MODE" --argument "$(cat << EOM
 (record {
   governance             = principal "$(canister id governance)";
   ledger                 = principal "$(canister id ledger)";
-  ledgerCandid           = principal "$(canister id ledger_candid)";
+  ledgerCandid           = principal "ockk2-xaaaa-aaaai-aaaua-cai";
   token                  = principal "$(canister id token)";
   owners                 = vec { $OWNERS };
   stakingNeuron          = opt record {

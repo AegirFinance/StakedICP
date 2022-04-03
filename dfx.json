@@ -10,11 +10,6 @@
       "wasm": "src/ledger/ledger.wasm",
       "candid": "src/ledger/ledger.did"
     },
-    "ledger_candid": {
-      "type": "custom",
-      "wasm": "src/ledger_candid/ledger_candid.wasm",
-      "candid": "src/ledger_candid/ledger_candid.did"
-    },
     "deposits": {
       "main": "src/deposits/deposits.mo",
       "type": "motoko"
