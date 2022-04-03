@@ -40,22 +40,6 @@ export function DepositForm() {
     return parsed;
   }, [amount]);
   const [showTransferDialog, setShowTransferDialog] = React.useState(false);
-  const [depositAddress, setDepositAddress] = React.useState("");
-  const depositsCanister = useCanister<Deposits>({
-    // TODO: handle missing canister id better
-    canisterId: deposits.canisterId ?? "",
-    interfaceFactory: deposits.idlFactory,
-  });
-
-  useAsyncEffect(async () => {
-      setDepositAddress("");
-      if (!principal || !depositsCanister) {
-          return;
-      }
-      const update = depositsCanister.depositIcp();
-      setDepositAddress(await depositsCanister.getDepositAddress());
-      await update;
-  }, [principal, !!depositsCanister]);
 
   return (
     <Wrapper onSubmit={e => {
@@ -76,8 +60,6 @@ export function DepositForm() {
           open={showTransferDialog}
           rawAmount={amount}
           amount={deposit}
-          depositAddress={depositAddress}
-          depositsCanister={depositsCanister}
           onOpenChange={(open: boolean) => {
             setShowTransferDialog(!!(principal && deposit && open));
           }} />
@@ -116,8 +98,6 @@ interface TransferDialogParams {
   amount: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  depositAddress: string;
-  depositsCanister?: ActorSubclass<Deposits>;
 }
 
 const MINIMUM_DEPOSIT = 0.001;
@@ -128,13 +108,23 @@ function TransferDialog({
     amount,
     open,
     onOpenChange: parentOnOpenChange,
-    depositAddress,
-    depositsCanister,
 }: TransferDialogParams) {
   const { setState: setGlobalState } = useContext();
   const [_, sendTransaction] = useTransaction();
   const [state, setState] = React.useState<"confirm" | "pending" | "complete" | "rejected">("confirm");
   const error = React.useMemo(() => rawAmount && amount < MINIMUM_DEPOSIT && `Minimum deposit is ${MINIMUM_DEPOSIT} ICP`, [rawAmount, amount])
+  const depositsCanister = useCanister<Deposits>({
+    // TODO: handle missing canister id better
+    canisterId: deposits.canisterId ?? "",
+    interfaceFactory: deposits.idlFactory,
+  });
+
+  useAsyncEffect(async () => {
+      if (!depositsCanister) {
+          return;
+      }
+      await depositsCanister.depositIcp();
+  }, [!!depositsCanister]);
 
   const onOpenChange = React.useCallback((open: boolean) => {
     setState("confirm");
@@ -152,7 +142,7 @@ function TransferDialog({
 
       setState("pending");
 
-      let to = depositAddress || await depositsCanister.getDepositAddress()
+      let to = await depositsCanister.getDepositAddress()
       if (!to) {
         throw new Error("Failed to get the deposit address");
       }
@@ -176,9 +166,10 @@ function TransferDialog({
       setGlobalState(x => ({...x, cacheBuster: x.cacheBuster+1}));
       setState("complete");
     } catch (err) {
+      console.debug(err);
       setState("rejected");
     }
-  }, [amount]);
+  }, [amount, !!depositsCanister]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -212,7 +203,7 @@ function TransferDialog({
               Cancel
               </Button>
             </DialogClose>
-            <Button onClick={() => deposit()}>Deposit</Button>
+            <Button onClick={deposit}>Deposit</Button>
           </Flex>
         </DialogContent>
       ) : state === "pending" ? (
