@@ -79,22 +79,6 @@ shared(init_msg) actor class Deposits(args: {
       result : Ledger.TransferResult;
     };
 
-    public type Invoice = {
-      memo: Nat64;
-      from: Principal;
-      to: Text;
-      state: InvoiceState;
-      block: ?Nat64;
-      createdAt : Time.Time;
-      receivedAt : ?Time.Time;
-    };
-
-    public type InvoiceState = {
-        #Waiting;
-        #Received;
-        #Cancelled;
-    };
-
     public type StakingNeuron = {
         id : NeuronId;
         accountId : Account.AccountIdentifier;
@@ -117,9 +101,6 @@ shared(init_msg) actor class Deposits(args: {
             };
         };
     };
-
-    private stable var nextInvoiceId : Nat64 = 0;
-    private stable var invoices : Trie.Trie<Nat64, Invoice> = Trie.empty();
 
     private stable var balances : Trie.Trie<Principal, Nat64> = Trie.empty();
     private stable var pendingMints : Trie.Trie<Principal, Nat64> = Trie.empty();
