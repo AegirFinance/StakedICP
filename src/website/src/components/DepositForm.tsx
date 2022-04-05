@@ -25,6 +25,14 @@ const Wrapper = styled('form', {
   },
 });
 
+function parseFloat(str: string): number {
+    str = str.trim();
+    if (str == "") {
+        return NaN;
+    }
+    return +str;
+}
+
 export function DepositForm() {
   const [{ data: account }] = useAccount();
   const principal = account?.principal;
@@ -33,7 +41,7 @@ export function DepositForm() {
     if (!amount) {
         return 0;
     }
-    const parsed = Number.parseFloat(amount);
+    const parsed = parseFloat(amount);
     if (parsed === NaN || parsed === +Infinity || parsed === -Infinity) {
         return 0;
     }
@@ -69,7 +77,7 @@ export function DepositForm() {
       <DataTable>
         <DataTableRow>
           <DataTableLabel>You will receive</DataTableLabel>
-          <DataTableValue>{deposit >= MINIMUM_DEPOSIT ? Number.parseFloat(amount) - FEE : 0} stICP</DataTableValue>
+          <DataTableValue>{deposit >= MINIMUM_DEPOSIT ? deposit - FEE : 0} stICP</DataTableValue>
         </DataTableRow>
         <DataTableRow>
           <DataTableLabel>Exchange rate</DataTableLabel>
