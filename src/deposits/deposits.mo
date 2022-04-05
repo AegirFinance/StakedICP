@@ -33,6 +33,7 @@ shared(init_msg) actor class Deposits(args: {
 }) = this {
     // Cost to transfer ICP on the ledger
     let icpFee: Nat = 10_000;
+    let minimumDeposit: Nat = icpFee*10;
 
     // Makes date math simpler
     let second : Int = 1_000_000_000;
@@ -389,7 +390,7 @@ shared(init_msg) actor class Deposits(args: {
         balances := Trie.put(balances, key, Principal.equal, balance.e8s).0;
 
         // Transfer to staking neuron
-        if (Nat64.toNat(balance.e8s) <= icpFee) {
+        if (Nat64.toNat(balance.e8s) <= minimumDeposit) {
             return #Err(#BalanceLow);
         };
         let fee = { e8s = Nat64.fromNat(icpFee) };
