@@ -4,6 +4,7 @@ import * as token from "../../../declarations/token";
 import { styled } from '../stitches.config';
 import { ConnectButton, useAccount, useBalance } from "../wallet";
 import { ActivityIndicator } from "./ActivityIndicator"
+import { Button } from "./Button";
 
 // TODO: do some media queries here
 const Wrapper = styled('header', {
@@ -36,7 +37,6 @@ const Balance = styled('span', {
   margin: "1rem",
 });
 
-
 export function Header() {
   const [{data: account}] = useAccount();
   const [{data: sticp}] = useBalance({ token: token.canisterId });
@@ -47,9 +47,13 @@ export function Header() {
         <img height="28" width="28" style={{marginRight: "0.75rem"}} src="./logo192.png" />
         <Logo style={{height: "2.5rem"}} />
       </Link>
+
       {account && (
         <Balance>{sticp ? sticp.formatted : <ActivityIndicator css={{marginRight: "1ch"}} /> } stICP</Balance>
       )}
+      <Link to="/rewards" style={{marginRight: "0.75rem"}}>
+        <Button variant="cancel">Rewards</Button>
+      </Link>
       <ConnectButton />
     </Wrapper>
   );

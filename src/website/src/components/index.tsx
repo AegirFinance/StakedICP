@@ -2,6 +2,7 @@ export * from "./ActivityIndicator";
 export * from "./AlertDialog";
 export * from "./APR";
 export * from "./Button";
+export * from "./CopyOnClick";
 export * from "./DataTable";
 export * from "./DepositForm";
 export * from "./Dialog";

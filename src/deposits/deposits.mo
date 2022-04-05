@@ -19,6 +19,7 @@ import Trie "mo:base/Trie";
 
 import Account      "./Account";
 import Hex          "./Hex";
+import Referrals    "./Referrals";
 import Governance "Governance";
 import Ledger "Ledger";
 import Token "../DIP20/motoko/src/token";
@@ -31,6 +32,9 @@ shared(init_msg) actor class Deposits(args: {
     owners: [Principal];
     stakingNeuron: ?{ id : { id : Nat64 }; accountId : Text };
 }) = this {
+    private let referralTracker = Referrals.Tracker();
+    private stable var stableReferralData : ?Referrals.UpgradeData = null;
+
     // Cost to transfer ICP on the ledger
     let icpFee: Nat = 10_000;
     let minimumDeposit: Nat = icpFee*10;
@@ -73,6 +77,7 @@ shared(init_msg) actor class Deposits(args: {
         remainder : Ledger.Tokens;
         totalHolders: Nat;
         flush : ?TxReceipt;
+        affiliatePayouts: Nat;
     };
 
     type WithdrawPendingDepositsResult = {
@@ -250,6 +255,7 @@ shared(init_msg) actor class Deposits(args: {
                 remainder = { e8s = 0 : Nat64 };
                 totalHolders = holders.size();
                 flush = null;
+                affiliatePayouts = 0;
             };
         };
         assert(interest > 0);
@@ -273,9 +279,18 @@ shared(init_msg) actor class Deposits(args: {
         assert(afterSupply == beforeSupply + interest - remainder);
 
         // Queue the mints
+        var affiliatePayouts : Nat = 0;
         for ((to, share) in Array.vals(mints)) {
             Debug.print("interest: " # debug_show(share) # " to " # debug_show(to));
             ignore queueMint(to, Nat64.fromNat(share));
+            switch (referralTracker.payout(to, share/10)) {
+                case (null) {};
+                case (?(affiliate, payout)) {
+                    Debug.print("affiliate: " # debug_show(payout) # " to " # debug_show(affiliate));
+                    ignore queueMint(affiliate, Nat64.fromNat(payout));
+                    affiliatePayouts := affiliatePayouts + payout;
+                };
+            }
         };
 
         // If there is one e8s left, we'll take it, to make sure the accounts
@@ -301,6 +316,7 @@ shared(init_msg) actor class Deposits(args: {
             remainder = { e8s = Nat64.fromNat(remainder) };
             totalHolders = holders.size();
             flush = ?flush;
+            affiliatePayouts = affiliatePayouts;
         };
     };
 
@@ -354,9 +370,28 @@ shared(init_msg) actor class Deposits(args: {
         return meanAprMicrobips;
     };
 
+    // ===== REFERRAL FUNCTIONS =====
+
+    public type ReferralStats = {
+        code: Text;
+        count: Nat;
+        earned: Nat;
+    };
+
+    public shared(msg) func getReferralStats(): async ReferralStats {
+        let stats = referralTracker.getStats(msg.caller);
+        return {
+            code = await referralTracker.getCode(msg.caller);
+            count = stats.count;
+            earned = stats.earned;
+        };
+    };
+
     // ===== DEPOSIT FUNCTIONS =====
+
     // Return the account ID specific to this user's subaccount
-    public shared(msg) func getDepositAddress(): async Text {
+    public shared(msg) func getDepositAddress(code: ?Text): async Text {
+        referralTracker.touch(msg.caller, code);
         Account.toText(Account.fromPrincipal(Principal.fromActor(this), Account.principalToSubaccount(msg.caller)));
     };
 
@@ -398,6 +433,7 @@ shared(init_msg) actor class Deposits(args: {
         // Check ledger for value
         let balance = await ledger.account_balance({ account = Blob.toArray(source_account) });
 
+        // TODO: Refactor this to a Triemap
         let key = principalKey(msg.caller);
         balances := Trie.put(balances, key, Principal.equal, balance.e8s).0;
 
@@ -444,6 +480,7 @@ shared(init_msg) actor class Deposits(args: {
             };
         };
 
+        referralTracker.convert(msg.caller);
         return #Ok(Nat64.toNat(amount.e8s));
     };
 
@@ -485,6 +522,8 @@ shared(init_msg) actor class Deposits(args: {
     system func preupgrade() {
       // convert the buffer to a stable array
       appliedInterestEntries := appliedInterest.toArray();
+
+      stableReferralData := referralTracker.preupgrade();
     };
 
     system func postupgrade() {
@@ -493,5 +532,8 @@ shared(init_msg) actor class Deposits(args: {
       for (x in appliedInterestEntries.vals()) {
         appliedInterest.add(x);
       };
+
+      referralTracker.postupgrade(stableReferralData);
+      stableReferralData := null;
     };
 };

@@ -35,8 +35,9 @@ export default function App() {
             <GeoipModal />
             <Routes>
               <Route path="/" element={<Pages.Deposit />} />
-              <Route path="/terms-of-use" element={<Pages.TermsOfUse />} />
               <Route path="/privacy-policy" element={<Pages.PrivacyPolicy />} />
+              <Route path="/rewards" element={<Pages.Rewards />} />
+              <Route path="/terms-of-use" element={<Pages.TermsOfUse />} />
             </Routes>
           </BrowserRouter>
         </WalletProvider>

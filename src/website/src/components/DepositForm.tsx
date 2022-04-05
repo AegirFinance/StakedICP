@@ -1,4 +1,3 @@
- import { ActorSubclass } from "@dfinity/agent";
 import React from 'react';
 import * as deposits from "../../../declarations/deposits";
 import { Deposits } from "../../../declarations/deposits/deposits.did";
@@ -126,6 +125,11 @@ function TransferDialog({
     canisterId: deposits.canisterId ?? "",
     interfaceFactory: deposits.idlFactory,
   });
+  const referralCode : [] | [string] = React.useMemo(() => {
+      const params = new URLSearchParams(window.location.search);
+      const r = params.get("r")
+      return r ? [r] : [];
+  }, [window.location.search]);
 
   useAsyncEffect(async () => {
       if (!depositsCanister) {
@@ -150,7 +154,7 @@ function TransferDialog({
 
       setState("pending");
 
-      let to = await depositsCanister.getDepositAddress()
+      let to = await depositsCanister.getDepositAddress(referralCode);
       if (!to) {
         throw new Error("Failed to get the deposit address");
       }
@@ -177,7 +181,7 @@ function TransferDialog({
       console.debug(err);
       setState("rejected");
     }
-  }, [amount, !!depositsCanister]);
+  }, [amount, !!depositsCanister, referralCode]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
