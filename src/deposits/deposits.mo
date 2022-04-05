@@ -272,11 +272,22 @@ shared(init_msg) actor class Deposits(args: {
         assert(interest >= remainder);
         assert(afterSupply == beforeSupply + interest - remainder);
 
-        // Do the mints
+        // Queue the mints
         for ((to, share) in Array.vals(mints)) {
             Debug.print("interest: " # debug_show(share) # " to " # debug_show(to));
             ignore queueMint(to, Nat64.fromNat(share));
         };
+
+        // If there is one e8s left, we'll take it, to make sure the accounts
+        // match up.
+        if (remainder > 0) {
+            let root = Principal.fromActor(this);
+            Debug.print("remainder: " # debug_show(remainder) # " to " # debug_show(root));
+            ignore queueMint(root, Nat64.fromNat(remainder));
+            remainder := 0;
+        };
+
+        // Do the mints.
         let flush = await flushAllMints();
 
         return {
