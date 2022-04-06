@@ -284,6 +284,7 @@ shared(init_msg) actor class Deposits(args: {
             let root = Principal.fromActor(this);
             Debug.print("remainder: " # debug_show(remainder) # " to " # debug_show(root));
             ignore queueMint(root, Nat64.fromNat(remainder));
+            afterSupply += remainder;
             remainder := 0;
         };
 
