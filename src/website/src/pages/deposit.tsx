@@ -268,6 +268,7 @@ const AccordionRoot = styled(Accordion.Root, {
 });
 
 const AccordionItem = styled(Accordion.Item, {
+  overflow: 'hidden',
   backgroundColor: '$slate3',
   marginBottom: '$2',
   padding: '$2',
@@ -299,6 +300,7 @@ const close = keyframes({
 });
 
 const AccordionContent = styled(Accordion.Content, {
+  overflow: 'hidden',
   maxWidth: '600px',
   padding: '$2 0',
   '&[data-state="open"]': { animation: `${open} 300ms ease-out` },
