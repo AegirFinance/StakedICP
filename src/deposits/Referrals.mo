@@ -1,4 +1,5 @@
 import Buffer "mo:base/Buffer";
+import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Option "mo:base/Option";
 import Principal "mo:base/Principal";
@@ -11,7 +12,13 @@ import Nanoid "./Nanoid";
 module {
     // TODO: Populate this
     public type UpgradeData = {
-        #v1: {};
+        #v1: {
+            codes: [(Principal, Text)];
+            leads: [Lead];
+            conversions: [(Principal, [Principal])];
+            payouts: [(Principal, [Payout])];
+            totals: [(Principal, Nat)];
+        };
     };
 
     type Lead = {
@@ -206,12 +213,64 @@ module {
         };
 
         public func preupgrade() : ?UpgradeData {
-            // TODO: Implement this
-            return null;
+            return ?#v1({
+                codes = Iter.toArray(codesByPrincipal.entries());
+                leads = Iter.toArray(leads.vals());
+                conversions = Iter.toArray(
+                    TrieMap.map<Principal, Buffer.Buffer<Principal>, [Principal]>(
+                        conversions,
+                        Principal.equal,
+                        Principal.hash,
+                        func(p, cs) { cs.toArray() }
+                    ).entries()
+                );
+                payouts = Iter.toArray(
+                    TrieMap.map<Principal, Buffer.Buffer<Payout>, [Payout]>(
+                        payouts,
+                        Principal.equal,
+                        Principal.hash,
+                        func(p, ps) { ps.toArray() }
+                    ).entries()
+                );
+                totals = Iter.toArray(totals.entries());
+            });
         };
 
         public func postupgrade(upgradeData : ?UpgradeData) {
-            // TODO: Implement this
+            switch (upgradeData) {
+                case (?#v1(data)) {
+                    for ((principal, code) in Iter.fromArray(data.codes)) {
+                        codesByPrincipal.put(principal, code);
+                        principalsByCode.put(code, principal);
+                    };
+
+                    for (lead in Iter.fromArray(data.leads)) {
+                        leads.put(lead.principal, lead);
+                    };
+
+                    for ((affiliate, referreds) in Iter.fromArray(data.conversions)) {
+                        let refs = Buffer.Buffer<Principal>(referreds.size());
+                        for (r in Iter.fromArray(referreds)) {
+                            refs.add(r);
+                        };
+                        conversions.put(affiliate, refs);
+                    };
+
+                    for ((affiliate, ps) in Iter.fromArray(data.payouts)) {
+                        let pbuf = Buffer.Buffer<Payout>(ps.size());
+                        for (p in Iter.fromArray(ps)) {
+                            pbuf.add(p);
+                        };
+                        payouts.put(affiliate, pbuf);
+                    };
+
+
+                    for ((affiliate, total) in Iter.fromArray(data.totals)) {
+                        totals.put(affiliate, total);
+                    };
+                };
+                case (_) { return; };
+            };
         };
     }
 }
