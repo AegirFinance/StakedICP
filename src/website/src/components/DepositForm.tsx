@@ -1,7 +1,7 @@
 import React from 'react';
 import * as deposits from "../../../declarations/deposits";
 import { Deposits } from "../../../declarations/deposits/deposits.did";
-import { useAsyncEffect } from '../hooks';
+import { useAsyncEffect, useReferralCode } from '../hooks';
 import { styled } from '../stitches.config';
 import { ConnectButton, useAccount, useCanister, useContext, useTransaction } from "../wallet";
 import { Button } from "./Button";
@@ -47,6 +47,7 @@ export function DepositForm() {
     return parsed;
   }, [amount]);
   const [showTransferDialog, setShowTransferDialog] = React.useState(false);
+  const referralCode = useReferralCode();
 
   return (
     <Wrapper onSubmit={e => {
@@ -69,7 +70,9 @@ export function DepositForm() {
           amount={deposit}
           onOpenChange={(open: boolean) => {
             setShowTransferDialog(!!(principal && deposit && open));
-          }} />
+          }}
+          referralCode={referralCode}
+          />
       ) : (
         <ConnectButton />
       )}
@@ -105,6 +108,7 @@ interface TransferDialogParams {
   amount: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  referralCode: string | undefined;
 }
 
 const MINIMUM_DEPOSIT = 0.001;
@@ -114,6 +118,7 @@ function TransferDialog({
     rawAmount,
     amount,
     open,
+    referralCode,
     onOpenChange: parentOnOpenChange,
 }: TransferDialogParams) {
   const { setState: setGlobalState } = useContext();
@@ -125,11 +130,6 @@ function TransferDialog({
     canisterId: deposits.canisterId ?? "",
     interfaceFactory: deposits.idlFactory,
   });
-  const referralCode : [] | [string] = React.useMemo(() => {
-      const params = new URLSearchParams(window.location.search);
-      const r = params.get("r")
-      return r ? [r] : [];
-  }, [window.location.search]);
 
   useAsyncEffect(async () => {
       if (!depositsCanister) {
@@ -154,7 +154,7 @@ function TransferDialog({
 
       setState("pending");
 
-      let to = await depositsCanister.getDepositAddress(referralCode);
+      let to = await depositsCanister.getDepositAddress(referralCode ? [referralCode] : []);
       if (!to) {
         throw new Error("Failed to get the deposit address");
       }
