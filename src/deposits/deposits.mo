@@ -462,6 +462,7 @@ shared(init_msg) actor class Deposits(args: {
         balances := Trie.put(balances, key, Principal.equal, 0 : Nat64).0;
 
         // Mint the new tokens
+        referralTracker.convert(msg.caller);
         ignore queueMint(msg.caller, amount.e8s);
         ignore await flushMint(msg.caller);
 
@@ -480,7 +481,6 @@ shared(init_msg) actor class Deposits(args: {
             };
         };
 
-        referralTracker.convert(msg.caller);
         return #Ok(Nat64.toNat(amount.e8s));
     };
 
