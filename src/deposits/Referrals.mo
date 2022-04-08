@@ -6,6 +6,8 @@ import Text "mo:base/Text";
 import Time "mo:base/Time";
 import TrieMap "mo:base/TrieMap";
 
+import Nanoid "./Nanoid";
+
 module {
     // TODO: Populate this
     public type UpgradeData = {
@@ -32,9 +34,12 @@ module {
 
     public class Tracker() {
         // 30 days
-        private var lookback: Nat = 30*24*60*60*1_000_000_000;
+        private var second = 1_000_000_000;
+        private var minute = 60*second;
+        private var hour = 60*minute;
+        private var day = 24*hour;
+        private var lookback: Nat = 30*day;
 
-        private var nextId : Nat = 0;
         private var codesByPrincipal = TrieMap.TrieMap<Principal, Text>(Principal.equal, Principal.hash);
         private var principalsByCode = TrieMap.TrieMap<Text, Principal>(Text.equal, Text.hash);
         private var leads            = TrieMap.TrieMap<Principal, Lead>(Principal.equal, Principal.hash);
@@ -46,7 +51,11 @@ module {
             switch (codesByPrincipal.get(affiliate)) {
                 case (?existing) { return existing };
                 case (null) {
-                    let generated = await generateCode();
+                    var generated = await Nanoid.new();
+                    while (Option.isSome(principalsByCode.get(generated))) {
+                        // Re-generate if there's a collision.
+                        generated := await Nanoid.new();
+                    };
                     codesByPrincipal.put(affiliate, generated);
                     principalsByCode.put(generated, affiliate);
                     return generated;
@@ -62,13 +71,6 @@ module {
                 };
                 earned = Option.get(totals.get(affiliate), 0 : Nat);
             };
-        };
-
-        // Generate the next 
-        // TODO: Implement this with nice unique text code generation
-        private func generateCode() : async Text {
-            nextId := nextId + 1;
-            return Nat.toText(nextId);
         };
 
         // record a touch event for this referred user. If they already have a
