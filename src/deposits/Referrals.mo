@@ -21,6 +21,12 @@ module {
         };
     };
 
+    public type LeadMetrics = {
+        converted: Bool;
+        hasAffiliate: Bool;
+        count: Nat;
+    };
+
     type Lead = {
         principal: Principal;
         affiliate: ?Principal;
@@ -53,6 +59,47 @@ module {
         private var conversions      = TrieMap.TrieMap<Principal, Buffer.Buffer<Principal>>(Principal.equal, Principal.hash);
         private var payouts          = TrieMap.TrieMap<Principal, Buffer.Buffer<Payout>>(Principal.equal, Principal.hash);
         private var totals           = TrieMap.TrieMap<Principal, Nat>(Principal.equal, Principal.hash);
+
+        public func affiliatesCount(): Nat {
+            conversions.size()
+        };
+
+        public func leadMetrics(): [LeadMetrics] {
+            var unconvertedNoAffiliate: Nat = 0;
+            var convertedNoAffiliate: Nat = 0;
+            var unconvertedAffiliate: Nat = 0;
+            var convertedAffiliate: Nat = 0;
+            for (lead in leads.vals()) {
+                switch (lead.convertedAt, lead.affiliate) {
+                    case (null, null) {
+                        unconvertedNoAffiliate += 1;
+                    };
+                    case (?c, null) {
+                        convertedNoAffiliate += 1;
+                    };
+                    case (null, ?a) {
+                        unconvertedAffiliate += 1;
+                    };
+                    case (?c, ?a) {
+                        convertedAffiliate += 1;
+                    };
+                };
+            };
+            return [
+                {converted = false; hasAffiliate = false; count = unconvertedNoAffiliate},
+                {converted = true; hasAffiliate = false; count = convertedNoAffiliate},
+                {converted = false; hasAffiliate = true; count = unconvertedAffiliate},
+                {converted = true; hasAffiliate = true; count = convertedAffiliate},
+            ];
+        };
+
+        public func payoutsSum(): Nat {
+            var sum : Nat = 0;
+            for (amount in totals.vals()) {
+                sum += amount;
+            };
+            return sum;
+        };
 
         public func getCode(affiliate: Principal) : async Text {
             switch (codesByPrincipal.get(affiliate)) {

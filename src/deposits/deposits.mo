@@ -3,6 +3,7 @@ import AssocList "mo:base/AssocList";
 import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
 import Debug "mo:base/Debug";
+import ExperimentalCycles "mo:base/ExperimentalCycles";
 import Hash "mo:base/Hash";
 import Int "mo:base/Int";
 import Iter "mo:base/Iter";
@@ -156,7 +157,7 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
-    public shared(msg) func stakingNeuronBalance(): async ?Nat64 {
+    private func stakingNeuronBalance(): async ?Nat64 {
         return switch (stakingNeuron_) {
             case (null) { null };
             case (?n) {
@@ -189,14 +190,51 @@ shared(init_msg) actor class Deposits(args: {
         return Account.fromPrincipal(Principal.fromActor(this), Account.defaultSubaccount());
     };
 
-    public func balance() : async Ledger.Tokens {
-        var sum = (await ledger.account_balance({
+    private stable var metricsCanister : ?Principal = null;
+    public shared(msg) func setMetrics(m: ?Principal) {
+        requireOwner(msg.caller);
+        metricsCanister := m;
+    };
+
+    public type Metrics = {
+        aprMicrobips: Nat64;
+        balances: [(Text, Nat64)];
+        stakingNeuronBalance: ?Nat64;
+        referralAffiliatesCount: Nat;
+        referralLeads: [Referrals.LeadMetrics];
+        referralPayoutsSum: Nat;
+    };
+
+    public shared(msg) func metrics() : async Metrics {
+        if (not isOwner(msg.caller)) {
+            switch (metricsCanister) {
+                case (null) {
+                    assert(false);
+                    loop {};
+                };
+                case (?expected) {
+                    assert(msg.caller == expected);
+                };
+            };
+        };
+
+        var balance = (await ledger.account_balance({
             account = Blob.toArray(accountIdBlob());
         })).e8s;
         for ((_, amount) in Trie.iter(balances)) {
-            sum := sum + amount;
+            balance := balance + amount;
         };
-        return { e8s = sum };
+        return {
+            aprMicrobips = await aprMicrobips();
+            balances = [
+                ("ICP", balance),
+                ("cycles", Nat64.fromNat(ExperimentalCycles.balance()))
+            ];
+            stakingNeuronBalance = await stakingNeuronBalance();
+            referralAffiliatesCount = referralTracker.affiliatesCount();
+            referralLeads = referralTracker.leadMetrics();
+            referralPayoutsSum = referralTracker.payoutsSum();
+        };
     };
 
     private func sortInterestByTime(a: ApplyInterestResult, b: ApplyInterestResult): Order.Order {

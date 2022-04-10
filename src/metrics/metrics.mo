@@ -1,8 +1,10 @@
 import Blob "mo:base/Blob";
+import Bool "mo:base/Bool";
 import Buffer "mo:base/Buffer";
 import Error "mo:base/Error";
 import ExperimentalCycles "mo:base/ExperimentalCycles";
 import Int "mo:base/Int";
+import Iter "mo:base/Iter";
 import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
 import Option "mo:base/Option";
@@ -10,10 +12,9 @@ import Principal "mo:base/Principal";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
 
-import Account "../deposits/Account";
 import Deposits "../deposits/deposits";
+import Referrals "../deposits/Referrals";
 import Token "../DIP20/motoko/src/token";
-import Ledger "canister:ledger";
 
 shared(init_msg) actor class Metrics(args: {
     deposits: Principal;
@@ -24,9 +25,7 @@ shared(init_msg) actor class Metrics(args: {
     private stable var deposits : Deposits.Deposits = actor(Principal.toText(args.deposits));
     private stable var token : Token.Token = actor(Principal.toText(args.token));
 
-    private stable var neuronBalanceE8s : ?Nat64 = null;
-    private stable var aprMicrobips : ?Nat64 = null;
-    private stable var depositsBalanceE8s : ?Nat64 = null;
+    private stable var depositsMetrics : ?DepositsMetrics = null;
     private stable var tokenInfo : ?TokenInfo = null;
     private stable var lastUpdatedAt : ?Time.Time = null;
 
@@ -52,6 +51,15 @@ shared(init_msg) actor class Metrics(args: {
         historySize: Nat;
         holderNumber: Nat;
         cycles: Nat;
+    };
+
+    public type DepositsMetrics = {
+        aprMicrobips: Nat64;
+        balances: [(Text, Nat64)];
+        stakingNeuronBalance: ?Nat64;
+        referralAffiliatesCount: Nat;
+        referralLeads: [Referrals.LeadMetrics];
+        referralPayoutsSum: Nat;
     };
 
     public query func http_request(request: HttpRequest) : async HttpResponse {
@@ -97,31 +105,43 @@ shared(init_msg) actor class Metrics(args: {
     private func metrics() : HttpResponse {
         let metrics: Buffer.Buffer<Text> = Buffer.Buffer(0);
 
-        // Get the neuron balance
-        switch (neuronBalanceE8s) {
+        switch (depositsMetrics) {
             case (null) { };
-            case (?neuronBalanceE8s) {
-                metrics.add("# TYPE neuron_balance_e8s gauge");
-                metrics.add("# HELP neuron_balance_e8s e8s balance of the staking neuron");
-                metrics.add("neuron_balance_e8s " # Nat64.toText(neuronBalanceE8s));
-            };
-        };
-
-        switch (aprMicrobips) {
-            case (null) { };
-            case (?aprMicrobips) {
+            case (?depositsMetrics) {
                 metrics.add("# TYPE apr_microbips gauge");
                 metrics.add("# HELP apr_microbips latest apr in microbips");
-                metrics.add("apr_microbips " # Nat64.toText(aprMicrobips));
-            };
-        };
+                metrics.add("apr_microbips " # Nat64.toText(depositsMetrics.aprMicrobips));
 
-        switch (depositsBalanceE8s) {
-            case (null) { };
-            case (?depositsBalanceE8s) {
                 metrics.add("# TYPE canister_balance_e8s gauge");
                 metrics.add("# HELP canister_balance_e8s canister balance for a token in e8s");
-                metrics.add("canister_balance_e8s{token=\"ICP\",canister=\"deposits\"} " # Nat64.toText(depositsBalanceE8s));
+                for ((token, balance) in Iter.fromArray(depositsMetrics.balances)) {
+                    metrics.add("canister_balance_e8s{token=\"" # token # "\",canister=\"deposits\"} " # Nat64.toText(balance));
+                };
+
+
+                switch (depositsMetrics.stakingNeuronBalance) {
+                    case (null) {};
+                    case (?b) {
+                        metrics.add("# TYPE neuron_balance_e8s gauge");
+                        metrics.add("# HELP neuron_balance_e8s e8s balance of the staking neuron");
+                        metrics.add("neuron_balance_e8s " # Nat64.toText(b));
+                    };
+                };
+
+
+                metrics.add("# TYPE referral_leads_count gauge");
+                metrics.add("# HELP referral_leads_count number of referral leads by state");
+                for ({converted; hasAffiliate; count} in Iter.fromArray(depositsMetrics.referralLeads)) {
+                    metrics.add("referral_leads_count{converted=\"" #  Bool.toText(converted) #  "\", hasAffiliate=\"" # Bool.toText(hasAffiliate) # "\"} " # Nat.toText(count));
+                };
+
+                metrics.add("# TYPE referral_affiliates_count gauge");
+                metrics.add("# HELP referral_affiliates_count number of affiliates who have 1+ referred users");
+                metrics.add("referral_affiliates_count " # Nat.toText(depositsMetrics.referralAffiliatesCount));
+
+                metrics.add("# TYPE referral_payouts_sum gauge");
+                metrics.add("# HELP referral_payouts_sum number of referral leads by state");
+                metrics.add("referral_payouts_sum " # Nat.toText(depositsMetrics.referralPayoutsSum));
             };
         };
 
@@ -191,40 +211,20 @@ shared(init_msg) actor class Metrics(args: {
             return ();
         };
 
-        let balance = refreshStakingNeuronBalance();
-        let apr = refreshAprMicrobips();
-        let depositsBalance = refreshDepositsBalance();
+        let depositsMetrics = refreshDepositsMetrics();
         let tokenInfo = refreshTokenInfo();
 
-        await balance;
-        await apr;
-        await depositsBalance;
+        await depositsMetrics;
         await tokenInfo;
 
         lastUpdatedAt := ?now;
     };
 
-    private func refreshStakingNeuronBalance() : async () {
+    private func refreshDepositsMetrics() : async () {
         try {
-            neuronBalanceE8s := await deposits.stakingNeuronBalance();
+            depositsMetrics := ?(await deposits.metrics());
         } catch (e) {
-            errors.add((Time.now(), "staking-neuron-balance", e));
-        };
-    };
-
-    private func refreshAprMicrobips() : async () {
-        try {
-            aprMicrobips := ?(await deposits.aprMicrobips());
-        } catch (e) {
-            errors.add((Time.now(), "apr-microbips", e));
-        };
-    };
-
-    private func refreshDepositsBalance() : async () {
-        try {
-            depositsBalanceE8s := ?(await deposits.balance()).e8s;
-        } catch (e) {
-            errors.add((Time.now(), "deposits-balance", e));
+            errors.add((Time.now(), "deposits-metrics", e));
         };
     };
 
