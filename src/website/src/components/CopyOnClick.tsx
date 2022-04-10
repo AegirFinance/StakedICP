@@ -62,7 +62,7 @@ const Message = styled('span', {
 const Wrapper = styled('span', {
   display: "inline-flex",
   flexDirection: "row",
-  flexWrap: "wrap",
+  flexWrap: "nowrap",
   justifyContent: "flex-start",
   alignItems: "center",
   cursor: "pointer",
