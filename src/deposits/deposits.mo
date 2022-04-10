@@ -262,13 +262,13 @@ shared(init_msg) actor class Deposits(args: {
 
         var remainder = interest;
 
-        var mints : [(Principal, Nat)] = [];
+        var mints = Buffer.Buffer<(Principal, Nat)>(holders.size());
         var afterSupply : Nat = 0;
         for (i in Iter.range(0, holders.size() - 1)) {
             let (to, balance) = holders[i];
             let share = (interest * balance) / beforeSupply;
             if (share > 0) {
-                mints := Array.append(mints, [(to, share)]);
+                mints.add((to, share));
             };
             assert(share <= remainder);
             remainder -= share;
@@ -280,7 +280,7 @@ shared(init_msg) actor class Deposits(args: {
 
         // Queue the mints
         var affiliatePayouts : Nat = 0;
-        for ((to, share) in Array.vals(mints)) {
+        for ((to, share) in mints.vals()) {
             Debug.print("interest: " # debug_show(share) # " to " # debug_show(to));
             ignore queueMint(to, Nat64.fromNat(share));
             switch (referralTracker.payout(to, share/10)) {
