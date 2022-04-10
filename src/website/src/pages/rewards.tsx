@@ -2,11 +2,11 @@ import { ClipboardCopyIcon } from '@radix-ui/react-icons'
 import React from 'react';
 import * as deposits from "../../../declarations/deposits";
 import { Deposits, ReferralStats } from "../../../declarations/deposits/deposits.did";
-import { ActivityIndicator, CopyOnClick, Flex, Header, Layout } from '../components';
+import { ActivityIndicator, CopyOnClick, Flex, Header, HelpDialog, Layout } from '../components';
 import * as format from "../format";
 import { useAsyncEffect } from '../hooks';
 import { styled } from '../stitches.config';
-import { useAccount, useCanister } from "../wallet";
+import { ConnectButton, useAccount, useCanister } from "../wallet";
 
 export function Rewards() {
   const [stats, setStats] = React.useState<ReferralStats|null>(null);
@@ -38,16 +38,16 @@ export function Rewards() {
                 <h2>Refer friends, earn 2.5% on their interest. For life.</h2>
             </Feature>
         </Hero>
-        {principal && (
+        {principal ? (
             <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
                 <Grid css={{width: '100%', maxWidth: 600}}>
                     <Key>Your Referral Link:</Key>
                     <Value>
                         <Code>{referralUrl || <ActivityIndicator />}</Code>
                     </Value>
-                    <Copy>
+                    <Side>
                         <CopyOnClick value={referralUrl || ""} disabled={!referralUrl}><ClipboardCopyIcon style={{padding: "0.25rem", marginTop: 3}} color={referralUrl ? "black" : "transparent" } /></CopyOnClick>
-                    </Copy>
+                    </Side>
                     <Explanation>
                         Use your referral link to recruit new users. Anyone who makes their first deposit within 30 days of clicking your link will become one of your referred users. From then on, you earn 2.5% on any interest they receive. Earnings are paid in stICP.
                     </Explanation>
@@ -59,7 +59,20 @@ export function Rewards() {
                     <Value>
                         <Code>{stats?.earned !== undefined ? format.units(stats?.earned) : <ActivityIndicator css={{marginRight: "1ch", display: "inline-block"}} />} stICP</Code>
                     </Value>
+                    <Side aria-label="Earnings Info">
+                        <HelpDialog>
+                            <p>
+                            All earnings are immediately sent to your stICP balance. This number is only for your reference.
+                            </p>
+                        </HelpDialog>
+                    </Side>
                 </Grid>
+            </Flex>
+        ) : (
+            <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
+
+                <ConnectButton />
+                <p style={{marginTop: "0.5rem"}}>Connect your wallet to begin earning.</p>
             </Flex>
         )}
       </Layout>
@@ -114,7 +127,7 @@ const Value = styled(Flex, {
   justifyContent: 'flex-end',
 });
 
-const Copy = styled('div', {
+const Side = styled('div', {
   gridColumn: '3 / span 1',
 });
 
