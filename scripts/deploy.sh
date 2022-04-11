@@ -92,7 +92,7 @@ optimize() {
 }
 
 if [[ "$CANISTER" == "" ]]; then
-    for c in token deposits metrics website; do
+    for c in token deposits metrics; do
         optimize "$c"
     done
 else
