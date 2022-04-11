@@ -2,7 +2,7 @@ import * as deposits from "../../declarations/deposits";
 import * as token from "../../declarations/token";
 import React from 'react';
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { GeoipModal, PreviewPassword } from './components';
+import { GeoipModal } from './components';
 import { globalCss } from './stitches.config';
 import { Provider as WalletProvider } from "./wallet";
 import * as Pages from "./pages";
@@ -29,20 +29,18 @@ export default function App() {
 
   return (
     <div>
-      <PreviewPassword>
-        <WalletProvider autoConnect whitelist={[deposits.canisterId, token.canisterId].filter(x => !!x) as string[]} host={process.env.NETWORK}>
-          <BrowserRouter>
-            <GeoipModal />
-            <Routes>
-              <Route path="/" element={<Pages.Deposit />} />
-              <Route path="/privacy-policy" element={<Pages.PrivacyPolicy />} />
-              <Route path="/rewards" element={<Pages.Rewards />} />
-              <Route path="/terms-of-use" element={<Pages.TermsOfUse />} />
-              <Route path="*" element={<Pages.FourOhFour />} />
-            </Routes>
-          </BrowserRouter>
-        </WalletProvider>
-      </PreviewPassword>
+      <WalletProvider autoConnect whitelist={[deposits.canisterId, token.canisterId].filter(x => !!x) as string[]} host={process.env.NETWORK}>
+        <BrowserRouter>
+          <GeoipModal />
+          <Routes>
+            <Route path="/" element={<Pages.Deposit />} />
+            <Route path="/privacy-policy" element={<Pages.PrivacyPolicy />} />
+            <Route path="/rewards" element={<Pages.Rewards />} />
+            <Route path="/terms-of-use" element={<Pages.TermsOfUse />} />
+            <Route path="*" element={<Pages.FourOhFour />} />
+          </Routes>
+        </BrowserRouter>
+      </WalletProvider>
     </div>
   );
 }
