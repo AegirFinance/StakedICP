@@ -10,7 +10,6 @@ import TrieMap "mo:base/TrieMap";
 import Nanoid "./Nanoid";
 
 module {
-    // TODO: Populate this
     public type UpgradeData = {
         #v1: {
             codes: [(Principal, Text)];
