@@ -129,6 +129,8 @@ shared(init_msg) actor class Deposits(args: {
         owners.remove(msg.caller, candidate);
     };
 
+    // ===== GETTER/SETTER FUNCTIONS =====
+
     public shared(msg) func setToken(_token: Principal) {
         owners.require(msg.caller);
         token := actor(Principal.toText(_token));
@@ -179,6 +181,8 @@ shared(init_msg) actor class Deposits(args: {
         return Account.fromPrincipal(Principal.fromActor(this), Account.defaultSubaccount());
     };
 
+    // ===== METRICS FUNCTIONS =====
+
     private stable var metricsCanister : ?Principal = null;
     public shared(msg) func setMetrics(m: ?Principal) {
         owners.require(msg.caller);
@@ -225,6 +229,8 @@ shared(init_msg) actor class Deposits(args: {
             referralPayoutsSum = referralTracker.payoutsSum();
         };
     };
+
+    // ===== INTEREST FUNCTIONS =====
 
     private func sortInterestByTime(a: ApplyInterestResult, b: ApplyInterestResult): Order.Order {
       Int.compare(a.timestamp, b.timestamp)
