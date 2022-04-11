@@ -82,6 +82,23 @@ echo
 
 dfx build --network "$NETWORK" $CANISTER
 
+echo
+echo == Optimize.
+echo
+
+optimize() {
+    local f=".dfx/${NETWORK}/canisters/$1/$1.wasm"
+    ic-cdk-optimizer "$f" -o "$f"
+}
+
+if [[ "$CANISTER" == "" ]]; then
+    for c in token deposits metrics website; do
+        optimize "$c"
+    done
+else
+    optimize "$CANISTER"
+fi
+
 if [[ "$CANISTER" == "" ]] || [[ "$CANISTER" == "token" ]]; then
 
 echo
