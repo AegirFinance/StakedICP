@@ -95,7 +95,6 @@ shared(init_msg) actor class Deposits(args: {
     private stable var governance : Governance.Interface = actor(Principal.toText(args.governance));
     private stable var ledger : Ledger.Self = actor(Principal.toText(args.ledger));
 
-    private stable var owners : [Principal] = args.owners;
     private stable var token : Token.Token = actor(Principal.toText(args.token));
     private stable var stakingNeuron_ : ?StakingNeuron = switch (args.stakingNeuron) {
         case (null) { null };
@@ -119,21 +118,21 @@ shared(init_msg) actor class Deposits(args: {
 
     // ===== OWNER FUNCTIONS =====
 
-    private let ownersModule = Owners.Owners(args.owners);
+    private let owners = Owners.Owners(args.owners);
     private stable var stableOwners : ?Owners.UpgradeData = null;
 
     public shared(msg) func addOwner(candidate: Principal) {
-        ownersModule.add(msg.caller, candidate);
+        owners.add(msg.caller, candidate);
     };
 
     public shared(msg) func removeOwner(candidate: Principal) {
-        ownersModule.remove(msg.caller, candidate);
+        owners.remove(msg.caller, candidate);
     };
 
     // ===== GETTER/SETTER FUNCTIONS =====
 
     public shared(msg) func setToken(_token: Principal) {
-        ownersModule.require(msg.caller);
+        owners.require(msg.caller);
         token := actor(Principal.toText(_token));
     };
 
@@ -161,7 +160,7 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func setStakingNeuron(n: { id : NeuronId ; accountId : Text }) {
-        ownersModule.require(msg.caller);
+        owners.require(msg.caller);
         stakingNeuron_ := ?{
             id = n.id;
             accountId = switch (Account.fromText(n.accountId)) {
@@ -186,7 +185,7 @@ shared(init_msg) actor class Deposits(args: {
 
     private stable var metricsCanister : ?Principal = null;
     public shared(msg) func setMetrics(m: ?Principal) {
-        ownersModule.require(msg.caller);
+        owners.require(msg.caller);
         metricsCanister := m;
     };
 
@@ -200,7 +199,7 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func metrics() : async Metrics {
-        if (not ownersModule.is(msg.caller)) {
+        if (not owners.is(msg.caller)) {
             switch (metricsCanister) {
                 case (null) {
                     assert(false);
@@ -247,7 +246,7 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func applyInterest(interest: Nat64, when: ?Time.Time) : async ApplyInterestResult {
-        ownersModule.require(msg.caller);
+        owners.require(msg.caller);
 
         let now = Option.get(when, Time.now());
 
@@ -558,7 +557,7 @@ shared(init_msg) actor class Deposits(args: {
 
       stableReferralData := referralTracker.preupgrade();
 
-      stableOwners := ownersModule.preupgrade();
+      stableOwners := owners.preupgrade();
     };
 
     system func postupgrade() {
@@ -571,12 +570,7 @@ shared(init_msg) actor class Deposits(args: {
       referralTracker.postupgrade(stableReferralData);
       stableReferralData := null;
 
-      if (stableOwners == null) {
-          // initial upgrade
-          ownersModule.postupgrade(?#v1({ owners = owners; }));
-      } else {
-          ownersModule.postupgrade(stableOwners);
-          stableOwners := null;
-      };
+      owners.postupgrade(stableOwners);
+      stableOwners := null;
     };
 };
