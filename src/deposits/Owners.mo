@@ -8,8 +8,8 @@ module {
         };
     };
 
-    public class Owners() {
-        private var owners = TrieSet.empty<Principal>();
+    public class Owners(initial : [Principal]) {
+        private var owners = TrieSet.fromArray<Principal>(initial, Principal.hash, Principal.equal);
 
         public func is(candidate : Principal) : Bool {
             TrieSet.mem(owners, candidate, Principal.hash(candidate), Principal.equal)
