@@ -20,6 +20,7 @@ import Trie "mo:base/Trie";
 
 import Account      "./Account";
 import Hex          "./Hex";
+import Owners       "./Owners";
 import Referrals    "./Referrals";
 import Governance "Governance";
 import Ledger "Ledger";
@@ -94,7 +95,6 @@ shared(init_msg) actor class Deposits(args: {
     private stable var governance : Governance.Interface = actor(Principal.toText(args.governance));
     private stable var ledger : Ledger.Self = actor(Principal.toText(args.ledger));
 
-    private stable var owners : [Principal] = args.owners;
     private stable var token : Token.Token = actor(Principal.toText(args.token));
     private stable var stakingNeuron_ : ?StakingNeuron = switch (args.stakingNeuron) {
         case (null) { null };
@@ -116,32 +116,21 @@ shared(init_msg) actor class Deposits(args: {
     private var appliedInterest : Buffer.Buffer<ApplyInterestResult> = Buffer.Buffer(0);
     private stable var meanAprMicrobips : Nat64 = 0;
 
-    private func isOwner(candidate : Principal) : Bool {
-        let found = Array.find(owners, func(p : Principal) : Bool {
-            Principal.equal(p, candidate)
-        });
-        found != null
-    };
+    // ===== OWNER FUNCTIONS =====
 
-    private func requireOwner(candidate : Principal) {
-        assert(isOwner(candidate));
-    };
+    private let owners = Owners.Owners();
+    private stable var stableOwners : ?Owners.UpgradeData = null;
 
     public shared(msg) func addOwner(candidate: Principal) {
-        requireOwner(msg.caller);
-        owners := Array.append(owners, [candidate]);
+        owners.add(msg.caller, candidate);
     };
 
     public shared(msg) func removeOwner(candidate: Principal) {
-        requireOwner(msg.caller);
-        assert(owners.size() > 1); // Stop us from locking ourselves out.
-        owners := Array.filter(owners, func(p : Principal) : Bool {
-          not Principal.equal(p, candidate)
-        });
+        owners.remove(msg.caller, candidate);
     };
 
     public shared(msg) func setToken(_token: Principal) {
-        requireOwner(msg.caller);
+        owners.require(msg.caller);
         token := actor(Principal.toText(_token));
     };
 
@@ -169,7 +158,7 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func setStakingNeuron(n: { id : NeuronId ; accountId : Text }) {
-        requireOwner(msg.caller);
+        owners.require(msg.caller);
         stakingNeuron_ := ?{
             id = n.id;
             accountId = switch (Account.fromText(n.accountId)) {
@@ -192,7 +181,7 @@ shared(init_msg) actor class Deposits(args: {
 
     private stable var metricsCanister : ?Principal = null;
     public shared(msg) func setMetrics(m: ?Principal) {
-        requireOwner(msg.caller);
+        owners.require(msg.caller);
         metricsCanister := m;
     };
 
@@ -206,7 +195,7 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func metrics() : async Metrics {
-        if (not isOwner(msg.caller)) {
+        if (not owners.is(msg.caller)) {
             switch (metricsCanister) {
                 case (null) {
                     assert(false);
@@ -251,7 +240,7 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func applyInterest(interest: Nat64, when: ?Time.Time) : async ApplyInterestResult {
-        requireOwner(msg.caller);
+        owners.require(msg.caller);
 
         let now = Option.get(when, Time.now());
 
@@ -554,14 +543,15 @@ shared(init_msg) actor class Deposits(args: {
         return #Ok(size);
     };
 
-    /*
-    * upgrade functions
-    */
+    // ===== UPGRADE FUNCTIONS =====
+
     system func preupgrade() {
       // convert the buffer to a stable array
       appliedInterestEntries := appliedInterest.toArray();
 
       stableReferralData := referralTracker.preupgrade();
+
+      stableOwners := owners.preupgrade();
     };
 
     system func postupgrade() {
@@ -573,5 +563,8 @@ shared(init_msg) actor class Deposits(args: {
 
       referralTracker.postupgrade(stableReferralData);
       stableReferralData := null;
+
+      owners.postupgrade(stableOwners);
+      stableOwners := null;
     };
 };
