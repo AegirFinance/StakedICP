@@ -111,6 +111,7 @@ shared(init_msg) actor class Deposits(args: {
 
     private stable var balances : Trie.Trie<Principal, Nat64> = Trie.empty();
     private stable var pendingMints : Trie.Trie<Principal, Nat64> = Trie.empty();
+    private stable var snapshot : ?[(Principal, Nat)] = null;
 
     private stable var appliedInterestEntries : [ApplyInterestResult] = [];
     private var appliedInterest : Buffer.Buffer<ApplyInterestResult> = Buffer.Buffer(0);
@@ -268,7 +269,8 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     private func applyInterestToToken(now: Time.Time, interest: Nat): async ApplyInterestResult {
-        let holders = await getAllHolders();
+        let nextHolders = await getAllHolders();
+        let holders = Option.get(snapshot, nextHolders);
 
         // Calculate everything
         var beforeSupply : Nat = 0;
@@ -338,6 +340,9 @@ shared(init_msg) actor class Deposits(args: {
 
         // Do the mints.
         let flush = await flushAllMints();
+
+        // Update the snapshot for next time.
+        snapshot := ?nextHolders;
 
         return {
             timestamp = now;
@@ -572,5 +577,19 @@ shared(init_msg) actor class Deposits(args: {
 
       owners.postupgrade(stableOwners);
       stableOwners := null;
+    };
+
+    public shared(msg) func setInitialSnapshot(): async (Text, [(Principal, Nat)]) {
+      owners.require(msg.caller);
+      switch (snapshot) {
+        case (null) {
+          let holders = await getAllHolders();
+          snapshot := ?holders;
+          return ("new", holders);
+        };
+        case (?holders) {
+          return ("existing", holders);
+        };
+      };
     };
 };

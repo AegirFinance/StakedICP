@@ -39,6 +39,11 @@ export function APR() {
         <p>
           Reward rates are adjusted roughly every 24 hours, based on the past 7 days’ activity.
         </p>
+
+        <p>
+          Rewards are distributed daily. There can be up to 48 hours between
+          when you deposit, and when you receive your first rewards.
+        </p>
         </HelpDialog></h1>
       
     </Wrapper>

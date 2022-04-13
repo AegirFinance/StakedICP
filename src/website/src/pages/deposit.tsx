@@ -95,6 +95,15 @@ function FAQ() {
           <p>
           When staking with StakedICP, users receive stICP tokens on a 1:1 basis representing their staked ICP. stICP balances can be used like regular ICP to earn yields and lending rewards, and are updated on a daily basis to reflect your ICP staking rewards.
           </p>
+
+          <p>
+          Rewards are based on the underlying NNS voting rewards, so can fluctuate based on the number of proposals (among other factors).
+          </p>
+
+          <p>
+          Rewards are distributed daily. There can be up to 48 hours
+          between when you deposit, and when you receive your first rewards.
+          </p>
         </AccordionContent>
       </AccordionItem>
 
