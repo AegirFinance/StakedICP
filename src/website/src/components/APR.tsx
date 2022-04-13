@@ -33,7 +33,7 @@ export function APR() {
       <Label>Stake ICP, earn up to</Label>
       <h1>{format.units(apy, 2)}% APY <HelpDialog aria-label="APY Details">
         <p>
-          The rates shown on this page are only provided for your reference: The actual rates will fluctuate according to many different factors, including token prices, trading volume, liquidity, amount staked, and more.
+          The rates shown on this page are only provided for your reference: The actual rates will fluctuate according to many different factors, including token prices, trading volume, liquidity, amount staked, and more. Rates are based on NNS voting rewards, which fluctuates with the number of proposals in a given week.
         </p>
         <br />
         <p>
