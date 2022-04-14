@@ -239,7 +239,12 @@ module {
 
             // figure out how much the affiliate gets
             // 1/4 of conversion value goes to affiliate
-            let amount = conversionValue / 4;
+            // conversionValue is the user's 90% cut, so figure out 2.5%.
+            // amount = (conversionValue / 0.9) * 0.025
+            //        = (conversionValue * 10) / (9 * 40)
+            //        = conversionValue / (9*4)
+            //        = conversionValue / 36
+            let amount = conversionValue / 36;
 
             switch (lead.affiliate) {
                 case (null) { return null; };

@@ -318,7 +318,7 @@ shared(init_msg) actor class Deposits(args: {
         for ((to, share) in mints.vals()) {
             Debug.print("interest: " # debug_show(share) # " to " # debug_show(to));
             ignore queueMint(to, Nat64.fromNat(share));
-            switch (referralTracker.payout(to, share/10)) {
+            switch (referralTracker.payout(to, share)) {
                 case (null) {};
                 case (?(affiliate, payout)) {
                     Debug.print("affiliate: " # debug_show(payout) # " to " # debug_show(affiliate));
