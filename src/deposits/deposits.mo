@@ -429,6 +429,7 @@ shared(init_msg) actor class Deposits(args: {
 
     // Return the account ID specific to this user's subaccount
     public shared(msg) func getDepositAddress(code: ?Text): async Text {
+        Debug.print("[Referrals.touch] user: " # debug_show(msg.caller) # ", code: " # debug_show(code));
         referralTracker.touch(msg.caller, code);
         Account.toText(Account.fromPrincipal(Principal.fromActor(this), Account.principalToSubaccount(msg.caller)));
     };
@@ -500,6 +501,7 @@ shared(init_msg) actor class Deposits(args: {
         balances := Trie.put(balances, key, Principal.equal, 0 : Nat64).0;
 
         // Mint the new tokens
+        Debug.print("[Referrals.convert] user: " # debug_show(msg.caller));
         referralTracker.convert(msg.caller);
         ignore queueMint(msg.caller, amount.e8s);
         ignore await flushMint(msg.caller);
