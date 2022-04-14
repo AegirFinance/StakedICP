@@ -49,12 +49,27 @@ export function Rewards() {
                         <CopyOnClick value={referralUrl || ""} disabled={!referralUrl}><ClipboardCopyIcon style={{padding: "0.25rem", marginTop: 3}} color={referralUrl ? "black" : "transparent" } /></CopyOnClick>
                     </Side>
                     <Explanation>
-                        Use your referral link to recruit new users. Anyone who makes their first deposit within 30 days of clicking your link will become one of your referred users. From then on, you earn 2.5% on any interest they receive. Earnings are paid in stICP.
+                        <p>
+                            Use your referral link to recruit new users. Anyone
+                            who makes their first deposit within 30 days of
+                            clicking your link will become one of your referred
+                            users. From then on, you earn 2.5% on any interest
+                            they receive. Earnings are paid in stICP.
+                        </p>
                     </Explanation>
                     <Key>Your Referred Users:</Key>
                     <Value>
                         <Code>{stats?.count !== undefined ? `${stats.count}` : <ActivityIndicator />}</Code>
                     </Value>
+                    <Side aria-label="Earnings Info">
+                        <HelpDialog>
+                            <p>
+                                You can't refer yourself, so signing up with
+                                the same account will not be reflected here, or
+                                in earnings.
+                            </p>
+                        </HelpDialog>
+                    </Side>
                     <Key>Your Total Earnings:</Key>
                     <Value>
                         <Code>{stats?.earned !== undefined ? format.units(stats?.earned) : <ActivityIndicator css={{marginRight: "1ch", display: "inline-block"}} />} stICP</Code>
@@ -62,7 +77,9 @@ export function Rewards() {
                     <Side aria-label="Earnings Info">
                         <HelpDialog>
                             <p>
-                            All earnings are immediately sent to your stICP balance. This number is only for your reference.
+                                All earnings are immediately sent to your stICP
+                                balance. This number is only for your
+                                reference.
                             </p>
                         </HelpDialog>
                     </Side>
@@ -131,7 +148,7 @@ const Side = styled('div', {
   gridColumn: '3 / span 1',
 });
 
-const Explanation = styled('p', {
+const Explanation = styled('div', {
   gridColumn: '1 / span 2',
   marginBottom: '$4',
 });
