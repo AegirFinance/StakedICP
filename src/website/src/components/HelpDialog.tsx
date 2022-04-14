@@ -26,6 +26,7 @@ const StyledTrigger = styled(Popover.Trigger, {
   border: 0,
   height: 15,
   width: 15,
+  cursor: 'pointer',
 });
 
 const StyledContent = styled(Popover.Content, {
