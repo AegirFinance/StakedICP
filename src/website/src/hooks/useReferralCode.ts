@@ -21,7 +21,7 @@ export function useReferralCode() : string | undefined {
         setCode(code ? {code, expiry: now+(86400*30*1000)} : null);
     }, [stored, setCode, window.location.search]);
 
-    if (stored?.expiry && stored.expiry > Date.now()) {
+    if (stored?.expiry && stored.expiry < Date.now()) {
         return undefined;
     }
     return stored?.code ?? undefined;
