@@ -160,6 +160,30 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
+    private func stakingNeuronMaturityE8s() : async ?Nat64 {
+        switch (stakingNeuron_) {
+            case (null) { null };
+            case (?neuron) {
+                let id = neuron.id.id;
+                let response = await governance.list_neurons({
+                    neuron_ids = [id];
+                    include_neurons_readable_by_caller = true;
+                });
+                let found = Option.map(
+                    Array.find(
+                        response.full_neurons,
+                        func(n: Governance.Neuron): Bool {
+                            return Option.get(n.id, {id=0:Nat64}).id == id;
+                        }
+                    ),
+                    func(n: Governance.Neuron): Nat64 {
+                       n.maturity_e8s_equivalent
+                    }
+                );
+            };
+        }
+    };
+
     public shared(msg) func setStakingNeuron(n: { id : NeuronId ; accountId : Text }) {
         owners.require(msg.caller);
         stakingNeuron_ := ?{
@@ -246,9 +270,21 @@ shared(init_msg) actor class Deposits(args: {
         result
     };
 
-    public shared(msg) func applyInterest(interest: Nat64, when: ?Time.Time) : async ApplyInterestResult {
+    public shared(msg) func applyInterestFromNeuron(when: ?Time.Time) : async ?(Nat64, ApplyInterestResult) {
         owners.require(msg.caller);
+        switch (await stakingNeuronMaturityE8s()) {
+            case (null)      { null };
+            case (?0)        { null };
+            case (?interest) { await doApplyInterest(interest, when) };
+        }
+    };
 
+    public shared(msg) func applyInterest(interest: Nat64, when: ?Time.Time) : async ?(Nat64, ApplyInterestResult) {
+        owners.require(msg.caller);
+        await doApplyInterest(interest, when);
+    };
+
+    private func doApplyInterest(interest: Nat64, when: ?Time.Time) : async ?(Nat64, ApplyInterestResult) {
         let now = Option.get(when, Time.now());
 
         let result = await applyInterestToToken(now, Nat64.toNat(interest));
@@ -258,7 +294,9 @@ shared(init_msg) actor class Deposits(args: {
 
         updateMeanAprMicrobips();
 
-        return result;
+        // Figure out the percentage to merge
+        let percentage = ((interest - result.remainder.e8s) * 100) / interest;
+        return ?(percentage, result);
     };
 
     private func getAllHolders(): async [(Principal, Nat)] {
@@ -295,25 +333,26 @@ shared(init_msg) actor class Deposits(args: {
         };
         assert(interest > 0);
 
+        var holdersPortion = (interest * 9) / 10;
         var remainder = interest;
 
+        // Calculate the holders portions
         var mints = Buffer.Buffer<(Principal, Nat)>(holders.size());
-        var afterSupply : Nat = 0;
+        var applied : Nat = 0;
         for (i in Iter.range(0, holders.size() - 1)) {
             let (to, balance) = holders[i];
-            let share = (interest * balance) / beforeSupply;
+            let share = (holdersPortion * balance) / beforeSupply;
             if (share > 0) {
                 mints.add((to, share));
             };
             assert(share <= remainder);
             remainder -= share;
-            afterSupply += balance + share;
+            applied += share;
         };
-        assert(afterSupply >= beforeSupply);
-        assert(interest >= remainder);
-        assert(afterSupply == beforeSupply + interest - remainder);
+        assert(applied + remainder == interest);
+        assert(holdersPortion >= remainder);
 
-        // Queue the mints
+        // Queue the mints & affiliate payouts
         var affiliatePayouts : Nat = 0;
         for ((to, share) in mints.vals()) {
             Debug.print("interest: " # debug_show(share) # " to " # debug_show(to));
@@ -324,21 +363,57 @@ shared(init_msg) actor class Deposits(args: {
                     Debug.print("affiliate: " # debug_show(payout) # " to " # debug_show(affiliate));
                     ignore queueMint(affiliate, Nat64.fromNat(payout));
                     affiliatePayouts := affiliatePayouts + payout;
+                    assert(payout <= remainder);
+                    remainder -= payout;
                 };
             }
         };
 
-        // If there is one e8s left, we'll take it, to make sure the accounts
-        // match up.
+        // Deal with our share
+        //
+        // If there is 1+ icp left, we'll spawn, so return it as a remainder,
+        // otherwise mint it to the root so the neuron matches up.
         if (remainder > 0) {
+            // The gotcha here is that we can only merge maturity in whole
+            // percentages, so round down to the nearest whole percentage.
+            let spawnablePercentage = (remainder * 100) / interest;
+            let spawnableE8s = (interest * spawnablePercentage) / 100;
+            assert(spawnableE8s <= remainder);
+
             let root = Principal.fromActor(this);
-            Debug.print("remainder: " # debug_show(remainder) # " to " # debug_show(root));
-            ignore queueMint(root, Nat64.fromNat(remainder));
-            afterSupply += remainder;
-            remainder := 0;
+            if (spawnableE8s < 100_000_000) {
+                // Less than than 1 icp left, but there is some remainder, so
+                // just mint all the remainder to root. This keeps the neuron
+                // and token matching, and tidy.
+                Debug.print("remainder: " # debug_show(remainder) # " to " # debug_show(root));
+                ignore queueMint(root, Nat64.fromNat(remainder));
+                applied += remainder;
+                remainder := 0;
+            } else {
+                // More than 1 icp left, so we can spawn!
+
+                // Gap is the fractional percentage we can't spawn, so we'll merge
+                // it, and mint to root
+                //
+                // e.g. if the remainder is 7.5% of total, we can't merge
+                // 92.5%, so merge 93%, and mint the gap 0.5%, to root.
+                let gap = remainder - spawnableE8s;
+
+                // Mint the gap to root
+                Debug.print("remainder: " # debug_show(gap) # " to " # debug_show(root));
+                ignore queueMint(root, Nat64.fromNat(gap));
+                applied += gap;
+
+                // Return the spawnable amount as remainder. This is what we'll
+                // get when we spawn our cut from the neuron.
+                remainder := spawnableE8s;
+            };
         };
 
-        // Do the mints.
+        // Check everything matches up
+        assert(applied+affiliatePayouts+remainder == interest);
+
+        // Execute the mints.
         let flush = await flushAllMints();
 
         // Update the snapshot for next time.
@@ -348,9 +423,9 @@ shared(init_msg) actor class Deposits(args: {
             timestamp = now;
             supply = {
                 before = { e8s = Nat64.fromNat(beforeSupply) };
-                after = { e8s = Nat64.fromNat(afterSupply) };
+                after = { e8s = Nat64.fromNat(beforeSupply+applied+affiliatePayouts) };
             };
-            applied = { e8s = Nat64.fromNat(afterSupply - beforeSupply) };
+            applied = { e8s = Nat64.fromNat(applied) };
             remainder = { e8s = Nat64.fromNat(remainder) };
             totalHolders = holders.size();
             flush = ?flush;
