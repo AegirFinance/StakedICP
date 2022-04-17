@@ -462,7 +462,8 @@ shared(init_msg) actor class Deposits(args: {
             if (interest.timestamp < start) {
                 break range;
             };
-            sum := sum + ((microbips * interest.supply.after.e8s) / interest.supply.before.e8s) - microbips;
+            let after = interest.applied.e8s + Nat64.fromNat(interest.affiliatePayouts) + interest.remainder.e8s + interest.supply.before.e8s;
+            sum := sum + ((microbips * after) / interest.supply.before.e8s) - microbips;
             earliest := interest.timestamp;
         };
         // truncate to start of first day where we found an application.
