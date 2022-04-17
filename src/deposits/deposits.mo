@@ -559,39 +559,39 @@ shared(init_msg) actor class Deposits(args: {
     // ===== UPGRADE FUNCTIONS =====
 
     system func preupgrade() {
-      // convert the buffer to a stable array
-      appliedInterestEntries := appliedInterest.toArray();
+        // convert the buffer to a stable array
+        appliedInterestEntries := appliedInterest.toArray();
 
-      stableReferralData := referralTracker.preupgrade();
+        stableReferralData := referralTracker.preupgrade();
 
-      stableOwners := owners.preupgrade();
+        stableOwners := owners.preupgrade();
     };
 
     system func postupgrade() {
-      // convert the stable array back to a buffer.
-      appliedInterest := Buffer.Buffer(appliedInterestEntries.size());
-      for (x in appliedInterestEntries.vals()) {
-        appliedInterest.add(x);
-      };
+        // convert the stable array back to a buffer.
+        appliedInterest := Buffer.Buffer(appliedInterestEntries.size());
+        for (x in appliedInterestEntries.vals()) {
+            appliedInterest.add(x);
+        };
 
-      referralTracker.postupgrade(stableReferralData);
-      stableReferralData := null;
+        referralTracker.postupgrade(stableReferralData);
+        stableReferralData := null;
 
-      owners.postupgrade(stableOwners);
-      stableOwners := null;
+        owners.postupgrade(stableOwners);
+        stableOwners := null;
     };
 
     public shared(msg) func setInitialSnapshot(): async (Text, [(Principal, Nat)]) {
-      owners.require(msg.caller);
-      switch (snapshot) {
-        case (null) {
-          let holders = await getAllHolders();
-          snapshot := ?holders;
-          return ("new", holders);
+        owners.require(msg.caller);
+        switch (snapshot) {
+            case (null) {
+                let holders = await getAllHolders();
+                snapshot := ?holders;
+                return ("new", holders);
+            };
+            case (?holders) {
+                return ("existing", holders);
+            };
         };
-        case (?holders) {
-          return ("existing", holders);
-        };
-      };
     };
 };
