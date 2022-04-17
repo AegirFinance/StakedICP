@@ -2,6 +2,8 @@
 
 set -e
 
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 NETWORK="${1:-local}"
 
 MODE="${2:-install}"
@@ -23,6 +25,9 @@ make_neuron() {
   (
     dfx ledger transfer "$NEURON_ACCOUNT_ID" --memo "$NEURON_MEMO" --amount "1.00"
     dfx canister call governance claim_or_refresh_neuron_from_account "(record { controller = opt principal \"$(dfx identity get-principal)\" ; memo = $NEURON_MEMO : nat64 })"
+
+    # Add the deposits canister as a hotkey
+    $DIR/addHotKey.sh local "$(existing_neuron_id)"
   ) >&2
   existing_neuron_id
 }

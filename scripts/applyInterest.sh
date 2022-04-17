@@ -6,11 +6,6 @@ NETWORK="${1:-local}"
 AMOUNT="${2}"
 TIMESTAMP="${3}"
 
-if [ -z "${AMOUNT}" ]; then
-    <&2 echo "usage: ./scripts/applyInterest.sh NETWORK AMOUNT_E8S [EPOCH_SEC]"
-    exit 1
-fi
-
 # epoch nanoseconds
 
 
@@ -23,14 +18,8 @@ existing_neuron_id() {
 }
 
 make_neuron() {
-  local NEURON_ACCOUNT_ID="$1"
-  local NEURON_MEMO="$2"
-  # Create a neuron
-  (
-    dfx ledger transfer "$NEURON_ACCOUNT_ID" --memo "$NEURON_MEMO" --amount "1.00"
-    dfx canister call governance claim_or_refresh_neuron_from_account "(record { controller = opt principal \"$(dfx identity get-principal)\" ; memo = $NEURON_MEMO : nat64 })"
-  ) > 2
-  existing_neuron_id
+  >&2 echo "Neuron not found"
+  exit 1
 }
 
 case "$NETWORK" in
@@ -43,7 +32,7 @@ case "$NETWORK" in
   "local")
     DFX_OPTS=""
     NEURON_ACCOUNT_ID="94d4eddb1a4f1ef7a99bc5e89b21a1554303258884c35b5daba251fcf409d465"
-    NEURON_ID="$(existing_neuron_id || make_neuron "$NEURON_ACCOUNT_ID" "5577006791947779410")"
+    NEURON_ID="$(existing_neuron_id || make_neuron)"
     ;;
 
   *)
@@ -53,7 +42,7 @@ case "$NETWORK" in
 esac
 
 echo "Network:           $NETWORK"
-echo "Amount (e8s):      $AMOUNT"
+echo "Amount (e8s):      ${AMOUNT:-all}"
 echo "Timestamp:         ${TIMESTAMP:-now}"
 echo "Staking Neuron ID: $NEURON_ID"
 
@@ -67,4 +56,8 @@ else
     TIMESTAMP="opt $(($TIMESTAMP * 1000000000))"
 fi
 
-canister call deposits applyInterest "(${AMOUNT}: nat64, ${TIMESTAMP}: opt int)"
+if [ -z "$AMOUNT" ]; then
+    canister call deposits applyInterestFromNeuron "(${TIMESTAMP}: opt int)"
+else
+    canister call deposits applyInterest "(${AMOUNT}: nat64, ${TIMESTAMP}: opt int)"
+fi
