@@ -70,7 +70,7 @@ export function Rewards() {
                             </p>
                         </HelpDialog>
                     </Side>
-                    <Key>Your Total Earnings:</Key>
+                    <Key>Lifetime Referral Earnings:</Key>
                     <Value>
                         <Code>{stats?.earned !== undefined ? format.units(stats?.earned) : <ActivityIndicator css={{marginRight: "1ch", display: "inline-block"}} />} stICP</Code>
                     </Value>
@@ -78,8 +78,8 @@ export function Rewards() {
                         <HelpDialog>
                             <p>
                                 All earnings are immediately sent to your stICP
-                                balance. This number is only for your
-                                reference.
+                                balance. This number is the total amount of
+                                stICP you have earned by referring other users.
                             </p>
                         </HelpDialog>
                     </Side>
