@@ -1,7 +1,7 @@
 import * as Accordion from '@radix-ui/react-accordion';
 import { ChevronDownIcon, GitHubLogoIcon, TwitterLogoIcon } from '@radix-ui/react-icons';
 import React from 'react';
-import { APR, DepositForm, Flex, Header, Layout, Statistics } from '../components';
+import { APR, Code, DepositForm, Flex, Header, Layout, Statistics } from '../components';
 import { keyframes, styled } from '../stitches.config';
 
 export function Deposit() {
@@ -140,6 +140,27 @@ function FAQ() {
           <p>
           The stICP transaction fee is set at 0.0001. The same as normal ICP.
           </p>
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="add-stICP-to-plug">
+        <AccordionHeader>
+          <AccordionTrigger>
+            <span>How do I add stICP to my Plug Wallet?</span>
+            <AccordionChevron aria-hidden />
+          </AccordionTrigger>
+        </AccordionHeader>
+        <AccordionContent>
+          <ol>
+            <li>Open plug</li>
+            <li>Click the large blue plus icon to add a token</li>
+            <li>Click "Custom", to add a custom token</li>
+            <li>For "Token Canister ID", paste: <Code>qfr6e-biaaa-aaaak-qafuq-cai</Code></li>
+            <li>For "Token Standard", select: <Code>DIP20</Code></li>
+            <li>Click "Continue"</li>
+            <li>Click "Add"</li>
+            <li>"Staked ICP" should now appear in your plug token list, with your balance</li>
+          </ol>
         </AccordionContent>
       </AccordionItem>
 
@@ -318,6 +339,11 @@ const AccordionContent = styled(Accordion.Content, {
     marginTop: '$2',
   },
   'ul': {
+    listStylePosition: 'outside',
+    marginLeft: '1.6em',
+  },
+  'ol': {
+    listStyleType: 'decimal',
     listStylePosition: 'outside',
     marginLeft: '1.6em',
   },

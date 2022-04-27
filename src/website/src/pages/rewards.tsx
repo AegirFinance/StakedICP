@@ -2,7 +2,7 @@ import { ClipboardCopyIcon } from '@radix-ui/react-icons'
 import React from 'react';
 import * as deposits from "../../../declarations/deposits";
 import { Deposits, ReferralStats } from "../../../declarations/deposits/deposits.did";
-import { ActivityIndicator, CopyOnClick, Flex, Header, HelpDialog, Layout } from '../components';
+import { ActivityIndicator, Code, CopyOnClick, Flex, Header, HelpDialog, Layout } from '../components';
 import * as format from "../format";
 import { useAsyncEffect } from '../hooks';
 import { styled } from '../stitches.config';
@@ -151,13 +151,4 @@ const Side = styled('div', {
 const Explanation = styled('div', {
   gridColumn: '1 / span 2',
   marginBottom: '$4',
-});
-
-const Code = styled('pre', {
-  textAlign: 'right',
-  flexGrow: '1',
-  padding: '$1 $2',
-  marginRight: '$2',
-  backgroundColor: '$slate3',
-  borderRadius: '$1',
 });
