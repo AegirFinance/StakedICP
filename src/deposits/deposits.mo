@@ -22,8 +22,8 @@ import Account      "./Account";
 import Hex          "./Hex";
 import Owners       "./Owners";
 import Referrals    "./Referrals";
-import Governance "Governance";
-import Ledger "Ledger";
+import Governance "../governance/Governance";
+import Ledger "../ledger/Ledger";
 import Token "../DIP20/motoko/src/token";
 
 shared(init_msg) actor class Deposits(args: {
