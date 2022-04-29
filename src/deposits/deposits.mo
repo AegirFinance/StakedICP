@@ -677,4 +677,9 @@ shared(init_msg) actor class Deposits(args: {
             };
         };
     };
+
+    public shared(msg) func getAppliedInterestResults(): async [ApplyInterestResult] {
+        owners.require(msg.caller);
+        return Iter.toArray(appliedInterestEntries.vals());
+    };
 };
