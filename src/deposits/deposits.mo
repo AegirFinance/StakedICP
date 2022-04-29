@@ -622,14 +622,21 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     private func flushAllMints() : async TxReceipt {
-        let size = Trie.size(pendingMints);
-        for ((to, _) in Trie.iter(pendingMints)) {
-            switch (await flushMint(to)) {
-                case (#Ok(_)) { };
-                case (err) { return err };
+        let mints = Trie.toArray<Principal, Nat64, (Principal, Nat)>(pendingMints, func(k, v) {
+            (k, Nat64.toNat(v))
+        });
+        for ((to, total) in mints.vals()) {
+            Debug.print("minting: " # debug_show(total) # " to " # debug_show(to));
+        };
+        switch (await token.mintAll(mints)) {
+            case (#Err(err)) {
+                return #Err(err);
+            };
+            case (#Ok(count)) {
+                pendingMints := Trie.empty();
+                return #Ok(count);
             };
         };
-        return #Ok(size);
     };
 
     // ===== UPGRADE FUNCTIONS =====
