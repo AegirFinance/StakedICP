@@ -125,6 +125,8 @@ echo
 echo == Install deposits.
 echo
 
+canister stop deposits
+
 canister install deposits --mode="$MODE" --argument "$(cat << EOM
 (record {
   governance             = principal "$(canister id governance)";
@@ -139,6 +141,8 @@ canister install deposits --mode="$MODE" --argument "$(cat << EOM
 })
 EOM
 )"
+
+canister start deposits
 
 fi
 
