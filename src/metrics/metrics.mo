@@ -33,6 +33,20 @@ shared(init_msg) actor class Metrics(args: {
 
     type HeaderField = ( Text, Text );
 
+    type Token = {};
+
+    type StreamingCallbackHttpResponse = {
+        body : Blob;
+        token : Token;
+    };
+
+    type StreamingStrategy = {
+        #Callback : {
+          callback : shared Token -> async StreamingCallbackHttpResponse;
+          token : Token;
+        };
+    };
+
     type HttpRequest = object {
         method: Text;
         url: Text;
@@ -40,10 +54,12 @@ shared(init_msg) actor class Metrics(args: {
         body: Blob;
     };
 
-    type HttpResponse = object {
+    type HttpResponse = {
         status_code: Nat16;
         headers: [HeaderField];
         body: Blob;
+        streaming_strategy: ?StreamingStrategy;
+        upgrade: Bool;
     };
 
     type TokenInfo = {
@@ -80,16 +96,18 @@ shared(init_msg) actor class Metrics(args: {
                         status_code = 401;
                         headers = headers;
                         body = Text.encodeUtf8("Not authorized.");
+                        streaming_strategy = null;
+                        upgrade = false;
                     };
                 }
             };
         };
 
-        switch (request.url) {
-            case ("/metrics") {
-                return metrics();
+        switch (Text.split(request.url, #text("?")).next()) {
+            case (?"/metrics") {
+                return metrics(true);
             };
-            case ("/errors") {
+            case (?"/errors") {
                 return showErrors();
             };
             case (_) {
@@ -97,12 +115,20 @@ shared(init_msg) actor class Metrics(args: {
                     status_code = 404;
                     headers = headers;
                     body = Text.encodeUtf8("Not found");
+                    streaming_strategy = null;
+                    upgrade = false;
                 };
             };
         };
     };
 
-    private func metrics() : HttpResponse {
+    public shared func http_request_update(request : HttpRequest) : async HttpResponse {
+        let resp = metrics(false);
+        ignore refreshMetrics();
+        return resp;
+    };
+
+    private func metrics(upgrade: Bool) : HttpResponse {
         let metrics: Buffer.Buffer<Text> = Buffer.Buffer(0);
 
         switch (depositsMetrics) {
@@ -184,6 +210,8 @@ shared(init_msg) actor class Metrics(args: {
             status_code = 200;
             headers = [("Content-Type", "text/plain")];
             body = Text.encodeUtf8(body);
+            streaming_strategy = null;
+            upgrade = upgrade;
         };
     };
 
@@ -199,15 +227,17 @@ shared(init_msg) actor class Metrics(args: {
             status_code = 200;
             headers = [("Content-Type", "text/plain")];
             body = Text.encodeUtf8(body);
+            streaming_strategy = null;
+            upgrade = false;
         };
     };
 
-    system func heartbeat() : async () {
-        // Only fire once per minute.
+    private func refreshMetrics() : async () {
+        // Only fire once per 30 seconds.
         let second = 1000_000_000;
         let now = Time.now();
         let elapsedSeconds = (now - Option.get(lastUpdatedAt, (now - (60*second)))) / second;
-        if (elapsedSeconds < 60) {
+        if (elapsedSeconds < 30) {
             return ();
         };
 
