@@ -8,6 +8,7 @@ import Hash "mo:base/Hash";
 import Int "mo:base/Int";
 import Iter "mo:base/Iter";
 import List "mo:base/List";
+import Nat32 "mo:base/Nat32";
 import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
 import Option "mo:base/Option";
@@ -271,12 +272,29 @@ shared(init_msg) actor class Deposits(args: {
         result
     };
 
-    public shared(msg) func applyInterestFromNeuron(when: ?Time.Time) : async ?(Nat64, ApplyInterestResult) {
+    public shared(msg) func applyInterestFromNeuron(when: ?Time.Time) : async ?(ApplyInterestResult, [(Nat, Governance.ManageNeuron)]) {
         owners.require(msg.caller);
-        switch (await stakingNeuronMaturityE8s()) {
-            case (null)      { null };
-            case (?0)        { null };
-            case (?interest) { await doApplyInterest(interest, when) };
+        switch (stakingNeuron_, await stakingNeuronMaturityE8s()) {
+            case (null, _)      { null };
+            case (_, null)      { null };
+            case (_, ?0)        { null };
+            case (?neuron, ?interest) {
+                switch (await doApplyInterest(interest, when)) {
+                    case (null)      { null };
+                    case (?(percentage, result)) {
+                        ?(result, [
+                            // TODO: store the rpc id somewhere, and handle results
+                            (0, {
+                                id = null;
+                                command = ?#MergeMaturity({
+                                    percentage_to_merge = Nat32.fromNat(Nat64.toNat(percentage))
+                                });
+                                neuron_id_or_subaccount = ?#NeuronId(neuron.id);
+                            })
+                        ]);
+                    };
+                }
+            };
         }
     };
 
