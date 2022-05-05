@@ -161,8 +161,7 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
-    public shared(msg) func stakingNeuronMaturityE8s() : async ?Nat64 {
-        owners.require(msg.caller);
+    private func stakingNeuronMaturityE8s() : async ?Nat64 {
         switch (stakingNeuron_) {
             case (null) { null };
             case (?neuron) {
