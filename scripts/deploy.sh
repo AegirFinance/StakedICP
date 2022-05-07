@@ -41,7 +41,7 @@ case "$NETWORK" in
     export NODE_ENV=production
 
     if [[ "$MODE" == "reinstall" ]]; then
-      echo "reinstall forbidden on network: $NETWORK" >2
+      echo "reinstall forbidden on network: $NETWORK" >&2
       exit 1
     fi
     ;;
@@ -55,7 +55,7 @@ case "$NETWORK" in
     ;;
 
   *)
-    echo "unknown network: $NETWORK" >2
+    echo "unknown network: $NETWORK" >&2
     exit 1
     ;;
 esac

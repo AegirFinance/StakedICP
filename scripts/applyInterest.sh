@@ -36,7 +36,7 @@ case "$NETWORK" in
     ;;
 
   *)
-    echo "unknown network: $NETWORK" >2
+    echo "unknown network: $NETWORK" >&2
     exit 1
     ;;
 esac
