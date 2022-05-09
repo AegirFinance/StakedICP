@@ -1,5 +1,8 @@
 #!/bin/bash
 
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+. "$DIR/common.sh"
+
 NETWORK="$1"
 NEURON_ID="$2"
 

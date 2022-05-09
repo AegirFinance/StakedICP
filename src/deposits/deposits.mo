@@ -23,6 +23,7 @@ import Account      "./Account";
 import Hex          "./Hex";
 import Owners       "./Owners";
 import Referrals    "./Referrals";
+import Util         "./Util";
 import Governance "../governance/Governance";
 import Ledger "../ledger/Ledger";
 import Token "../DIP20/motoko/src/token";
@@ -70,6 +71,16 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
+    type ApplyInterestResponse = {
+        #Ok : (ApplyInterestResult, [(Nat, Governance.ManageNeuronResponse)]);
+        #Err: {
+            #StakingNeuronMissing;
+            #ProposalNeuronMissing;
+            #InsufficientMaturity;
+            #Other: Text;
+        };
+    };
+
     type ApplyInterestResult = {
         timestamp : Time.Time;
         supply : {
@@ -88,7 +99,7 @@ shared(init_msg) actor class Deposits(args: {
       result : Ledger.TransferResult;
     };
 
-    public type StakingNeuron = {
+    public type Neuron = {
         id : NeuronId;
         accountId : Account.AccountIdentifier;
     };
@@ -97,7 +108,7 @@ shared(init_msg) actor class Deposits(args: {
     private stable var ledger : Ledger.Self = actor(Principal.toText(args.ledger));
 
     private stable var token : Token.Token = actor(Principal.toText(args.token));
-    private stable var stakingNeuron_ : ?StakingNeuron = switch (args.stakingNeuron) {
+    private stable var stakingNeuron_ : ?Neuron = switch (args.stakingNeuron) {
         case (null) { null };
         case (?n) {
             ?{
@@ -109,6 +120,7 @@ shared(init_msg) actor class Deposits(args: {
             };
         };
     };
+    private stable var proposalNeuron_ : ?Neuron = null;
 
     private stable var balances : Trie.Trie<Principal, Nat64> = Trie.empty();
     private stable var pendingMints : Trie.Trie<Principal, Nat64> = Trie.empty();
@@ -199,6 +211,33 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
+    public shared(msg) func proposalNeuron(): async ?{ id : NeuronId ; accountId : Text } {
+        return switch (proposalNeuron_) {
+            case (null) { null };
+            case (?n) {
+                ?{
+                    id = n.id;
+                    accountId = Account.toText(n.accountId);
+                }
+            };
+        };
+    };
+
+    public shared(msg) func setProposalNeuron(n: { id : NeuronId ; accountId : Text }) {
+        owners.require(msg.caller);
+        proposalNeuron_ := ?{
+            id = n.id;
+            accountId = switch (Account.fromText(n.accountId)) {
+                case (#err(_)) {
+                    assert(false);
+                    loop {};
+                };
+                case (#ok(x)) { x };
+            };
+        };
+    };
+
+
     public shared(msg) func accountId() : async Text {
         return Account.toText(accountIdBlob());
     };
@@ -271,38 +310,47 @@ shared(init_msg) actor class Deposits(args: {
         result
     };
 
-    public shared(msg) func applyInterestFromNeuron(when: ?Time.Time) : async ?(ApplyInterestResult, [(Nat, Governance.ManageNeuron)]) {
+    public shared(msg) func applyInterestFromNeuron(when: ?Time.Time) : async ApplyInterestResponse {
         owners.require(msg.caller);
-        switch (stakingNeuron_, await stakingNeuronMaturityE8s()) {
-            case (null, _)      { null };
-            case (_, null)      { null };
-            case (_, ?0)        { null };
-            case (?neuron, ?interest) {
-                switch (await doApplyInterest(interest, when)) {
-                    case (null)      { null };
-                    case (?(percentage, result)) {
-                        ?(result, [
-                            // TODO: store the rpc id somewhere, and handle results
-                            (0, {
-                                id = null;
-                                command = ?#MergeMaturity({
-                                    percentage_to_merge = Nat32.fromNat(Nat64.toNat(percentage))
-                                });
-                                neuron_id_or_subaccount = ?#NeuronId(neuron.id);
-                            })
-                        ]);
-                    };
-                }
+        switch (proposalNeuron_, stakingNeuron_, await stakingNeuronMaturityE8s()) {
+            case (null,    _,    _) { #Err(#ProposalNeuronMissing) };
+            case (   _, null,    _) { #Err(#StakingNeuronMissing) };
+            case (   _,    _, null) { #Err(#InsufficientMaturity) };
+            case (   _,    _,   ?0) { #Err(#InsufficientMaturity) };
+            case (?proposalNeuron, ?stakingNeuron, ?interest) {
+                if (interest <= 10_000) {
+                    return #Err(#InsufficientMaturity);
+                };
+
+                let (percentage, result) = await doApplyInterest(interest, when);
+                let response = await governance.manage_neuron({
+                    id = null;
+                    command = ?#MakeProposal({
+                        url = "https://stakedicp.com";
+                        title = ?"Merge Maturity";
+                        action = ?#ManageNeuron({
+                            id = null;
+                            command = ?#MergeMaturity({
+                                percentage_to_merge = Nat32.fromNat(Nat64.toNat(percentage))
+                            });
+                            neuron_id_or_subaccount = ?#NeuronId(stakingNeuron.id);
+                        });
+                        summary = "Merge Maturity";
+                    });
+                    neuron_id_or_subaccount = ?#NeuronId(proposalNeuron.id);
+                });
+
+                #Ok(result, [(0, response)])
             };
-        }
+        };
     };
 
-    public shared(msg) func applyInterest(interest: Nat64, when: ?Time.Time) : async ?(Nat64, ApplyInterestResult) {
+    public shared(msg) func applyInterest(interest: Nat64, when: ?Time.Time) : async (Nat64, ApplyInterestResult) {
         owners.require(msg.caller);
         await doApplyInterest(interest, when);
     };
 
-    private func doApplyInterest(interest: Nat64, when: ?Time.Time) : async ?(Nat64, ApplyInterestResult) {
+    private func doApplyInterest(interest: Nat64, when: ?Time.Time) : async (Nat64, ApplyInterestResult) {
         let now = Option.get(when, Time.now());
 
         let result = await applyInterestToToken(now, Nat64.toNat(interest));
@@ -314,7 +362,7 @@ shared(init_msg) actor class Deposits(args: {
 
         // Figure out the percentage to merge
         let percentage = ((interest - result.remainder.e8s) * 100) / interest;
-        return ?(percentage, result);
+        return (percentage, result);
     };
 
     private func getAllHolders(): async [(Principal, Nat)] {
@@ -699,5 +747,10 @@ shared(init_msg) actor class Deposits(args: {
     public shared(msg) func getAppliedInterestResults(): async [ApplyInterestResult] {
         owners.require(msg.caller);
         return Iter.toArray(appliedInterestEntries.vals());
+    };
+
+    public shared(msg) func neuronAccountId(controller: Principal, nonce: Nat64): async Text {
+        owners.require(msg.caller);
+        return Account.toText(Util.neuronAccountId(args.governance, controller, nonce));
     };
 };

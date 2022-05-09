@@ -1,14 +1,14 @@
-import AId "mo:principal/blob/AccountIdentifier";
 import Array "mo:base/Array";
-import Binary "mo:encoding/Binary";
 import Blob "mo:base/Blob";
 import Nat64 "mo:base/Nat64";
 import Principal "mo:base/Principal";
 import Random "mo:base/Random";
-import SHA256 "mo:sha/SHA256";
+import Account "./Account";
+import Binary "./Binary";
+import SHA256 "./SHA256";
 
 module {
-    public func neuronSubaccount(controller : Principal, nonce : Nat64) : [Nat8] {
+    public func neuronSubaccount(controller : Principal, nonce : Nat64) : Account.Subaccount {
        var arr : [Nat8] = [
            0x0c, 0x6e, 0x65, 0x75,
            0x72, 0x6f, 0x6e, 0x2d,
@@ -19,12 +19,12 @@ module {
        arr := Array.append<Nat8>(arr, Blob.toArray(Principal.toBlob(controller)));
        arr := Array.append<Nat8>(arr, Binary.BigEndian.fromNat64(nonce));
 
-       return SHA256.sum256(arr);
+       return Blob.fromArray(SHA256.sum256(arr));
     };
 
-    public func neuronAccountId(controller : Principal, nonce : Nat64) : AId.AccountIdentifier {
+    public func neuronAccountId(governance : Principal, controller : Principal, nonce : Nat64) : Account.AccountIdentifier {
         let subaccount = neuronSubaccount(controller, nonce);
-        return AId.fromPrincipal(controller, ?subaccount);
+        return Account.fromPrincipal(governance, subaccount);
     };
 
     public func randomNat64() : async Nat64 {

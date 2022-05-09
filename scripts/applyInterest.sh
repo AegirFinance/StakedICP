@@ -1,26 +1,13 @@
 #!/usr/bin/env bash
 
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+. "$DIR/common.sh"
+
 set -e
 
 NETWORK="${1:-local}"
 AMOUNT="${2}"
 TIMESTAMP="${3}"
-
-# epoch nanoseconds
-
-
-existing_neuron_id() {
-  (dfx canister call governance \
-    list_neurons \
-    '(record { neuron_ids = vec {}; include_neurons_readable_by_caller = true})' \
-    | grep -o "id = [0-9_]\+" \
-    | grep -o "[0-9_]\+") \
-}
-
-make_neuron() {
-  >&2 echo "Neuron not found"
-  exit 1
-}
 
 case "$NETWORK" in
   "ic")
@@ -32,7 +19,7 @@ case "$NETWORK" in
   "local")
     DFX_OPTS=""
     NEURON_ACCOUNT_ID="94d4eddb1a4f1ef7a99bc5e89b21a1554303258884c35b5daba251fcf409d465"
-    NEURON_ID="$(existing_neuron_id || make_neuron)"
+    NEURON_ID="$(existing_neuron_id 1)"
     ;;
 
   *)
@@ -40,6 +27,11 @@ case "$NETWORK" in
     exit 1
     ;;
 esac
+
+if [ -z "$NEURON_ID" ]; then
+  >&2 echo "Neuron not found"
+  exit 1
+fi
 
 echo "Network:           $NETWORK"
 echo "Amount (e8s):      ${AMOUNT:-all}"

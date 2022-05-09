@@ -1,29 +1,18 @@
 #!/bin/bash
 
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+. "$DIR/common.sh"
+
 NETWORK="${1:-local}"
-
-existing_neuron_id() {
-  (dfx canister call governance \
-    list_neurons \
-    '(record { neuron_ids = vec {}; include_neurons_readable_by_caller = true})' \
-    | grep -o "id = [0-9_]\+" \
-    | grep -o "[0-9_]\+") \
-}
-
-make_neuron() {
-  >&2 echo "Neuron not found"
-  exit 1
-}
+NEURON_ID="${2}"
 
 case "$NETWORK" in
   "ic")
     DFX_OPTS="--network ic"
-    NEURON_ID="16_136_654_443_876_485_299"
     ;;
 
   "local")
     DFX_OPTS=""
-    NEURON_ID="$(existing_neuron_id || make_neuron)"
     ;;
 
   *)
@@ -31,6 +20,11 @@ case "$NETWORK" in
     exit 1
     ;;
 esac
+
+if [ -z "$NEURON_ID" ]; then
+    echo "usage: ./scripts/addHotKey.sh NETWORK NEURON_ID" >&2
+    exit 1
+fi
 
 canister() {
   dfx canister $DFX_OPTS "$@"
