@@ -753,4 +753,9 @@ shared(init_msg) actor class Deposits(args: {
         owners.require(msg.caller);
         return Account.toText(Util.neuronAccountId(args.governance, controller, nonce));
     };
+
+    public shared(msg) func neuronAccountIdSub(controller: Principal, subaccount: Blob.Blob): async Text {
+        owners.require(msg.caller);
+        return Account.toText(Account.fromPrincipal(args.governance, subaccount));
+    };
 };

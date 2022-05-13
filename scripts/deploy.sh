@@ -16,8 +16,8 @@ case "$NETWORK" in
     DFX_OPTS="--network ic"
     STAKING_NEURON_ACCOUNT_ID="d0c352c04c8bfd4cf6cf827903a1483253bee4e354b8361b5b7023b72d384007"
     STAKING_NEURON_ID="16_136_654_443_876_485_299"
-    PROPOSAL_NEURON_ACCOUNT_ID="TODO"
-    PROPOSAL_NEURON_ID="TODO"
+    PROPOSAL_NEURON_ACCOUNT_ID="252fdf1003d53ee3fb03a7446a7836276e24078901a06da9dd1a0b1dd31a28bd"
+    PROPOSAL_NEURON_ID="13_739_920_397_011_050_625"
     OWNERS='principal "b66ir-rprad-rut4a-acjje-naq3d-ymndg-itex7-47hrz-vvzqy-3le4a-eae"; principal "ckbyu-bzwwp-bxvwo-ewhjd-7ewsx-7wux3-c3foy-gp62f-enftx-nec3u-wqe"; principal "dtwfm-dtbib-y277g-oeali-iu4z4-m66x5-lofpb-oytcd-ursw2-2ne77-3qe"'
     export NODE_ENV=production
 
