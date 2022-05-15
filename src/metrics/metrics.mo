@@ -76,6 +76,9 @@ shared(init_msg) actor class Metrics(args: {
         referralAffiliatesCount: Nat;
         referralLeads: [Referrals.LeadMetrics];
         referralPayoutsSum: Nat;
+        lastHeartbeatAt: Time.Time;
+        lastHeartbeatOk: Bool;
+        lastHeartbeatInterestApplied: Nat64;
     };
 
     public query func http_request(request: HttpRequest) : async HttpResponse {
@@ -168,6 +171,22 @@ shared(init_msg) actor class Metrics(args: {
                 metrics.add("# TYPE referral_payouts_sum gauge");
                 metrics.add("# HELP referral_payouts_sum number of referral leads by state");
                 metrics.add("referral_payouts_sum " # Nat.toText(depositsMetrics.referralPayoutsSum));
+
+                metrics.add("# TYPE last_heartbeat_at gauge");
+                metrics.add("# HELP last_heartbeat_at nanosecond timestamp of the last time heartbeat ran");
+                metrics.add("last_heartbeat_at " # Int.toText(depositsMetrics.lastHeartbeatAt));
+
+                metrics.add("# TYPE last_heartbeat_ok gauge");
+                metrics.add("# HELP last_heartbeat_ok 0 if the last heartbeat run was successful");
+                metrics.add("last_heartbeat_ok " # (if (depositsMetrics.lastHeartbeatOk) {
+                    "0"
+                } else {
+                    "1"
+                }));
+
+                metrics.add("# TYPE last_heartbeat_interest_applied gauge");
+                metrics.add("# HELP last_heartbeat_interest_applied e8s of interest applied at the last heartbeat");
+                metrics.add("last_heartbeat_interest_applied " # Nat64.toText(depositsMetrics.lastHeartbeatInterestApplied));
             };
         };
 

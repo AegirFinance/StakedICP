@@ -261,6 +261,9 @@ shared(init_msg) actor class Deposits(args: {
         referralAffiliatesCount: Nat;
         referralLeads: [Referrals.LeadMetrics];
         referralPayoutsSum: Nat;
+        lastHeartbeatAt: Time.Time;
+        lastHeartbeatOk: Bool;
+        lastHeartbeatInterestApplied: Nat64;
     };
 
     public shared(msg) func metrics() : async Metrics {
@@ -292,6 +295,17 @@ shared(init_msg) actor class Deposits(args: {
             referralAffiliatesCount = referralTracker.affiliatesCount();
             referralLeads = referralTracker.leadMetrics();
             referralPayoutsSum = referralTracker.payoutsSum();
+            lastHeartbeatAt = lastHeartbeatAt;
+            lastHeartbeatOk = switch (lastHeartbeatResult) {
+                case (?#Ok(_)) { true };
+                case (_)       { false };
+            };
+            lastHeartbeatInterestApplied = switch (lastHeartbeatResult) {
+                case (?#Ok(result, _)) {
+                    result.applied.e8s + result.remainder.e8s + Nat64.fromNat(result.affiliatePayouts)
+                };
+                case (_)       { 0 };
+            };
         };
     };
 
@@ -757,5 +771,24 @@ shared(init_msg) actor class Deposits(args: {
     public shared(msg) func neuronAccountIdSub(controller: Principal, subaccount: Blob.Blob): async Text {
         owners.require(msg.caller);
         return Account.toText(Account.fromPrincipal(args.governance, subaccount));
+    };
+
+    // ===== HEARTBEAT FUNCTION =====
+
+    private stable var lastHeartbeatAt : Time.Time = if (appliedInterest.size() > 0) {
+        appliedInterest.get(appliedInterest.size()-1).timestamp
+    } else {
+        Time.now()
+    };
+    private stable var lastHeartbeatResult : ?ApplyInterestResponse = null;
+
+    system func heartbeat() : async () {
+        let next = lastHeartbeatAt + day;
+        let now = Time.now();
+        if (now < next) {
+            return;
+        };
+        lastHeartbeatAt := now;
+        lastHeartbeatResult := ?(await applyInterestFromNeuron(?now));
     };
 };
