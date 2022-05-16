@@ -3,6 +3,7 @@ import AssocList "mo:base/AssocList";
 import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
 import Debug "mo:base/Debug";
+import Error "mo:base/Error";
 import ExperimentalCycles "mo:base/ExperimentalCycles";
 import Hash "mo:base/Hash";
 import Int "mo:base/Int";
@@ -326,6 +327,10 @@ shared(init_msg) actor class Deposits(args: {
 
     public shared(msg) func applyInterestFromNeuron(when: ?Time.Time) : async ApplyInterestResponse {
         owners.require(msg.caller);
+        await doApplyInterestFromNeuron(when)
+    };
+
+    private func doApplyInterestFromNeuron(when: ?Time.Time) : async ApplyInterestResponse {
         switch (proposalNeuron_, stakingNeuron_, await stakingNeuronMaturityE8s()) {
             case (null,    _,    _) { #Err(#ProposalNeuronMissing) };
             case (   _, null,    _) { #Err(#StakingNeuronMissing) };
@@ -789,7 +794,16 @@ shared(init_msg) actor class Deposits(args: {
             return;
         };
         lastHeartbeatAt := now;
-        lastHeartbeatResult := ?(await applyInterestFromNeuron(?now));
+        try {
+            lastHeartbeatResult := ?(await doApplyInterestFromNeuron(?now));
+        } catch (error) {
+            lastHeartbeatResult := ?#Err(#Other(Error.message(error)));
+        };
+    };
+
+    public shared(msg) func getLastHeartbeatResult(): async ?ApplyInterestResponse {
+        owners.require(msg.caller);
+        lastHeartbeatResult
     };
 
     public shared(msg) func setLastHeartbeatAt(when: Time.Time): async () {
