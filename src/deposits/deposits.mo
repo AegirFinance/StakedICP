@@ -791,4 +791,10 @@ shared(init_msg) actor class Deposits(args: {
         lastHeartbeatAt := now;
         lastHeartbeatResult := ?(await applyInterestFromNeuron(?now));
     };
+
+    public shared(msg) func setLastHeartbeatAt(when: Time.Time): async () {
+        owners.require(msg.caller);
+        lastHeartbeatAt := when;
+    };
+
 };
