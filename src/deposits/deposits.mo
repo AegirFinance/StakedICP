@@ -41,7 +41,7 @@ shared(init_msg) actor class Deposits(args: {
     private let referralTracker = Referrals.Tracker();
     private stable var stableReferralData : ?Referrals.UpgradeData = null;
 
-    private let neuronsManager = Neurons.Manager({ governance = args.governance });
+    private let neurons = Neurons.Manager({ governance = args.governance });
     private stable var stableNeuronsData : ?Neurons.UpgradeData = null;
 
     // Cost to transfer ICP on the ledger
@@ -77,13 +77,8 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     type ApplyInterestResponse = {
-        #Ok : (ApplyInterestResult, [(Nat, Governance.ManageNeuronResponse)]);
-        #Err: {
-            #StakingNeuronMissing;
-            #ProposalNeuronMissing;
-            #InsufficientMaturity;
-            #Other: Text;
-        };
+        #Ok : (ApplyInterestResult, Neurons.MergeMaturityResponse);
+        #Err: Neurons.NeuronsError;
     };
 
     type ApplyInterestResult = {
@@ -167,39 +162,28 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
-    private func stakingNeuronBalance(): async ?Nat64 {
-        return switch (stakingNeuron_) {
-            case (null) { null };
-            case (?n) {
-                ?(await ledger.account_balance({
-                    account = Blob.toArray(n.accountId);
-                })).e8s;
-            };
+    private func stakingNeuronBalance(): Nat64 {
+        let balances = neurons.balances();
+        if (balances.size() == 0) {
+            return 0;
         };
+        var sum : Nat64 = 0;
+        for ((id, balance) in balances.vals()) {
+            sum += balance;
+        };
+        sum
     };
 
-    private func stakingNeuronMaturityE8s() : async ?Nat64 {
-        switch (stakingNeuron_) {
-            case (null) { null };
-            case (?neuron) {
-                let id = neuron.id.id;
-                let response = await governance.list_neurons({
-                    neuron_ids = [id];
-                    include_neurons_readable_by_caller = true;
-                });
-                let found = Option.map(
-                    Array.find(
-                        response.full_neurons,
-                        func(n: Governance.Neuron): Bool {
-                            return Option.get(n.id, {id=0:Nat64}).id == id;
-                        }
-                    ),
-                    func(n: Governance.Neuron): Nat64 {
-                       n.maturity_e8s_equivalent
-                    }
-                );
-            };
-        }
+    private func stakingNeuronMaturityE8s() : async Nat64 {
+        let maturities = await neurons.maturities();
+        if (maturities.size() == 0) {
+            return 0;
+        };
+        var sum : Nat64 = 0;
+        for ((id, maturities) in maturities.vals()) {
+            sum += maturities;
+        };
+        sum
     };
 
     public shared(msg) func setStakingNeuron(n: { id : NeuronId ; accountId : Text }) {
@@ -217,12 +201,12 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func proposalNeuron(): async ?Neurons.Neuron {
-        neuronsManager.getProposalNeuron()
+        neurons.getProposalNeuron()
     };
 
     public shared(msg) func setProposalNeuron(id: Nat64): async ?Governance.GovernanceError {
         owners.require(msg.caller);
-        await neuronsManager.setProposalNeuron(id)
+        await neurons.setProposalNeuron(id)
     };
 
 
@@ -252,6 +236,7 @@ shared(init_msg) actor class Deposits(args: {
         lastHeartbeatAt: Time.Time;
         lastHeartbeatOk: Bool;
         lastHeartbeatInterestApplied: Nat64;
+        // TODO: Add neurons metrics
     };
 
     public shared(msg) func metrics() : async Metrics {
@@ -279,7 +264,7 @@ shared(init_msg) actor class Deposits(args: {
                 ("ICP", balance),
                 ("cycles", Nat64.fromNat(ExperimentalCycles.balance()))
             ];
-            stakingNeuronBalance = await stakingNeuronBalance();
+            stakingNeuronBalance = ?stakingNeuronBalance();
             referralAffiliatesCount = referralTracker.affiliatesCount();
             referralLeads = referralTracker.leadMetrics();
             referralPayoutsSum = referralTracker.payoutsSum();
@@ -318,37 +303,16 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     private func doApplyInterestFromNeuron(when: ?Time.Time) : async ApplyInterestResponse {
-        switch (proposalNeuron_, stakingNeuron_, await stakingNeuronMaturityE8s()) {
-            case (null,    _,    _) { #Err(#ProposalNeuronMissing) };
-            case (   _, null,    _) { #Err(#StakingNeuronMissing) };
-            case (   _,    _, null) { #Err(#InsufficientMaturity) };
-            case (   _,    _,   ?0) { #Err(#InsufficientMaturity) };
-            case (?proposalNeuron, ?stakingNeuron, ?interest) {
-                if (interest <= 10_000) {
-                    return #Err(#InsufficientMaturity);
-                };
-
-                let (percentage, result) = await doApplyInterest(interest, when);
-                let response = await governance.manage_neuron({
-                    id = null;
-                    command = ?#MakeProposal({
-                        url = "https://stakedicp.com";
-                        title = ?"Merge Maturity";
-                        action = ?#ManageNeuron({
-                            id = null;
-                            command = ?#MergeMaturity({
-                                percentage_to_merge = Nat32.fromNat(Nat64.toNat(percentage))
-                            });
-                            neuron_id_or_subaccount = ?#NeuronId(stakingNeuron.id);
-                        });
-                        summary = "Merge Maturity";
-                    });
-                    neuron_id_or_subaccount = ?#NeuronId(proposalNeuron.id);
-                });
-
-                #Ok(result, [(0, response)])
-            };
+        let interest = await stakingNeuronMaturityE8s();
+        if (interest <= 10_000) {
+            return #Err(#InsufficientMaturity);
         };
+
+        let (percentage, result) = await doApplyInterest(interest, when);
+        // TODO: Error handling here. Do this first to confirm it worked? After
+        // is nice as we can the merge "manually" to ensure it merges.
+        let mergeResult = await neurons.mergeMaturity(Nat32.fromNat(Nat64.toNat(percentage)));
+        #Ok(result, mergeResult)
     };
 
     public shared(msg) func applyInterest(interest: Nat64, when: ?Time.Time) : async (Nat64, ApplyInterestResult) {
@@ -719,7 +683,7 @@ shared(init_msg) actor class Deposits(args: {
 
         stableReferralData := referralTracker.preupgrade();
 
-        stableNeuronsData := neuronsManager.preupgrade();
+        stableNeuronsData := neurons.preupgrade();
 
         stableOwners := owners.preupgrade();
     };
@@ -734,7 +698,7 @@ shared(init_msg) actor class Deposits(args: {
         referralTracker.postupgrade(stableReferralData);
         stableReferralData := null;
 
-        neuronsManager.postupgrade(stableNeuronsData);
+        neurons.postupgrade(stableNeuronsData);
         stableNeuronsData := null;
 
         owners.postupgrade(stableOwners);

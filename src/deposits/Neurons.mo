@@ -44,7 +44,7 @@ module {
     };
 
     public type MergeMaturityResponse = {
-        #Ok : ([(Nat64, Governance.ManageNeuronResponse)]);
+        #Ok : ([(Nat, Governance.ManageNeuronResponse)]);
         #Err: NeuronsError;
     };
 
@@ -163,7 +163,7 @@ module {
                 };
                 case (?proposalNeuron) {
                     // TODO: Parallelize these calls
-                    let b = Buffer.Buffer<(Nat64, Governance.ManageNeuronResponse)>(stakingNeurons.size());
+                    let b = Buffer.Buffer<(Nat, Governance.ManageNeuronResponse)>(stakingNeurons.size());
                     for (stakingNeuron in stakingNeurons.vals()) {
                         let response = await governance.manage_neuron({
                             id = null;
@@ -181,7 +181,7 @@ module {
                             });
                             neuron_id_or_subaccount = ?#NeuronId({ id = proposalNeuron.id });
                         });
-                        b.add((stakingNeuron.id, response));
+                        b.add((Nat64.toNat(stakingNeuron.id), response));
                         // TODO: Check the proposals were successful
                         ignore await addOrRefresh(stakingNeuron.id)
                         // TODO: Handle error results here
