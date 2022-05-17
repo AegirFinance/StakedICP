@@ -22,6 +22,7 @@ import Trie "mo:base/Trie";
 
 import Account      "./Account";
 import Hex          "./Hex";
+import Neurons      "./Neurons";
 import Owners       "./Owners";
 import Referrals    "./Referrals";
 import Util         "./Util";
@@ -39,6 +40,9 @@ shared(init_msg) actor class Deposits(args: {
 }) = this {
     private let referralTracker = Referrals.Tracker();
     private stable var stableReferralData : ?Referrals.UpgradeData = null;
+
+    private let neuronsManager = Neurons.Manager({ governance = args.governance });
+    private stable var stableNeuronsData : ?Neurons.UpgradeData = null;
 
     // Cost to transfer ICP on the ledger
     let icpFee: Nat = 10_000;
@@ -212,30 +216,13 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
-    public shared(msg) func proposalNeuron(): async ?{ id : NeuronId ; accountId : Text } {
-        return switch (proposalNeuron_) {
-            case (null) { null };
-            case (?n) {
-                ?{
-                    id = n.id;
-                    accountId = Account.toText(n.accountId);
-                }
-            };
-        };
+    public shared(msg) func proposalNeuron(): async ?Neurons.Neuron {
+        neuronsManager.getProposalNeuron()
     };
 
-    public shared(msg) func setProposalNeuron(n: { id : NeuronId ; accountId : Text }) {
+    public shared(msg) func setProposalNeuron(id: Nat64): async ?Governance.GovernanceError {
         owners.require(msg.caller);
-        proposalNeuron_ := ?{
-            id = n.id;
-            accountId = switch (Account.fromText(n.accountId)) {
-                case (#err(_)) {
-                    assert(false);
-                    loop {};
-                };
-                case (#ok(x)) { x };
-            };
-        };
+        await neuronsManager.setProposalNeuron(id)
     };
 
 
@@ -633,7 +620,7 @@ shared(init_msg) actor class Deposits(args: {
         // Check ledger for value
         let balance = await ledger.account_balance({ account = Blob.toArray(source_account) });
 
-        // TODO: Refactor this to a Triemap
+        // TODO: Refactor this to a TrieMap
         let key = principalKey(msg.caller);
         balances := Trie.put(balances, key, Principal.equal, balance.e8s).0;
 
@@ -732,6 +719,8 @@ shared(init_msg) actor class Deposits(args: {
 
         stableReferralData := referralTracker.preupgrade();
 
+        stableNeuronsData := neuronsManager.preupgrade();
+
         stableOwners := owners.preupgrade();
     };
 
@@ -744,6 +733,9 @@ shared(init_msg) actor class Deposits(args: {
 
         referralTracker.postupgrade(stableReferralData);
         stableReferralData := null;
+
+        neuronsManager.postupgrade(stableNeuronsData);
+        stableNeuronsData := null;
 
         owners.postupgrade(stableOwners);
         stableOwners := null;
