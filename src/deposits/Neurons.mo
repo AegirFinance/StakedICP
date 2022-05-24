@@ -86,6 +86,17 @@ module {
             return null;
         };
 
+        public func list(): [{ id : Governance.NeuronId ; accountId : Text }] {
+            let b = Buffer.Buffer<{ id : Governance.NeuronId ; accountId : Text }>(stakingNeurons.size());
+            for (neuron in stakingNeurons.vals()) {
+                b.add({
+                    id = { id = neuron.id };
+                    accountId = Account.toText(neuron.accountId);
+                });
+            };
+            return b.toArray();
+        };
+
         // balances is the balances of the staking neurons
         public func balances(): [(Nat64, Nat64)] {
             let b = Buffer.Buffer<(Nat64, Nat64)>(stakingNeurons.size());
@@ -193,7 +204,7 @@ module {
 
         // depositIcp takes an amount of e8s to deposit, and returns a list of
         // transfers to make.
-        // TODO: Implement depositIcp properly
+        // TODO: Route incoming ICP to neurons based on existing balances
         public func depositIcp(e8s: Nat64, fromSubaccount: ?Account.Subaccount): [Ledger.TransferArgs] {
             if (e8s <= icpFee) {
                 return [];

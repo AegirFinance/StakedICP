@@ -77,7 +77,11 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     type ApplyInterestResponse = {
-        #Ok : (ApplyInterestResult, Neurons.MergeMaturityResponse);
+        #Ok : ({
+            apply: ApplyInterestResult;
+            merge: Neurons.MergeMaturityResponse;
+            flush: [Ledger.TransferResult];
+        });
         #Err: Neurons.NeuronsError;
     };
 
@@ -108,19 +112,6 @@ shared(init_msg) actor class Deposits(args: {
     private stable var ledger : Ledger.Self = actor(Principal.toText(args.ledger));
 
     private stable var token : Token.Token = actor(Principal.toText(args.token));
-    private stable var stakingNeuron_ : ?Neuron = switch (args.stakingNeuron) {
-        case (null) { null };
-        case (?n) {
-            ?{
-                id = n.id;
-                accountId = switch (Account.fromText(n.accountId)) {
-                    case (#err(_)) { P.unreachable() };
-                    case (#ok(x)) { x };
-                };
-            };
-        };
-    };
-    private stable var proposalNeuron_ : ?Neuron = null;
 
     private stable var balances : Trie.Trie<Principal, Nat64> = Trie.empty();
     private stable var pendingMints : Trie.Trie<Principal, Nat64> = Trie.empty();
@@ -150,16 +141,8 @@ shared(init_msg) actor class Deposits(args: {
         token := actor(Principal.toText(_token));
     };
 
-    public shared(msg) func stakingNeuron(): async ?{ id : NeuronId ; accountId : Text } {
-        return switch (stakingNeuron_) {
-            case (null) { null };
-            case (?n) {
-                ?{
-                    id = n.id;
-                    accountId = Account.toText(n.accountId);
-                }
-            };
-        };
+    public shared(msg) func stakingNeurons(): async [{ id : NeuronId ; accountId : Text }] {
+        neurons.list()
     };
 
     private func stakingNeuronBalance(): Nat64 {
@@ -186,18 +169,9 @@ shared(init_msg) actor class Deposits(args: {
         sum
     };
 
-    public shared(msg) func setStakingNeuron(n: { id : NeuronId ; accountId : Text }) {
+    public shared(msg) func addStakingNeuron(id: Nat64): async ?Governance.GovernanceError {
         owners.require(msg.caller);
-        stakingNeuron_ := ?{
-            id = n.id;
-            accountId = switch (Account.fromText(n.accountId)) {
-                case (#err(_)) {
-                    assert(false);
-                    loop {};
-                };
-                case (#ok(x)) { x };
-            };
-        };
+        await neurons.addOrRefresh(id)
     };
 
     public shared(msg) func proposalNeuron(): async ?Neurons.Neuron {
@@ -274,8 +248,8 @@ shared(init_msg) actor class Deposits(args: {
                 case (_)       { false };
             };
             lastHeartbeatInterestApplied = switch (lastHeartbeatResult) {
-                case (?#Ok(result, _)) {
-                    result.applied.e8s + result.remainder.e8s + Nat64.fromNat(result.affiliatePayouts)
+                case (?#Ok({apply})) {
+                    apply.applied.e8s + apply.remainder.e8s + Nat64.fromNat(apply.affiliatePayouts)
                 };
                 case (_)       { 0 };
             };
@@ -312,7 +286,16 @@ shared(init_msg) actor class Deposits(args: {
         // TODO: Error handling here. Do this first to confirm it worked? After
         // is nice as we can the merge "manually" to ensure it merges.
         let mergeResult = await neurons.mergeMaturity(Nat32.fromNat(Nat64.toNat(percentage)));
-        #Ok(result, mergeResult)
+
+        // Flush pending deposits
+        // TODO: do something with the errors here
+        let flushResult = await flushPendingDeposits();
+
+        #Ok({
+            apply = result;
+            merge = mergeResult;
+            flush = flushResult;
+        })
     };
 
     public shared(msg) func applyInterest(interest: Nat64, when: ?Time.Time) : async (Nat64, ApplyInterestResult) {
@@ -333,6 +316,18 @@ shared(init_msg) actor class Deposits(args: {
         // Figure out the percentage to merge
         let percentage = ((interest - result.remainder.e8s) * 100) / interest;
         return (percentage, result);
+    };
+
+    private func flushPendingDeposits(): async [Ledger.TransferResult] {
+        let balance = (await ledger.account_balance({
+            account = Blob.toArray(accountIdBlob());
+        })).e8s;
+        let transfers = neurons.depositIcp(balance, null);
+        let b = Buffer.Buffer<Ledger.TransferResult>(transfers.size());
+        for (transfer in transfers.vals()) {
+            b.add(await ledger.transfer(transfer));
+        };
+        return b.toArray();
     };
 
     private func getAllHolders(): async [(Principal, Nat)] {
@@ -565,18 +560,6 @@ shared(init_msg) actor class Deposits(args: {
 
     // After user transfers ICP to the target subaccount
     public shared(msg) func depositIcp(): async DepositReceipt {
-        let neuron = stakingNeuron_;
-        let to = switch (neuron) {
-            case (null) {
-                // contract not configured.
-                assert(false);
-                loop {};
-            };
-            case (?neuron) {
-                Blob.toArray(neuron.accountId)
-            };
-        };
-
         // Calculate target subaccount
         let subaccount = Account.principalToSubaccount(msg.caller);
         let source_account = Account.fromPrincipal(Principal.fromActor(this), subaccount);
@@ -597,7 +580,7 @@ shared(init_msg) actor class Deposits(args: {
         let icp_receipt = await ledger.transfer({
             memo : Nat64    = 0;
             from_subaccount = ?Blob.toArray(subaccount);
-            to              = to;
+            to              = Blob.toArray(accountIdBlob());
             amount          = amount;
             fee             = fee;
             created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
@@ -617,21 +600,6 @@ shared(init_msg) actor class Deposits(args: {
         referralTracker.convert(msg.caller);
         ignore queueMint(msg.caller, amount.e8s);
         ignore await flushMint(msg.caller);
-
-        // Refresh the neuron balance, if we deposited directly
-        switch (neuron) {
-            case (null) {
-                Debug.print("Staking neuron not configured for deposit");
-            };
-            case (?neuron) {
-                Debug.print("Staking neuron refreshing: " # debug_show(neuron.id));
-                let refresh = await governance.manage_neuron({
-                    id = null;
-                    command = ?#ClaimOrRefresh({ by = ?#NeuronIdOrSubaccount({}) });
-                    neuron_id_or_subaccount = ?#NeuronId(neuron.id);
-                });
-            };
-        };
 
         return #Ok(Nat64.toNat(amount.e8s));
     };
