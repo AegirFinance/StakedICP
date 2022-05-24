@@ -175,27 +175,30 @@ module {
                 case (?proposalNeuron) {
                     // TODO: Parallelize these calls
                     let b = Buffer.Buffer<(Nat, Governance.ManageNeuronResponse)>(stakingNeurons.size());
-                    for (stakingNeuron in stakingNeurons.vals()) {
-                        let response = await governance.manage_neuron({
-                            id = null;
-                            command = ?#MakeProposal({
-                                url = "https://stakedicp.com";
-                                title = ?"Merge Maturity";
-                                action = ?#ManageNeuron({
-                                    id = null;
-                                    command = ?#MergeMaturity({
-                                        percentage_to_merge = percentage
+
+                    for ((id, maturity) in (await maturities()).vals()) {
+                        if (maturity > icpFee) {
+                            let response = await governance.manage_neuron({
+                                id = null;
+                                command = ?#MakeProposal({
+                                    url = "https://stakedicp.com";
+                                    title = ?"Merge Maturity";
+                                    action = ?#ManageNeuron({
+                                        id = null;
+                                        command = ?#MergeMaturity({
+                                            percentage_to_merge = percentage
+                                        });
+                                        neuron_id_or_subaccount = ?#NeuronId({ id = id });
                                     });
-                                    neuron_id_or_subaccount = ?#NeuronId({ id = stakingNeuron.id });
+                                    summary = "Merge Maturity";
                                 });
-                                summary = "Merge Maturity";
+                                neuron_id_or_subaccount = ?#NeuronId({ id = proposalNeuron.id });
                             });
-                            neuron_id_or_subaccount = ?#NeuronId({ id = proposalNeuron.id });
-                        });
-                        b.add((Nat64.toNat(stakingNeuron.id), response));
-                        // TODO: Check the proposals were successful
-                        ignore await addOrRefresh(stakingNeuron.id)
-                        // TODO: Handle error results here
+                            b.add((Nat64.toNat(id), response));
+                            // TODO: Check the proposals were successful
+                            ignore await addOrRefresh(id)
+                            // TODO: Handle error results here
+                        };
                     };
                     return #Ok(b.toArray());
                 };
