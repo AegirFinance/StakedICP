@@ -232,6 +232,39 @@ module {
             }
         };
 
+        public func split(id: Nat64, amount_e8s: Nat64): async ?Governance.ProposalInfo {
+            do ? {
+                let proposalNeuronId = (proposalNeuron !).id;
+                let neuron = stakingNeurons.get(Nat64.toText(id)) !;
+
+                let manageNeuronResponse = await governance.manage_neuron({
+                    id = null;
+                    command = ?#MakeProposal({
+                        url = "https://stakedicp.com";
+                        title = ?"Split Neuron";
+                        action = ?#ManageNeuron({
+                            id = null;
+                            command = ?#Split({
+                                amount_e8s = amount_e8s;
+                            });
+                            neuron_id_or_subaccount = ?#NeuronId({ id = id });
+                        });
+                        summary = "Split Neuron";
+                    });
+                    neuron_id_or_subaccount = ?#NeuronId({ id = proposalNeuronId });
+                });
+
+                let proposalId = switch (manageNeuronResponse.command !) {
+                    case (#MakeProposal { proposal_id }) {
+                        proposal_id !
+                    };
+                    case (_) { null ! };
+                };
+
+                (await governance.get_proposal_info(proposalId.id)) !
+            }
+        };
+
         public func preupgrade(): ?UpgradeData {
             return ?#v1({
                 governance = args.governance;

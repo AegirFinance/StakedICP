@@ -128,10 +128,8 @@ EOM
 
 canister start deposits
 
-canister call deposits setProposalNeuron "(record {
-    id = record { id = ${PROPOSAL_NEURON_ID} : nat64 };
-    accountId = \"${PROPOSAL_NEURON_ACCOUNT_ID}\";
-})"
+canister call deposits setProposalNeuron "(${PROPOSAL_NEURON_ID} : nat64)"
+canister call deposits addStakingNeuron "(${STAKING_NEURON_ID} : nat64)"
 
 fi
 

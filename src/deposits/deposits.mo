@@ -735,4 +735,9 @@ shared(init_msg) actor class Deposits(args: {
         lastHeartbeatAt := when;
     };
 
+    public shared(msg) func splitNeuron(id: Nat64, amount_e8s: Nat64): async ?Governance.ProposalInfo {
+        owners.require(msg.caller);
+        await neurons.split(id, amount_e8s)
+    };
+
 };
