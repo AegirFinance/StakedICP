@@ -79,7 +79,7 @@ shared(init_msg) actor class Deposits(args: {
     type ApplyInterestResponse = {
         #Ok : ({
             apply: ApplyInterestResult;
-            merge: Neurons.MergeMaturityResponse;
+            merge: Neurons.MergeMaturityResult;
             flush: [Ledger.TransferResult];
         });
         #Err: Neurons.NeuronsError;
@@ -735,7 +735,7 @@ shared(init_msg) actor class Deposits(args: {
         lastHeartbeatAt := when;
     };
 
-    public shared(msg) func splitNeuron(id: Nat64, amount_e8s: Nat64): async ?Governance.ProposalInfo {
+    public shared(msg) func splitNeuron(id: Nat64, amount_e8s: Nat64): async Neurons.SplitResult {
         owners.require(msg.caller);
         await neurons.split(id, amount_e8s)
     };
