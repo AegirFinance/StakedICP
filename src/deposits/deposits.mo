@@ -26,6 +26,7 @@ import Neurons      "./Neurons";
 import Owners       "./Owners";
 import Referrals    "./Referrals";
 import Util         "./Util";
+import Withdrawals  "./Withdrawals";
 import Governance "../governance/Governance";
 import Ledger "../ledger/Ledger";
 import Token "../DIP20/motoko/src/token";
@@ -43,6 +44,13 @@ shared(init_msg) actor class Deposits(args: {
 
     private let neurons = Neurons.Manager({ governance = args.governance });
     private stable var stableNeuronsData : ?Neurons.UpgradeData = null;
+
+    private let withdrawals = Withdrawals.Manager({
+        token = args.token;
+        neurons = neurons;
+    });
+    private stable var stableWithdrawalsData : ?Withdrawals.UpgradeData = null;
+
 
     // Cost to transfer ICP on the ledger
     let icpFee: Nat = 10_000;
@@ -653,6 +661,8 @@ shared(init_msg) actor class Deposits(args: {
 
         stableNeuronsData := neurons.preupgrade();
 
+        stableWithdrawalsData := withdrawals.preupgrade();
+
         stableOwners := owners.preupgrade();
     };
 
@@ -668,6 +678,9 @@ shared(init_msg) actor class Deposits(args: {
 
         neurons.postupgrade(stableNeuronsData);
         stableNeuronsData := null;
+
+        withdrawals.postupgrade(stableWithdrawalsData);
+        stableWithdrawalsData := null;
 
         owners.postupgrade(stableOwners);
         stableOwners := null;
