@@ -47,6 +47,7 @@ shared(init_msg) actor class Deposits(args: {
 
     private let withdrawals = Withdrawals.Manager({
         token = args.token;
+        ledger = args.ledger;
         neurons = neurons;
     });
     private stable var stableWithdrawalsData : ?Withdrawals.UpgradeData = null;
@@ -327,9 +328,22 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     private func flushPendingDeposits(): async [Ledger.TransferResult] {
-        let balance = (await ledger.account_balance({
-            account = Blob.toArray(accountIdBlob());
-        })).e8s;
+        // Basically this is: "use incoming deposits to attempt to rebalance
+        // the buckets", where "the buckets" are:
+        // - cash on hand
+        // - pending withdrawals
+        // - staking neurons
+
+        var balance = await availableBalance();
+        if (balance == 0) {
+            return [];
+        };
+
+        balance -= withdrawals.applyIcp(balance);
+        if (balance == 0) {
+            return [];
+        };
+
         let transfers = neurons.depositIcp(balance, null);
         let b = Buffer.Buffer<Ledger.TransferResult>(transfers.size());
         for (transfer in transfers.vals()) {
@@ -651,6 +665,28 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
+    // ===== WITHDRAWAL FUNCTIONS =====
+
+    public shared(msg) func availableBalance() : async Nat64 {
+        let balance = (await ledger.account_balance({
+            account = Blob.toArray(accountIdBlob());
+        })).e8s;
+        let reserved = withdrawals.reservedIcp();
+        if (reserved >= balance) {
+            0
+        } else {
+            balance - reserved
+        }
+    };
+
+    public shared(msg) func createWithdrawal(user: Principal, total: Nat64) : async Withdrawals.WithdrawalResult {
+        if (msg.caller != user) {
+            owners.require(msg.caller);
+        };
+        let balance = await availableBalance();
+        await withdrawals.createWithdrawal(user, total, balance)
+    };
+
     // ===== UPGRADE FUNCTIONS =====
 
     system func preupgrade() {
@@ -736,6 +772,8 @@ shared(init_msg) actor class Deposits(args: {
         } catch (error) {
             lastHeartbeatResult := ?#Err(#Other(Error.message(error)));
         };
+
+        // TODO: Split off the new neurons and start them dissolving
     };
 
     public shared(msg) func getLastHeartbeatResult(): async ?ApplyInterestResponse {

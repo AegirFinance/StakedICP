@@ -1,8 +1,13 @@
+import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
+import Deque "mo:base/Deque";
+import Heap "mo:base/Heap";
+import Int "mo:base/Int";
 import Iter "mo:base/Iter";
 import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
 import Option "mo:base/Option";
+import Order "mo:base/Order";
 import P "mo:base/Prelude";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
@@ -18,9 +23,13 @@ import Ledger "../ledger/Ledger";
 import Token "../DIP20/motoko/src/token";
 
 module {
+    // Cost to transfer ICP on the ledger
+    let icpFee: Nat64 = 10_000;
+
     public type UpgradeData = {
         #v1: {
             withdrawals: [(Text, Withdrawal)];
+            reserved: Nat64;
         };
     };
 
@@ -30,20 +39,20 @@ module {
         pendingE8s: Nat64;
         availableE8s: Nat64;
         disbursedE8s: Nat64;
-        neuronsCount: Nat64;
         usersCount: Nat64;
     };
 
     type Withdrawal = {
         id: Text;
-        principal: Principal;
+        user: Principal;
         createdAt: Time.Time;
         expectedAt: Time.Time;
+        readyAt: ?Time.Time;
+        disbursedAt: ?Time.Time;
         total: Nat64;
         pending: Nat64;
         available: Nat64;
         disbursed: Nat64;
-        neurons: [Neurons.Neuron];
     };
 
     type WithdrawalsError = {
@@ -63,18 +72,56 @@ module {
             #AmountTooSmall;
         };
         #NeuronsError: Neurons.NeuronsError;
+        #TransferError: Ledger.TransferError;
     };
 
-    type WithdrawalResult = Result.Result<Withdrawal, WithdrawalsError>;
-    type PayoutResult = Result.Result<[Ledger.TransferResult], WithdrawalsError>;
+    public type WithdrawalResult = Result.Result<Withdrawal, WithdrawalsError>;
+    type PayoutResult = Result.Result<Ledger.BlockIndex, WithdrawalsError>;
+
+    type WithdrawalHeapEntry = {
+        id: Text;
+        createdAt: Time.Time;
+    };
+
+    // Sorting order for two withdrawalHeapEntries
+    func compare(a: WithdrawalHeapEntry, b: WithdrawalHeapEntry): Order.Order {
+        Int.compare(a.createdAt, b.createdAt)
+    };
+
+    // func heapToArray<T>(root: Heap.Heap<T>): [T] {
+    //     var q = Deque.pushBack(Deque.empty<Heap.Tree<T>>(), root.share());
+    //     var b = Buffer.Buffer<T>(1);
+    //     for {
+    //         switch (q.popFront()) {
+    //             case (null) {};
+    //             case (?(_, x, l, r)) {
+    //                 b.add(x);
+    //                 q := Deque.pushBack(q, l);
+    //                 q := Deque.pushBack(q, r);
+    //             };
+    //         };
+    //     };
+    //     b.toArray()
+    // };
 
     public class Manager(args: {
         token: Principal;
+        ledger: Principal;
         neurons: Neurons.Manager;
     }) {
+        let second : Int = 1_000_000_000;
+
         private let token: Token.Token = actor(Principal.toText(args.token));
+        private let ledger: Ledger.Self = actor(Principal.toText(args.ledger));
         private var withdrawals = TrieMap.TrieMap<Text, Withdrawal>(Text.equal, Text.hash);
-        private var withdrawalsByPrincipal = TrieMap.TrieMap<Principal, Buffer.Buffer<Text>>(Principal.equal, Principal.hash);
+        private var pendingWithdrawals = Heap.Heap<WithdrawalHeapEntry>(compare);
+        private var withdrawalsByUser = TrieMap.TrieMap<Principal, Buffer.Buffer<Text>>(Principal.equal, Principal.hash);
+        private var reserved: Nat64 = 0;
+
+        // Tell the main contract how much icp to keep on-hand
+        public func reservedIcp(): Nat64 {
+            reserved
+        };
 
         public func count(): Nat {
             withdrawals.size()
@@ -85,13 +132,11 @@ module {
             var pendingE8s: Nat64 = 0;
             var availableE8s: Nat64 = 0;
             var disbursedE8s: Nat64 = 0;
-            var neuronsCount: Nat64 = 0;
             for (w in withdrawals.vals()) {
                 totalE8s += w.total;
                 pendingE8s += w.pending;
                 availableE8s += w.available;
                 disbursedE8s += w.disbursed;
-                neuronsCount += Nat64.fromNat(w.neurons.size());
             };
 
             return {
@@ -100,70 +145,92 @@ module {
                 pendingE8s = pendingE8s;
                 availableE8s = availableE8s;
                 disbursedE8s = disbursedE8s;
-                neuronsCount = neuronsCount;
-                usersCount = Nat64.fromNat(withdrawalsByPrincipal.size());
+                usersCount = Nat64.fromNat(withdrawalsByUser.size());
             };
         };
 
-        // Returns array of delays (seconds) and the amount (e8s) becoming
-        // available after that delay.
-        // TODO: Implement this properly.
-        public func availableLiquidityGraph(): [(Nat64, Nat64)] {
+        // TODO: Make sure we never split one into < 1icp
+        // TODO: Move this to Neurons module.
+        private func availableLiquidity(amount: Nat64): (Int, Nat64) {
+            var maxDelay: Int = 0;
             var sum: Nat64 = 0;
-            for ((_, amount) in args.neurons.balances().vals()) {
-                sum += amount;
-            };
-
-            // 8 years in seconds, and sum
-            return [(252_460_800, sum)];
-        };
-
-        // TODO: Implement this
-        public func createWithdrawal(user: Principal, total: Nat64): async WithdrawalResult {
-            let now = Time.now();
-
-            // Mark cash as available for instant withdrawal, and reserve
-            // let available: Nat64 = 0;
-
             // Is there enough available liquidity in the neurons?
             // Figure out the unstaking schedule
+            for ((delay, liquidity) in args.neurons.availableLiquidityGraph().vals()) {
+                if (sum >= amount) {
+                    return (maxDelay, sum);
+                };
+                sum += Nat64.min(liquidity, amount-sum);
+                maxDelay := Int.max(maxDelay, delay);
+            };
+            return (maxDelay, sum);
+        };
+
+        public func createWithdrawal(user: Principal, amount: Nat64, availableCash: Nat64): async WithdrawalResult {
+            let now = Time.now();
+
+            // Mark cash as available for instant withdrawal
+            let available: Nat64 = Nat64.min(availableCash, amount);
+
+            // If not enough cash for instant payout
+            var maxDelay: Int = 0;
+            var neurons: Nat64 = 0;
+            if (available < amount) {
+                let (delay, sum) = availableLiquidity(amount-available);
+                maxDelay := delay;
+                neurons := sum;
+            };
+            if (neurons+available < amount) {
+                return #err(#InsufficientLiquidity);
+            };
 
             // Burn the tokens from the user. This makes sure there is enough
             // balance for the user, avoiding re-entrancy.
-            // let burn = token.burn(user,total);
-            // switch (burn) {
-            //     case (#Err(err)) {
-            //         return #err(#TokenError(err));
-            //     };
-            //     case (#Ok(_)) { };
-            // };
+            let burn = await token.burnFor(user, Nat64.toNat(amount));
+            switch (burn) {
+                case (#Err(err)) {
+                    return #err(#TokenError(err));
+                };
+                case (#Ok(_)) { };
+            };
+
+            // TODO: Re-check we have enough cash+neurons, to avoid re-entrancy or timing attacks
 
             // Store the withdrawal
-            // let withdrawal: Withdrawal = {
-            //     id = id;
-            //     principal = user;
-            //     createdAt = now;
-            //     expectedAt: Time.Time;
-            //     total = total;
-            //     pending = total - available;
-            //     available = available;
-            //     disbursed = 0;
-            //     neurons = neurons.toArray();
-            // }
-            // withdrawals.put(id, withdrawal);
+            let readyAt = if (available == amount) {
+                ?now
+            } else {
+                null
+            };
+            var id = await Nanoid.new();
+            while (Option.isSome(withdrawals.get(id))) {
+                // Re-generate if there's a collision.
+                id := await Nanoid.new();
+            };
+            let withdrawal: Withdrawal = {
+                id = id;
+                user = user;
+                createdAt = now;
+                expectedAt = now + (maxDelay * second);
+                readyAt = readyAt;
+                disbursedAt = null;
+                total = amount;
+                pending = amount - available;
+                available = available;
+                disbursed = 0;
+            };
+            withdrawals.put(id, withdrawal);
+            if (available < amount) {
+                pendingWithdrawals.put({id = id; createdAt = now});
+            };
+            reserved += amount;
 
-            // Split off the new neurons and start them dissolving
-            // let neurons = Buffer.Buffer<Neurons.Neuron>(0);
-            // Save them onto the withdrawal
-            // withdrawal.neurons = neurons.toArray();
-            // withdrawals.put(id, withdrawal);
-
-            return #err(#Other("createWithdrawal: Not Implemented"));
+            return #ok(withdrawal);
         };
 
         public func withdrawalsFor(user: Principal): [Withdrawal] {
             var sources = Buffer.Buffer<Withdrawal>(0);
-            let ids = Option.get<Buffer.Buffer<Text>>(withdrawalsByPrincipal.get(user), Buffer.Buffer<Text>(0));
+            let ids = Option.get<Buffer.Buffer<Text>>(withdrawalsByUser.get(user), Buffer.Buffer<Text>(0));
             for (id in ids.vals()) {
                 switch (withdrawals.get(id)) {
                     case (null) { P.unreachable(); };
@@ -175,40 +242,124 @@ module {
             return sources.toArray();
         };
 
-        // record a conversion event for this referred user
-        public func disburse(user: Principal, total: Nat64, to: Account.AccountIdentifier): async PayoutResult {
+        // Apply some ICP towards paying off our deposits balance. Either from
+        // new deposits, or newly disbursed neurons.
+        public func applyIcp(amount: Nat64): Nat64 {
             let now = Time.now();
-
-            // Figure out where it is coming from
-            var sources = Buffer.Buffer<Withdrawal>(0);
-            var found: Nat64 = 0;
-            let ids = Option.get<Buffer.Buffer<Text>>(withdrawalsByPrincipal.get(user), Buffer.Buffer<Text>(0));
-            for (id in ids.vals()) {
-                switch (withdrawals.get(id)) {
-                    case (null) { P.unreachable(); };
-                    case (?w) {
-                        if (found < total and w.available > 0) {
-                            sources.add(w);
-                            found += w.available;
+            var remaining = amount;
+            while (remaining > 0) {
+                switch (pendingWithdrawals.peekMin()) {
+                    case (null) {
+                        // No pending withdrawals
+                        return remaining;
+                    };
+                    case (?{id}) {
+                        switch (withdrawals.get(id)) {
+                            case (null) { P.unreachable(); };
+                            case (?w) {
+                                let applied = Nat64.min(w.pending, remaining);
+                                remaining -= applied;
+                                if (w.pending == applied) {
+                                    // This withdrawal is done
+                                    pendingWithdrawals.deleteMin();
+                                };
+                                let readyAt = if (w.pending == applied) {
+                                    ?now;
+                                } else {
+                                    null
+                                };
+                                withdrawals.put(id, {
+                                    id = id;
+                                    user = w.user;
+                                    createdAt = w.createdAt;
+                                    expectedAt = w.expectedAt;
+                                    readyAt = readyAt;
+                                    disbursedAt = w.disbursedAt;
+                                    total = w.total;
+                                    pending = w.pending - applied;
+                                    available = w.available + applied;
+                                    disbursed = w.disbursed;
+                                });
+                            };
                         };
                     };
                 };
             };
+            return remaining;
+        };
 
-            // Check the user has this much available
-            if (found < total) {
+        // record a conversion event for this referred user
+        public func disburse(user: Principal, amount: Nat64, to: Account.AccountIdentifier): async PayoutResult {
+            let now = Time.now();
+
+            // Figure out which available withdrawals we're disbursing
+            var remaining : Nat64 = amount;
+            var b = Buffer.Buffer<(Nat64, Withdrawal)>(1);
+            for (w in withdrawalsFor(user).vals()) {
+                if (remaining > 0 and w.pending == 0 and w.available > 0) {
+                    let applied = Nat64.min(w.available, remaining);
+                    b.add((applied, w));
+                    remaining -= applied;
+                };
+            };
+            // Check the user has enough available
+            if (remaining > 0) {
                 return #err(#InsufficientBalance);
             };
+            // Check we have reserved enough. This should always be true.
+            assert(amount <= reserved);
 
-            // TODO: Pay it out. Disburse the neuron(s)
-            // TODO: Remove the neuron from the withdrawal.
+            // TODO: Make sure you can't spam this to trigger race condition
+            // for infinite withdrawal.
 
-            return #err(#Other("disburse: Not Implemented"));
+            let transfer = await ledger.transfer({
+                    memo : Nat64    = 0;
+                    from_subaccount = null;
+                    to              = Blob.toArray(to);
+                    amount          = { e8s = amount - icpFee };
+                    fee             = { e8s = icpFee };
+                    created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(now)) };
+            });
+            switch (transfer) {
+                case (#Ok(block)) {
+                    reserved -= amount;
+                    // Mark these withdrawals as disbursed.
+                    for ((applied, w) in b.vals()) {
+                        // TODO: Check this updates them in the original array
+                        let disbursedAt = if (w.disbursed + applied == w.total) {
+                            ?now
+                        } else {
+                            null
+                        };
+                        withdrawals.put(w.id, {
+                            id = w.id;
+                            user = w.user;
+                            createdAt = w.createdAt;
+                            expectedAt = w.expectedAt;
+                            readyAt = w.readyAt;
+                            disbursedAt = disbursedAt;
+                            total = w.total;
+                            pending = w.pending;
+                            available = w.available - applied;
+                            disbursed = w.disbursed + applied;
+                        });
+                    };
+                    #ok(block)
+                };
+                case (#Err(#InsufficientFunds{})) {
+                    // Not enough ICP in the contract
+                    #err(#InsufficientLiquidity)
+                };
+                case (#Err(err)) {
+                    #err(#TransferError(err))
+                };
+            }
         };
 
         public func preupgrade() : ?UpgradeData {
             return ?#v1({
                 withdrawals = Iter.toArray(withdrawals.entries());
+                reserved = reserved;
             });
         };
 
@@ -217,14 +368,23 @@ module {
                 case (?#v1(data)) {
                     for ((id, withdrawal) in Iter.fromArray(data.withdrawals)) {
                         withdrawals.put(id, withdrawal);
+
+                        if (withdrawal.pending > 0) {
+                            pendingWithdrawals.put({
+                                id = id;
+                                createdAt = withdrawal.createdAt;
+                            });
+                        };
+
                         let buf = Option.get<Buffer.Buffer<Text>>(
-                            withdrawalsByPrincipal.get(withdrawal.principal),
+                            withdrawalsByUser.get(withdrawal.user),
                             Buffer.Buffer<Text>(1)
                         );
                         buf.add(id);
-                        withdrawalsByPrincipal.put(withdrawal.principal, buf);
+                        withdrawalsByUser.put(withdrawal.user, buf);
                     };
 
+                    reserved := data.reserved;
                 };
                 case (_) { return; };
             };

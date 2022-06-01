@@ -112,6 +112,19 @@ module {
             return b.toArray();
         };
 
+        // Returns array of delays (seconds) and the amount (e8s) becoming
+        // available after that delay.
+        // TODO: Implement this properly.
+        public func availableLiquidityGraph(): [(Int, Nat64)] {
+            var sum: Nat64 = 0;
+            for (neuron in stakingNeurons.vals()) {
+                sum += neuron.cachedNeuronStakeE8s;
+            };
+
+            // 8 years in seconds, and sum
+            return [(252_460_800, sum)];
+        };
+
         public func ids(): [Nat64] {
             Iter.toArray(Iter.map(
                 stakingNeurons.vals(),
