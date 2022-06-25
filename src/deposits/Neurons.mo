@@ -24,7 +24,6 @@ module {
         #v1: {
             governance: Principal;
             proposalNeuron: ?Neuron;
-            stakingNeurons: [(Text, Neuron)];
         };
     };
 
@@ -39,7 +38,6 @@ module {
     };
 
     public type NeuronsError = {
-        #StakingNeuronMissing;
         #ProposalNeuronMissing;
         #InsufficientMaturity;
         #Other: Text;
@@ -47,13 +45,11 @@ module {
         #GovernanceError: Governance.GovernanceError;
     };
 
-    public type MergeMaturityResult = Result.Result<
-        ([(Nat, Governance.ManageNeuronResponse)]),
-        NeuronsError
-    >;
+    public type NeuronResult = Result.Result<Neuron, NeuronsError>;
+    public type Nat64Result = Result.Result<Nat64, NeuronsError>;
 
-    public type SplitResult = Result.Result<Nat64, NeuronsError>;
-
+    // Proposal-based neuron management. Let's our canister "directly" manage
+    // NNS neurons. Used by other modules, like Withdrawals, and Staking.
     public class Manager(args: {
         governance: Principal;
     }) {
@@ -65,7 +61,6 @@ module {
 
         private var governance: Governance.Interface = actor(Principal.toText(args.governance));
         private var proposalNeuron: ?Neuron = null;
-        private var stakingNeurons = TrieMap.TrieMap<Text, Neuron>(Text.equal, Text.hash);
 
         public func metrics(): Metrics {
             return {};
@@ -92,71 +87,8 @@ module {
             return null;
         };
 
-        public func list(): [{ id : Governance.NeuronId ; accountId : Text }] {
-            let b = Buffer.Buffer<{ id : Governance.NeuronId ; accountId : Text }>(stakingNeurons.size());
-            for (neuron in stakingNeurons.vals()) {
-                b.add({
-                    id = { id = neuron.id };
-                    accountId = Account.toText(neuron.accountId);
-                });
-            };
-            return b.toArray();
-        };
-
-        // balances is the balances of the staking neurons
-        public func balances(): [(Nat64, Nat64)] {
-            let b = Buffer.Buffer<(Nat64, Nat64)>(stakingNeurons.size());
-            for (neuron in stakingNeurons.vals()) {
-                b.add((neuron.id, neuron.cachedNeuronStakeE8s));
-            };
-            return b.toArray();
-        };
-
-        // Returns array of delays (seconds) and the amount (e8s) becoming
-        // available after that delay.
-        // TODO: Implement this properly.
-        public func availableLiquidityGraph(): [(Int, Nat64)] {
-            var sum: Nat64 = 0;
-            for (neuron in stakingNeurons.vals()) {
-                sum += neuron.cachedNeuronStakeE8s;
-            };
-
-            // 8 years in seconds, and sum
-            return [(252_460_800, sum)];
-        };
-
-        public func ids(): [Nat64] {
-            Iter.toArray(Iter.map(
-                stakingNeurons.vals(),
-                func (n: Neuron): Nat64 { n.id }
-            ))
-        };
-
-        public func maturities(): async [(Nat64, Nat64)] {
-            let response = await governance.list_neurons({
-                neuron_ids = ids();
-                include_neurons_readable_by_caller = true;
-            });
-            let b = Buffer.Buffer<(Nat64, Nat64)>(stakingNeurons.size());
-            for (neuron in response.full_neurons.vals()) {
-                let existing = Option.chain(
-                    neuron.id,
-                    func(id: Governance.NeuronId): ?Neuron {
-                        stakingNeurons.get(Nat64.toText(id.id))
-                    }
-                );
-                switch (existing) {
-                    case (null) {};
-                    case (?e) {
-                        b.add((e.id, neuron.maturity_e8s_equivalent));
-                    };
-                };
-            };
-            return b.toArray()
-        };
-
-        // addOrRefresh idempotently adds a staking neuron, or refreshes it's balance
-        public func addOrRefresh(id: Nat64): async ?Governance.GovernanceError {
+        // Refresh a neuron's balance and info
+        public func refresh(id: Nat64): async NeuronResult {
                 // Update the cached balance in governance canister
                 switch ((await governance.manage_neuron({
                     id = null;
@@ -164,17 +96,17 @@ module {
                     neuron_id_or_subaccount = ?#NeuronId({ id = id });
                 })).command) {
                     case (?#Error(err)) {
-                        return ?err;
+                        return #err(#GovernanceError(err));
                     };
                     case (_) {};
                 };
                 // Fetch and cache the new balance
                 switch (await governance.get_full_neuron(id)) {
                     case (#Err(err)) {
-                        return ?err;
+                        return #err(#GovernanceError(err));
                     };
                     case (#Ok(neuron)) {
-                        stakingNeurons.put(Nat64.toText(id), {
+                        return #ok({
                             id = id;
                             accountId = Account.fromPrincipal(args.governance, Blob.fromArray(neuron.account));
                             dissolveState = neuron.dissolve_state;
@@ -182,73 +114,29 @@ module {
                         });
                     };
                 };
-                return null;
         };
 
-        // TODO: How do we take our cut here?
-        public func mergeMaturity(percentage: Nat32): async MergeMaturityResult {
-            switch (proposalNeuron) {
-                case (null) {
-                    return #err(#ProposalNeuronMissing);
+        public func mergeMaturity(id: Nat64, percentage: Nat32): async NeuronResult {
+            let proposal = await propose({
+                url = "https://stakedicp.com";
+                title = ?"Merge Maturity";
+                action = ?#ManageNeuron({
+                    id = null;
+                    command = ?#MergeMaturity({
+                        percentage_to_merge = percentage
+                    });
+                    neuron_id_or_subaccount = ?#NeuronId({ id = id });
+                });
+                summary = "Merge Maturity";
+            });
+            switch (proposal) {
+                case (#err(err)) {
+                    return #err(err);
                 };
-                case (?proposalNeuron) {
-                    // TODO: Parallelize these calls
-                    let b = Buffer.Buffer<(Nat, Governance.ManageNeuronResponse)>(stakingNeurons.size());
-
-                    for ((id, maturity) in (await maturities()).vals()) {
-                        if (maturity > icpFee) {
-                            let response = await governance.manage_neuron({
-                                id = null;
-                                command = ?#MakeProposal({
-                                    url = "https://stakedicp.com";
-                                    title = ?"Merge Maturity";
-                                    action = ?#ManageNeuron({
-                                        id = null;
-                                        command = ?#MergeMaturity({
-                                            percentage_to_merge = percentage
-                                        });
-                                        neuron_id_or_subaccount = ?#NeuronId({ id = id });
-                                    });
-                                    summary = "Merge Maturity";
-                                });
-                                neuron_id_or_subaccount = ?#NeuronId({ id = proposalNeuron.id });
-                            });
-                            b.add((Nat64.toNat(id), response));
-                            // TODO: Check the proposals were successful
-                            ignore await addOrRefresh(id)
-                            // TODO: Handle error results here
-                        };
-                    };
-                    return #ok(b.toArray());
+                case (#ok(_)) {
+                    return await refresh(id);
                 };
             };
-        };
-
-        // depositIcp takes an amount of e8s to deposit, and returns a list of
-        // transfers to make.
-        // TODO: Route incoming ICP to neurons based on existing balances
-        public func depositIcp(e8s: Nat64, fromSubaccount: ?Account.Subaccount): [Ledger.TransferArgs] {
-            if (e8s <= icpFee) {
-                return [];
-            };
-            
-            // For now just return the first neuron account for all of it.
-            switch (stakingNeurons.vals().next()) {
-                case (null) { [] };
-                case (?neuron) {
-                    let to = Blob.toArray(neuron.accountId);
-                    [
-                        {
-                            memo : Nat64    = 0;
-                            from_subaccount = Option.map(fromSubaccount, Blob.toArray);
-                            to              = Blob.toArray(neuron.accountId);
-                            amount          = { e8s = e8s - icpFee };
-                            fee             = { e8s = icpFee };
-                            created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
-                        }
-                    ]
-                };
-            }
         };
 
         private func okOr<Ok, Error>(x : ?Ok, e : Error) : Result.Result<Ok, Error> {
@@ -258,35 +146,15 @@ module {
             }
         };
 
-        public func split(id: Nat64, amount_e8s: Nat64): async SplitResult {
-            if (amount_e8s < minimumStake + icpFee) {
-                return #err(#InsufficientStake)
-            };
-
+        private func propose(proposal: Governance.Proposal): async Result.Result<Governance.ProposalInfo, NeuronsError> {
             let proposalNeuronId: Nat64 = switch (proposalNeuron) {
                 case (null) { return #err(#ProposalNeuronMissing); };
                 case (?n) { n.id };
             };
 
-            let neuron: Neuron = switch (stakingNeurons.get(Nat64.toText(id))) {
-                case (null) { return #err(#StakingNeuronMissing); };
-                case (?n) { n };
-            };
-
             let manageNeuronResult = await governance.manage_neuron({
                 id = null;
-                command = ?#MakeProposal({
-                    url = "https://stakedicp.com";
-                    title = ?"Split Neuron";
-                    action = ?#ManageNeuron({
-                        id = null;
-                        command = ?#Split({
-                            amount_e8s = amount_e8s;
-                        });
-                        neuron_id_or_subaccount = ?#NeuronId({ id = id });
-                    });
-                    summary = "Split Neuron";
-                });
+                command = ?#MakeProposal(proposal);
                 neuron_id_or_subaccount = ?#NeuronId({ id = proposalNeuronId });
             });
 
@@ -313,17 +181,42 @@ module {
                 };
             };
 
-            let neuronId = await findNewNeuron(
-                proposalInfo.executed_timestamp_seconds,
-                amount_e8s - icpFee
-            );
-
-            // TODO: set dissolve delay and start dissolving, if we need to
-
-            okOr(neuronId, #Other("Neuron not found, proposal: " # debug_show(proposalId)))
+            return #ok(proposalInfo);
         };
 
-        private func findNewNeuron(createdTimestampSeconds: Nat64, stakeE8s: Nat64): async ?Nat64 {
+        public func split(id: Nat64, amount_e8s: Nat64): async NeuronResult {
+            if (amount_e8s < minimumStake + icpFee) {
+                return #err(#InsufficientStake)
+            };
+
+            let title = "Split Neuron" # Nat64.toText(id);
+            let proposal = await propose({
+                url = "https://stakedicp.com";
+                title = ?title;
+                action = ?#ManageNeuron({
+                    id = null;
+                    command = ?#Split({
+                        amount_e8s = amount_e8s;
+                    });
+                    neuron_id_or_subaccount = ?#NeuronId({ id = id });
+                });
+                summary = title;
+            });
+            switch (proposal) {
+                case (#err(err)) {
+                    return #err(err);
+                };
+                case (#ok(p)) {
+                    let result = await findNewNeuron(
+                        p.executed_timestamp_seconds,
+                        amount_e8s - icpFee
+                    );
+                    return okOr(result, #Other("Neuron not found, proposal: " # debug_show(p.id)));
+                };
+            };
+        };
+
+        private func findNewNeuron(createdTimestampSeconds: Nat64, stakeE8s: Nat64): async ?Neuron {
             let response = await governance.list_neurons({
                 neuron_ids = [];
                 include_neurons_readable_by_caller = true;
@@ -332,7 +225,12 @@ module {
                 if (neuron.cached_neuron_stake_e8s == stakeE8s and neuron.created_timestamp_seconds == createdTimestampSeconds) {
                     switch (neuron.id) {
                         case (?id) {
-                            return ?id.id;
+                            return ?{
+                                id = id.id;
+                                accountId = Account.fromPrincipal(args.governance, Blob.fromArray(neuron.account));
+                                dissolveState = neuron.dissolve_state;
+                                cachedNeuronStakeE8s = neuron.cached_neuron_stake_e8s;
+                            };
                         };
                         case (_) { };
                     };
@@ -341,11 +239,71 @@ module {
             return null;
         };
 
+        // Start a neuron dissolving
+        public func dissolve(id: Nat64): async NeuronResult {
+            let title = "Start Dissolving Neuron" # Nat64.toText(id);
+            let proposal = await propose({
+                url = "https://stakedicp.com";
+                title = ?title;
+                action = ?#ManageNeuron({
+                    id = null;
+                    command = ?#Configure({
+                        operation = ?#StartDissolving({});
+                    });
+                    neuron_id_or_subaccount = ?#NeuronId({ id = id });
+                });
+                summary = title;
+            });
+            switch (proposal) {
+                case (#err(err)) {
+                    return #err(err);
+                };
+                case (#ok(_)) {
+                    return await refresh(id);
+                };
+            };
+        };
+
+        // Attempt to disburse a neuron
+        public func disburse(id: Nat64, account: Account.AccountIdentifier): async Nat64Result {
+            let neuron = await refresh(id);
+            switch (neuron) {
+                case (#err(err)) {
+                    return #err(err);
+                };
+                case (#ok(neuron)) {
+                    let title = "Disburse Neuron" # Nat64.toText(id);
+                    let proposal = await propose({
+                        url = "https://stakedicp.com";
+                        title = ?title;
+                        action = ?#ManageNeuron({
+                            id = null;
+                            command = ?#Disburse({
+                                // TODO: Test this hash thing goes to the right account here
+                                to_account = ?{ hash = Blob.toArray(account) };
+                                amount = ?{ e8s = neuron.cachedNeuronStakeE8s };
+                            });
+                            neuron_id_or_subaccount = ?#NeuronId({ id = id });
+                        });
+                        summary = title;
+                    });
+                    switch (proposal) {
+                        case (#err(err)) {
+                            return #err(err);
+                        };
+                        case (#ok(_)) {
+                            // TODO: Is the icpFee subtracted here?
+                            return #ok(neuron.cachedNeuronStakeE8s - icpFee);
+                        };
+                    };
+                };
+            };
+        };
+
         public func preupgrade(): ?UpgradeData {
             return ?#v1({
                 governance = args.governance;
                 proposalNeuron = proposalNeuron;
-                stakingNeurons = Iter.toArray(stakingNeurons.entries());
             });
         };
 
@@ -354,11 +312,6 @@ module {
                 case (?#v1(data)) {
                     governance := actor(Principal.toText(args.governance));
                     proposalNeuron := data.proposalNeuron;
-                    stakingNeurons := TrieMap.fromEntries(
-                        data.stakingNeurons.vals(),
-                        Text.equal,
-                        Text.hash
-                    );
                 };
                 case (_) { return; };
             };

@@ -1,7 +1,7 @@
+import Array "mo:base/Array";
 import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
 import Deque "mo:base/Deque";
-import Heap "mo:base/Heap";
 import Int "mo:base/Int";
 import Iter "mo:base/Iter";
 import Nat64 "mo:base/Nat64";
@@ -28,8 +28,9 @@ module {
 
     public type UpgradeData = {
         #v1: {
-            withdrawals: [(Text, Withdrawal)];
+            dissolving: [(Text, Neurons.Neuron)];
             reserved: Nat64;
+            withdrawals: [(Text, Withdrawal)];
         };
     };
 
@@ -83,11 +84,6 @@ module {
         createdAt: Time.Time;
     };
 
-    // Sorting order for two withdrawalHeapEntries
-    func compare(a: WithdrawalHeapEntry, b: WithdrawalHeapEntry): Order.Order {
-        Int.compare(a.createdAt, b.createdAt)
-    };
-
     // func heapToArray<T>(root: Heap.Heap<T>): [T] {
     //     var q = Deque.pushBack(Deque.empty<Heap.Tree<T>>(), root.share());
     //     var b = Buffer.Buffer<T>(1);
@@ -113,8 +109,9 @@ module {
 
         private let token: Token.Token = actor(Principal.toText(args.token));
         private let ledger: Ledger.Self = actor(Principal.toText(args.ledger));
+        private var dissolving = TrieMap.TrieMap<Text, Neurons.Neuron>(Text.equal, Text.hash);
         private var withdrawals = TrieMap.TrieMap<Text, Withdrawal>(Text.equal, Text.hash);
-        private var pendingWithdrawals = Heap.Heap<WithdrawalHeapEntry>(compare);
+        private var pendingWithdrawals = Deque.empty<WithdrawalHeapEntry>();
         private var withdrawalsByUser = TrieMap.TrieMap<Principal, Buffer.Buffer<Text>>(Principal.equal, Principal.hash);
         private var reserved: Nat64 = 0;
 
@@ -150,7 +147,7 @@ module {
         };
 
         // TODO: Make sure we never split one into < 1icp
-        // TODO: Move this to Neurons module.
+        // TODO: Move this to top level deposits module.
         private func availableLiquidity(amount: Nat64): (Int, Nat64) {
             var maxDelay: Int = 0;
             var sum: Nat64 = 0;
@@ -221,7 +218,7 @@ module {
             };
             withdrawals.put(id, withdrawal);
             if (available < amount) {
-                pendingWithdrawals.put({id = id; createdAt = now});
+                pendingWithdrawals := Deque.pushBack(pendingWithdrawals, {id = id; createdAt = now});
             };
             reserved += amount;
 
@@ -248,7 +245,7 @@ module {
             let now = Time.now();
             var remaining = amount;
             while (remaining > 0) {
-                switch (pendingWithdrawals.peekMin()) {
+                switch (Deque.peekFront(pendingWithdrawals)) {
                     case (null) {
                         // No pending withdrawals
                         return remaining;
@@ -261,7 +258,12 @@ module {
                                 remaining -= applied;
                                 if (w.pending == applied) {
                                     // This withdrawal is done
-                                    pendingWithdrawals.deleteMin();
+                                    switch (Deque.popFront(pendingWithdrawals)) {
+                                        case (null) {};
+                                        case (?(_, q)) {
+                                            pendingWithdrawals := q;
+                                        };
+                                    };
                                 };
                                 let readyAt = if (w.pending == applied) {
                                     ?now;
@@ -287,6 +289,59 @@ module {
             };
             return remaining;
         };
+
+        // Disburse and/or create dissolving neurons such that account will receive (now or later) amount_e8s.
+        // TODO: Merge maturity on any dissolving neurons which have pending maturity.
+        // TODO: Call this in the heartbeat function
+        public func disburseNeurons(account_id : Account.AccountIdentifier): async Neurons.Nat64Result {
+            let now = Time.now();
+
+            var disbursed: Nat64 = 0;
+            for (neuron in dissolving.vals()) {
+                let isDissolved = switch (neuron.dissolveState) {
+                    case (?#DissolveDelaySeconds(delay)) {
+                        // Not dissolving. start it. This shouldn't happen,
+                        // because we should start the neurons dissolving when
+                        // we first split them, but just in case, this will
+                        // recover.
+                        switch (await args.neurons.dissolve(neuron.id)) {
+                            case (#err(err)) {
+                                return #err(err);
+                            };
+                            case (#ok(n)) {
+                                dissolving.put(Nat64.toText(neuron.id), n);
+                            };
+                        };
+                        // If the delay was 0, it'll dissolve immediately, so
+                        // we can disburse it.
+                        delay == 0
+                    };
+                    case (null) {
+                        // Equivalent to dissolved already. Disburse.
+                        true
+                    };
+                    case (?#WhenDissolvedTimestampSeconds(timestamp)) {
+                        // If the timestamp is in the past, we're dissolved.
+                        Nat64.toNat(timestamp) <= now
+                    };
+                };
+
+                if (isDissolved) {
+                    switch (await args.neurons.disburse(neuron.id, account_id)) {
+                        case (#err(err)) {
+                            return #err(err);
+                        };
+                        case (#ok(amount)) {
+                            disbursed += amount;
+                            dissolving.delete(Nat64.toText(neuron.id));
+                        };
+                    };
+                };
+            };
+
+            return #ok(disbursed);
+        };
+
 
         // record a conversion event for this referred user
         public func disburse(user: Principal, amount: Nat64, to: Account.AccountIdentifier): async PayoutResult {
@@ -358,19 +413,30 @@ module {
 
         public func preupgrade() : ?UpgradeData {
             return ?#v1({
-                withdrawals = Iter.toArray(withdrawals.entries());
+                dissolving = Iter.toArray(dissolving.entries());
                 reserved = reserved;
+                withdrawals = Iter.toArray(withdrawals.entries());
             });
+        };
+
+        private func compareCreatedAt((_, a) : (Text, Withdrawal), (_, b) : (Text, Withdrawal)): Order.Order {
+            Int.compare(a.createdAt, b.createdAt)
         };
 
         public func postupgrade(upgradeData : ?UpgradeData) {
             switch (upgradeData) {
                 case (?#v1(data)) {
-                    for ((id, withdrawal) in Iter.fromArray(data.withdrawals)) {
+                    for ((id, neuron) in Iter.fromArray(data.dissolving)) {
+                        dissolving.put(id, neuron);
+                    };
+
+                    reserved := data.reserved;
+
+                    for ((id, withdrawal) in Iter.fromArray(Array.sort(data.withdrawals, compareCreatedAt))) {
                         withdrawals.put(id, withdrawal);
 
                         if (withdrawal.pending > 0) {
-                            pendingWithdrawals.put({
+                            pendingWithdrawals := Deque.pushBack(pendingWithdrawals, {
                                 id = id;
                                 createdAt = withdrawal.createdAt;
                             });
@@ -383,8 +449,6 @@ module {
                         buf.add(id);
                         withdrawalsByUser.put(withdrawal.user, buf);
                     };
-
-                    reserved := data.reserved;
                 };
                 case (_) { return; };
             };
