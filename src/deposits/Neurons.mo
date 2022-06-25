@@ -87,6 +87,24 @@ module {
             return null;
         };
 
+        // Fetch maturity info for a list of neuron ids, as an array of [(id, e8s)].
+        public func maturities(ids: [Nat64]): async [(Nat64, Nat64)] {
+            let response = await governance.list_neurons({
+                neuron_ids = ids;
+                include_neurons_readable_by_caller = true;
+            });
+            let b = Buffer.Buffer<(Nat64, Nat64)>(response.full_neurons.size());
+            for (neuron in response.full_neurons.vals()) {
+                switch (neuron.id) {
+                    case (null) { };
+                    case (?id) {
+                        b.add((id.id, neuron.maturity_e8s_equivalent));
+                    };
+                };
+            };
+            return b.toArray()
+        };
+
         // Refresh a neuron's balance and info
         public func refresh(id: Nat64): async NeuronResult {
                 // Update the cached balance in governance canister
@@ -137,6 +155,19 @@ module {
                     return await refresh(id);
                 };
             };
+        };
+
+        public func mergeMaturities(ids: [Nat64], percentage: Nat32): async [NeuronResult] {
+            // TODO: Parallelize these calls
+            let b = Buffer.Buffer<NeuronResult>(ids.size());
+
+            for ((id, maturity) in (await maturities(ids)).vals()) {
+                if (maturity > icpFee) {
+                    b.add(await mergeMaturity(id, percentage));
+                    // TODO: Check the proposals were successful
+                };
+            };
+            return b.toArray();
         };
 
         private func okOr<Ok, Error>(x : ?Ok, e : Error) : Result.Result<Ok, Error> {

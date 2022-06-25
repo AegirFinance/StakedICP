@@ -29,7 +29,6 @@ module {
     public type UpgradeData = {
         #v1: {
             dissolving: [(Text, Neurons.Neuron)];
-            reserved: Nat64;
             withdrawals: [(Text, Withdrawal)];
         };
     };
@@ -113,11 +112,16 @@ module {
         private var withdrawals = TrieMap.TrieMap<Text, Withdrawal>(Text.equal, Text.hash);
         private var pendingWithdrawals = Deque.empty<WithdrawalHeapEntry>();
         private var withdrawalsByUser = TrieMap.TrieMap<Principal, Buffer.Buffer<Text>>(Principal.equal, Principal.hash);
-        private var reserved: Nat64 = 0;
 
         // Tell the main contract how much icp to keep on-hand
+        // TODO: Maybe cache this
+        // TODO: Figure out how much cash to keep on hand here as well.
         public func reservedIcp(): Nat64 {
-            reserved
+            var reserved: Nat64 = 0;
+            for (w in withdrawals.vals()) {
+                reserved += w.available;
+            };
+            return reserved;
         };
 
         public func count(): Nat {
@@ -220,7 +224,6 @@ module {
             if (available < amount) {
                 pendingWithdrawals := Deque.pushBack(pendingWithdrawals, {id = id; createdAt = now});
             };
-            reserved += amount;
 
             return #ok(withdrawal);
         };
@@ -361,8 +364,6 @@ module {
             if (remaining > 0) {
                 return #err(#InsufficientBalance);
             };
-            // Check we have reserved enough. This should always be true.
-            assert(amount <= reserved);
 
             // TODO: Make sure you can't spam this to trigger race condition
             // for infinite withdrawal.
@@ -377,7 +378,6 @@ module {
             });
             switch (transfer) {
                 case (#Ok(block)) {
-                    reserved -= amount;
                     // Mark these withdrawals as disbursed.
                     for ((applied, w) in b.vals()) {
                         // TODO: Check this updates them in the original array
@@ -411,10 +411,29 @@ module {
             }
         };
 
+        public func ids(): [Nat64] {
+            Iter.toArray(Iter.map(
+                dissolving.vals(),
+                func (n: Neurons.Neuron): Nat64 { n.id }
+            ))
+        };
+
+        public func mergeMaturity(): async [Neurons.NeuronResult] {
+            let merges = await args.neurons.mergeMaturities(ids(), 100);
+            for (m in merges.vals()) {
+                switch (m) {
+                    case (#err(err)) { };
+                    case (#ok(neuron)) {
+                        dissolving.put(Nat64.toText(neuron.id), neuron);
+                    };
+                };
+            };
+            merges
+        };
+
         public func preupgrade() : ?UpgradeData {
             return ?#v1({
                 dissolving = Iter.toArray(dissolving.entries());
-                reserved = reserved;
                 withdrawals = Iter.toArray(withdrawals.entries());
             });
         };
@@ -429,8 +448,6 @@ module {
                     for ((id, neuron) in Iter.fromArray(data.dissolving)) {
                         dissolving.put(id, neuron);
                     };
-
-                    reserved := data.reserved;
 
                     for ((id, withdrawal) in Iter.fromArray(Array.sort(data.withdrawals, compareCreatedAt))) {
                         withdrawals.put(id, withdrawal);

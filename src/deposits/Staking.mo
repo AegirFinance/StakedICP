@@ -96,29 +96,6 @@ module {
             ))
         };
 
-        public func maturities(): async [(Nat64, Nat64)] {
-            let response = await governance.list_neurons({
-                neuron_ids = ids();
-                include_neurons_readable_by_caller = true;
-            });
-            let b = Buffer.Buffer<(Nat64, Nat64)>(stakingNeurons.size());
-            for (neuron in response.full_neurons.vals()) {
-                let existing = Option.chain(
-                    neuron.id,
-                    func(id: Governance.NeuronId): ?Neurons.Neuron {
-                        stakingNeurons.get(Nat64.toText(id.id))
-                    }
-                );
-                switch (existing) {
-                    case (null) {};
-                    case (?e) {
-                        b.add((e.id, neuron.maturity_e8s_equivalent));
-                    };
-                };
-            };
-            return b.toArray()
-        };
-
         // addOrRefresh idempotently adds a staking neuron, or refreshes it's balance
         public func addOrRefresh(id: Nat64): async Neurons.NeuronResult {
             switch (await args.neurons.refresh(id)) {
@@ -135,23 +112,16 @@ module {
         // TODO: How do we take our cut here?
         // TODO: Move this to the new StakingManager module and use mergeMaturity above
         public func mergeMaturity(percentage: Nat32): async [Neurons.NeuronResult] {
-            // TODO: Parallelize these calls
-            let b = Buffer.Buffer<MergeMaturityResult>(stakingNeurons.size());
-
-            for ((id, maturity) in (await maturities()).vals()) {
-                if (maturity > icpFee) {
-                    let response = await args.neurons.mergeMaturity(id, percentage);
-                    switch (response) {
-                        case (#err(err)) {};
-                        case (#ok(neuron)) {
-                            stakingNeurons.put(Nat64.toText(id), neuron);
-                        };
+            let merges = await args.neurons.mergeMaturities(ids(), percentage);
+            for (m in merges.vals()) {
+                switch (m) {
+                    case (#err(err)) { };
+                    case (#ok(neuron)) {
+                        stakingNeurons.put(Nat64.toText(neuron.id), neuron);
                     };
-                    b.add(response);
-                    // TODO: Check the proposals were successful
                 };
             };
-            return b.toArray();
+            merges
         };
 
         // depositIcp takes an amount of e8s to deposit, and returns a list of

@@ -92,7 +92,7 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
-    type ApplyInterestResponse = {
+    type DailyHeartbeatResponse = {
         #Ok : ({
             disburse: Neurons.DisburseResult;
             apply: ApplyInterestResult;
@@ -288,41 +288,35 @@ shared(init_msg) actor class Deposits(args: {
         result
     };
 
-    public shared(msg) func applyInterestFromNeuron(when: ?Time.Time) : async ApplyInterestResponse {
-        owners.require(msg.caller);
-        await doApplyInterestFromNeuron(when)
-    };
-
-    private func doApplyInterestFromNeuron(when: ?Time.Time) : async ApplyInterestResponse {
-        // Disburse all we can from our dissolved neurons
+    // called every day by the heartbeat function.
+    private func dailyHeartbeat(when: ?Time.Time) : async DailyHeartbeatResponse {
+        // Disburse all we can from our dissolved neurons. This will add it
+        // into our main account, like it is a new deposit.
+        // flushPendingDeposits will then route it to the right place.
         let disburseResult = await staking.disburseNeurons(accountIdBlob());
-        if (Result.isErr(disburseResult)) {
-            return disburseResult;
-        };
 
+        // Merge the interest
         let interest = await stakingNeuronMaturityE8s();
-        if (interest <= 10_000) {
-            return #Err(#InsufficientMaturity);
+        let mergeResult = if (interest <= 10_000) {
+            #Err(#InsufficientMaturity);
+        } else {
+            let (percentage, result) = await applyInterest(interest, when);
+            // TODO: Error handling here. Do this first to confirm it worked? After
+            // is nice as we can the merge "manually" to ensure it merges.
+            await staking.mergeMaturity(Nat32.fromNat(Nat64.toNat(percentage)));
         };
-
-        let (percentage, result) = await doApplyInterest(interest, when);
-        // TODO: Error handling here. Do this first to confirm it worked? After
-        // is nice as we can the merge "manually" to ensure it merges.
-        let mergeResult = await staking.mergeMaturity(Nat32.fromNat(Nat64.toNat(percentage)));
 
         // Flush pending deposits
         // TODO: do something with the errors here
         let flushResult = await flushPendingDeposits();
 
         // TODO: Figure out withdrawal neuron splitting here.
-        // let reserved = withdrawals.reservedIcp();
-        // let balance = (await ledger.account_balance({
-        //     account = Blob.toArray(accountIdBlob());
-        // })).e8s;
-        // if (reserved > balance) {
-        //     let toDissolve = reserved - balance;
-        //     // TODO: Pay out neurons finished dissolving into pending withdrawals
-        // };
+        // merge the maturity for dissolving neurons
+        await withdrawals.mergeMaturity();
+        // figure out how much we have dissolving for withdrawals
+        // figure out how much we need dissolving for withdrawals
+        // Split the difference off from staking neurons
+        // Pass the new neurons into the withdrawals manager.
 
         #Ok({
             disburse = disburseResult;
@@ -332,12 +326,7 @@ shared(init_msg) actor class Deposits(args: {
         })
     };
 
-    public shared(msg) func applyInterest(interest: Nat64, when: ?Time.Time) : async (Nat64, ApplyInterestResult) {
-        owners.require(msg.caller);
-        await doApplyInterest(interest, when);
-    };
-
-    private func doApplyInterest(interest: Nat64, when: ?Time.Time) : async (Nat64, ApplyInterestResult) {
+    private func applyInterest(interest: Nat64, when: ?Time.Time) : async (Nat64, ApplyInterestResult) {
         let now = Option.get(when, Time.now());
 
         let result = await applyInterestToToken(now, Nat64.toNat(interest));
@@ -788,7 +777,7 @@ shared(init_msg) actor class Deposits(args: {
     } else {
         Time.now()
     };
-    private stable var lastHeartbeatResult : ?ApplyInterestResponse = null;
+    private stable var lastHeartbeatResult : ?DailyHeartbeatResponse = null;
 
     system func heartbeat() : async () {
         let next = lastHeartbeatAt + day;
@@ -798,7 +787,7 @@ shared(init_msg) actor class Deposits(args: {
         };
         lastHeartbeatAt := now;
         try {
-            lastHeartbeatResult := ?(await doApplyInterestFromNeuron(?now));
+            lastHeartbeatResult := ?(await daily(?now));
         } catch (error) {
             lastHeartbeatResult := ?#Err(#Other(Error.message(error)));
         };
@@ -806,7 +795,7 @@ shared(init_msg) actor class Deposits(args: {
         // TODO: Split off the new neurons and start them dissolving
     };
 
-    public shared(msg) func getLastHeartbeatResult(): async ?ApplyInterestResponse {
+    public shared(msg) func getLastHeartbeatResult(): async ?DailyHeartbeatResponse {
         owners.require(msg.caller);
         lastHeartbeatResult
     };
