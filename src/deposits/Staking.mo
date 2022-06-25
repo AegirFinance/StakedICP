@@ -151,6 +151,13 @@ module {
             }
         };
 
+        // splitNeurons attempts to split off enough new dissolving neurons to
+        // make "amount" liquidity available.
+        public func splitNeurons(e8s: Nat64): [Neurons.Neuron] {
+            // TODO: Implement this
+            return [];
+        };
+
         public func preupgrade(): ?UpgradeData {
             return ?#v1({
                 stakingNeurons = Iter.toArray(stakingNeurons.entries());

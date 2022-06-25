@@ -117,11 +117,29 @@ module {
         // TODO: Maybe cache this
         // TODO: Figure out how much cash to keep on hand here as well.
         public func reservedIcp(): Nat64 {
-            var reserved: Nat64 = 0;
+            var sum: Nat64 = 0;
             for (w in withdrawals.vals()) {
-                reserved += w.available;
+                sum += w.available;
             };
-            return reserved;
+            return sum;
+        };
+
+        // TODO: Maybe cache this
+        public func totalDissolving(): Nat64 {
+            var sum: Nat64 = 0;
+            for (n in dissolving.vals()) {
+                sum += n.cachedNeuronStakeE8s;
+            };
+            return sum;
+        };
+
+        // TODO: Maybe cache this
+        public func totalPending(): Nat64 {
+            var sum: Nat64 = 0;
+            for (w in withdrawals.vals()) {
+                sum += w.pending;
+            };
+            return sum;
         };
 
         public func count(): Nat {
@@ -148,6 +166,30 @@ module {
                 disbursedE8s = disbursedE8s;
                 usersCount = Nat64.fromNat(withdrawalsByUser.size());
             };
+        };
+
+        public func addNeurons(ns: [Neurons.Neuron]): async Result.Result<(), Neurons.NeuronsError> {
+            for (n in ns.vals()) {
+                let key = Nat64.toText(n.id);
+                if (dissolving.get(key) == null) {
+                    let neuron = switch (n.dissolveState) {
+                        case (?#DissolveDelaySeconds(delay)) {
+                            // Make sure the neuron is dissolving
+                            switch (await args.neurons.dissolve(n.id)) {
+                                case (#err(err)) {
+                                    return #err(err);
+                                };
+                                case (#ok(n)) {
+                                    n
+                                };
+                            }
+                        };
+                        case (_) { n };
+                    };
+                    dissolving.put(key, neuron);
+                }
+            };
+            #ok()
         };
 
         // TODO: Make sure we never split one into < 1icp

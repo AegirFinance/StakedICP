@@ -314,9 +314,17 @@ shared(init_msg) actor class Deposits(args: {
         // merge the maturity for dissolving neurons
         await withdrawals.mergeMaturity();
         // figure out how much we have dissolving for withdrawals
-        // figure out how much we need dissolving for withdrawals
-        // Split the difference off from staking neurons
-        // Pass the new neurons into the withdrawals manager.
+        let dissolving = withdrawals.totalDissolving();
+        let pending = withdrawals.totalPending();
+        if (pending > dissolving) {
+            // figure out how much we need dissolving for withdrawals
+            let needed = pending - dissolving;
+            // Split the difference off from staking neurons
+            let newNeurons = await staking.splitNeurons(needed);
+            // TODO: Handle errors splitting neurons.
+            // Pass the new neurons into the withdrawals manager.
+            await withdrawals.addNeurons(newNeurons);
+        };
 
         #Ok({
             disburse = disburseResult;
