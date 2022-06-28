@@ -1,11 +1,14 @@
+import Array "mo:base/Array";
 import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
 import Int "mo:base/Int";
 import Iter "mo:base/Iter";
+import List "mo:base/List";
 import Nat32 "mo:base/Nat32";
 import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
 import Option "mo:base/Option";
+import Order "mo:base/Order";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
@@ -20,6 +23,7 @@ import Ledger "../ledger/Ledger";
 module {
     let minimumStake: Nat64 = 100_000_000;
     let icpFee: Nat64 = 10_000;
+    let yearSeconds: Int = 31_557_600;
 
     public type UpgradeData = {
         #v1: {
@@ -124,31 +128,65 @@ module {
             merges
         };
 
+        func compareBalance(a: Neurons.Neuron, b: Neurons.Neuron): Order.Order {
+            Nat64.compare(a.cachedNeuronStakeE8s, b.cachedNeuronStakeE8s)
+        };
+
+        // Calculate how much we should aim to have in each neuron, and in
+        // cash. (The same for now).
+        public func rebalancingTarget(totalE8s: Nat64): Nat64 {
+            // Assume there is one neuron per 6 months.. no duplicates.
+            // All the same share for now. +1 is for first 6 months in cash
+            totalE8s / (Nat64.fromNat(stakingNeurons.size())+1)
+        };
+
         // depositIcp takes an amount of e8s to deposit, and returns a list of
         // transfers to make.
-        // TODO: Route incoming ICP to neurons based on existing balances
-        public func depositIcp(e8s: Nat64, fromSubaccount: ?Account.Subaccount): [Ledger.TransferArgs] {
-            if (e8s <= icpFee) {
+        public func depositIcp(newE8s: Nat64, fromSubaccount: ?Account.Subaccount): [Ledger.TransferArgs] {
+            if (newE8s <= icpFee) {
                 return [];
             };
-            
-            // For now just return the first neuron account for all of it.
-            switch (stakingNeurons.vals().next()) {
-                case (null) { [] };
-                case (?neuron) {
-                    let to = Blob.toArray(neuron.accountId);
-                    [
-                        {
-                            memo : Nat64    = 0;
-                            from_subaccount = Option.map(fromSubaccount, Blob.toArray);
-                            to              = Blob.toArray(neuron.accountId);
-                            amount          = { e8s = e8s - icpFee };
-                            fee             = { e8s = icpFee };
-                            created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
-                        }
-                    ]
+
+            let neurons = Array.sort(Iter.toArray(stakingNeurons.vals()), compareBalance);
+
+            var totalE8s: Nat64 = 0;
+            for (n in neurons.vals()) {
+                totalE8s += n.cachedNeuronStakeE8s;
+            };
+
+            var remaining = newE8s;
+            let b = Buffer.Buffer<Ledger.TransferArgs>(neurons.size());
+            let target = rebalancingTarget(totalE8s+newE8s);
+            for (n in neurons.vals()) {
+                if (remaining < minimumStake) {
+                    return b.toArray();
                 };
-            }
+
+                if (target > n.cachedNeuronStakeE8s) {
+                    var amount = Nat64.min(
+                        remaining,
+                        Nat64.max(
+                            minimumStake,
+                            target - n.cachedNeuronStakeE8s
+                        )
+                    );
+                    remaining -= amount;
+                    if (remaining < minimumStake) {
+                        // If there's <1ICP left, chuck the remainder in here.
+                        amount += remaining;
+                        remaining := 0;
+                    };
+                    b.add({
+                        memo : Nat64    = 0;
+                        from_subaccount = Option.map(fromSubaccount, Blob.toArray);
+                        to              = Blob.toArray(n.accountId);
+                        amount          = { e8s = amount - icpFee };
+                        fee             = { e8s = icpFee };
+                        created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
+                    })
+                }
+            };
+            b.toArray()
         };
 
         // splitNeurons attempts to split off enough new dissolving neurons to

@@ -308,7 +308,8 @@ shared(init_msg) actor class Deposits(args: {
 
         // Flush pending deposits
         // TODO: do something with the errors here
-        let flushResult = await flushPendingDeposits();
+        let tokenE8s = Nat64.fromNat((await token.getMetadata()).totalSupply);
+        let flushResult = await flushPendingDeposits(tokenE8s);
 
         // TODO: Figure out withdrawal neuron splitting here.
         // merge the maturity for dissolving neurons
@@ -349,7 +350,7 @@ shared(init_msg) actor class Deposits(args: {
         return (percentage, result);
     };
 
-    private func flushPendingDeposits(): async [Ledger.TransferResult] {
+    private func flushPendingDeposits(tokenE8s: Nat64): async [Ledger.TransferResult] {
         // Basically this is: "use incoming deposits to attempt to rebalance
         // the buckets", where "the buckets" are:
         // - cash on hand
@@ -365,6 +366,10 @@ shared(init_msg) actor class Deposits(args: {
         if (balance == 0) {
             return [];
         };
+
+        // retained cash.
+        // TODO: Should this come from the withdrawals module?
+        balance -= staking.rebalancingTarget(tokenE8s+balance);
 
         let transfers = staking.depositIcp(balance, null);
         let b = Buffer.Buffer<Ledger.TransferResult>(transfers.size());
@@ -799,8 +804,6 @@ shared(init_msg) actor class Deposits(args: {
         } catch (error) {
             lastHeartbeatResult := ?#Err(#Other(Error.message(error)));
         };
-
-        // TODO: Split off the new neurons and start them dissolving
     };
 
     public shared(msg) func getLastHeartbeatResult(): async ?DailyHeartbeatResponse {
