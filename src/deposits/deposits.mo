@@ -16,6 +16,7 @@ import Option "mo:base/Option";
 import Order "mo:base/Order";
 import P "mo:base/Prelude";
 import Principal "mo:base/Principal";
+import Result "mo:base/Result";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
 import Trie "mo:base/Trie";
@@ -94,9 +95,10 @@ shared(init_msg) actor class Deposits(args: {
 
     type DailyHeartbeatResponse = {
         #Ok : ({
-            disburse: Neurons.DisburseResult;
-            apply: ApplyInterestResult;
-            merge: Neurons.MergeMaturityResult;
+            disburse: Neurons.Nat64Result;
+            apply: Result.Result<ApplyInterestResult, Neurons.NeuronsError>;
+            mergeStaked: ?[Neurons.NeuronResult];
+            mergeDissolving: [Neurons.NeuronResult];
             flush: [Ledger.TransferResult];
         });
         #Err: Neurons.NeuronsError;
@@ -186,7 +188,7 @@ shared(init_msg) actor class Deposits(args: {
         sum
     };
 
-    public shared(msg) func addStakingNeuron(id: Nat64): async ?Governance.GovernanceError {
+    public shared(msg) func addStakingNeuron(id: Nat64): async Neurons.NeuronResult {
         owners.require(msg.caller);
         await staking.addOrRefresh(id)
     };
@@ -266,7 +268,12 @@ shared(init_msg) actor class Deposits(args: {
             };
             lastHeartbeatInterestApplied = switch (lastHeartbeatResult) {
                 case (?#Ok({apply})) {
-                    apply.applied.e8s + apply.remainder.e8s + Nat64.fromNat(apply.affiliatePayouts)
+                    switch (apply) {
+                        case (#ok({applied; remainder; affiliatePayouts})) {
+                            applied.e8s + remainder.e8s + Nat64.fromNat(affiliatePayouts)
+                        };
+                        case (_) { 0 };
+                    };
                 };
                 case (_)       { 0 };
             };
@@ -293,17 +300,17 @@ shared(init_msg) actor class Deposits(args: {
         // Disburse all we can from our dissolved neurons. This will add it
         // into our main account, like it is a new deposit.
         // flushPendingDeposits will then route it to the right place.
-        let disburseResult = await staking.disburseNeurons(accountIdBlob());
+        let disburseResult = await withdrawals.disburseNeurons(accountIdBlob());
 
         // Merge the interest
         let interest = await stakingNeuronMaturityE8s();
-        let mergeResult = if (interest <= 10_000) {
-            #Err(#InsufficientMaturity);
+        let (applyInterestResult, mergeStakedResult): (Result.Result<ApplyInterestResult, Neurons.NeuronsError>, ?[Neurons.NeuronResult]) = if (interest <= 10_000) {
+            (#err(#InsufficientMaturity), null)
         } else {
-            let (percentage, result) = await applyInterest(interest, when);
+            let (percentage, applyResult) = await applyInterest(interest, when);
             // TODO: Error handling here. Do this first to confirm it worked? After
             // is nice as we can the merge "manually" to ensure it merges.
-            await staking.mergeMaturity(Nat32.fromNat(Nat64.toNat(percentage)));
+            (#ok(applyResult), ?(await staking.mergeMaturity(Nat32.fromNat(Nat64.toNat(percentage)))))
         };
 
         // Flush pending deposits
@@ -313,7 +320,7 @@ shared(init_msg) actor class Deposits(args: {
 
         // TODO: Figure out withdrawal neuron splitting here.
         // merge the maturity for dissolving neurons
-        await withdrawals.mergeMaturity();
+        let mergeDissolvingResult = await withdrawals.mergeMaturity();
         // figure out how much we have dissolving for withdrawals
         let dissolving = withdrawals.totalDissolving();
         let pending = withdrawals.totalPending();
@@ -321,16 +328,23 @@ shared(init_msg) actor class Deposits(args: {
             // figure out how much we need dissolving for withdrawals
             let needed = pending - dissolving;
             // Split the difference off from staking neurons
-            let newNeurons = await staking.splitNeurons(needed);
-            // TODO: Handle errors splitting neurons.
-            // Pass the new neurons into the withdrawals manager.
-            await withdrawals.addNeurons(newNeurons);
+            switch (await staking.splitNeurons(needed)) {
+                case (#err(err)) {
+                    // TODO: Handle errors splitting neurons.
+                };
+                case (#ok(newNeurons)) {
+                    // Pass the new neurons into the withdrawals manager.
+                    // TODO: Handle errors adding neurons.
+                    ignore await withdrawals.addNeurons(newNeurons);
+                };
+            };
         };
 
         #Ok({
             disburse = disburseResult;
-            apply = result;
-            merge = mergeResult;
+            apply = applyInterestResult;
+            mergeStaked = mergeStakedResult;
+            mergeDissolving = mergeDissolvingResult;
             flush = flushResult;
         })
     };
@@ -706,12 +720,38 @@ shared(init_msg) actor class Deposits(args: {
         }
     };
 
+    // TODO: Make sure we never split one into < 1icp
+    // TODO: Move this to top level deposits module.
+    private func availableLiquidity(amount: Nat64): (Int, Nat64) {
+        var maxDelay: Int = 0;
+        var sum: Nat64 = 0;
+        // Is there enough available liquidity in the neurons?
+        // Figure out the unstaking schedule
+        for ((delay, liquidity) in staking.availableLiquidityGraph().vals()) {
+            if (sum >= amount) {
+                return (maxDelay, sum);
+            };
+            sum += Nat64.min(liquidity, amount-sum);
+maxDelay := Int.max(maxDelay, delay);
+        };
+        return (maxDelay, sum);
+    };
+
+
     public shared(msg) func createWithdrawal(user: Principal, total: Nat64) : async Withdrawals.WithdrawalResult {
         if (msg.caller != user) {
             owners.require(msg.caller);
         };
-        let balance = await availableBalance();
-        await withdrawals.createWithdrawal(user, total, balance)
+        let availableCash = await availableBalance();
+        let (delay, availableNeurons): (Int, Nat64) = if (total <= availableCash) {
+            (0, 0)
+        } else {
+            availableLiquidity(total - availableCash)
+        };
+        if (availableCash+availableNeurons < total) {
+            return #err(#InsufficientLiquidity);
+        };
+        await withdrawals.createWithdrawal(user, total, availableCash, delay)
     };
 
     // ===== UPGRADE FUNCTIONS =====
@@ -800,7 +840,7 @@ shared(init_msg) actor class Deposits(args: {
         };
         lastHeartbeatAt := now;
         try {
-            lastHeartbeatResult := ?(await daily(?now));
+            lastHeartbeatResult := ?(await dailyHeartbeat(?now));
         } catch (error) {
             lastHeartbeatResult := ?#Err(#Other(Error.message(error)));
         };
@@ -817,7 +857,7 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     // TODO: Remove this when done.
-    public shared(msg) func splitNeuron(id: Nat64, amount_e8s: Nat64): async Neurons.SplitResult {
+    public shared(msg) func splitNeuron(id: Nat64, amount_e8s: Nat64): async Neurons.NeuronResult {
         owners.require(msg.caller);
         await neurons.split(id, amount_e8s)
     };

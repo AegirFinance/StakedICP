@@ -48,6 +48,21 @@ module {
     public type NeuronResult = Result.Result<Neuron, NeuronsError>;
     public type Nat64Result = Result.Result<Nat64, NeuronsError>;
 
+    public func dissolveDelay({dissolveState}: Neuron): Nat64 {
+        switch (dissolveState) {
+            case (?#DissolveDelaySeconds(delay)) { delay };
+            case (null) { 0 };
+            case (?#WhenDissolvedTimestampSeconds(timestamp)) {
+                let now = Nat64.fromNat(Int.abs(Time.now()));
+                if (timestamp <= now) {
+                    0
+                } else {
+                    timestamp - now
+                }
+            };
+        }
+    };
+
     // Proposal-based neuron management. Let's our canister "directly" manage
     // NNS neurons. Used by other modules, like Withdrawals, and Staking.
     public class Manager(args: {

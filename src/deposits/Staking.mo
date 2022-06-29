@@ -113,6 +113,10 @@ module {
             };
         };
 
+        public func maturities(): async [(Nat64, Nat64)] {
+            await args.neurons.maturities(ids())
+        };
+
         // TODO: How do we take our cut here?
         // TODO: Move this to the new StakingManager module and use mergeMaturity above
         public func mergeMaturity(percentage: Nat32): async [Neurons.NeuronResult] {
@@ -130,6 +134,10 @@ module {
 
         func compareBalance(a: Neurons.Neuron, b: Neurons.Neuron): Order.Order {
             Nat64.compare(a.cachedNeuronStakeE8s, b.cachedNeuronStakeE8s)
+        };
+
+        func compareDissolveDelay(a: Neurons.Neuron, b: Neurons.Neuron): Order.Order {
+            Nat64.compare(Neurons.dissolveDelay(a), Neurons.dissolveDelay(b))
         };
 
         // Calculate how much we should aim to have in each neuron, and in
@@ -191,9 +199,40 @@ module {
 
         // splitNeurons attempts to split off enough new dissolving neurons to
         // make "amount" liquidity available.
-        public func splitNeurons(e8s: Nat64): [Neurons.Neuron] {
-            // TODO: Implement this
-            return [];
+        public func splitNeurons(e8s: Nat64): async Result.Result<[Neurons.Neuron], Neurons.NeuronsError> {
+            // Sort by shortest dissolve delay
+            let neurons = Array.sort(Iter.toArray(stakingNeurons.vals()), compareDissolveDelay);
+
+            // Split as much as we can off each, until we are satisfied
+            var remaining = e8s;
+            let toSplit = Buffer.Buffer<(Nat64, Nat64)>(0);
+            for (n in neurons.vals()) {
+                // Filter out any we can't split (balance < 2icp+fee)
+                if (remaining > 0 and n.cachedNeuronStakeE8s >= (minimumStake*2)+icpFee) {
+                    let amountToSplit = Nat64.min(remaining, n.cachedNeuronStakeE8s - minimumStake - icpFee);
+                    remaining -= amountToSplit;
+                    toSplit.add((n.id, amountToSplit));
+                };
+            };
+
+            // If we couldn't get enough, fail w insufficient liquidity
+            if (remaining > 0) {
+                return #err(#InsufficientStake);
+            };
+
+            // Do the splits and find the new neurons.
+            let newNeurons = Buffer.Buffer<Neurons.Neuron>(toSplit.size());
+            for ((id, amount) in toSplit.vals()) {
+                switch (await args.neurons.split(id, amount+icpFee)) {
+                    case (#err(err)) {
+                        // TODO: Error handling
+                    };
+                    case (#ok(n)) {
+                        newNeurons.add(n);
+                    };
+                };
+            };
+            return #ok(newNeurons.toArray());
         };
 
         public func preupgrade(): ?UpgradeData {

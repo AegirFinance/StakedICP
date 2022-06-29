@@ -192,40 +192,11 @@ module {
             #ok()
         };
 
-        // TODO: Make sure we never split one into < 1icp
-        // TODO: Move this to top level deposits module.
-        private func availableLiquidity(amount: Nat64): (Int, Nat64) {
-            var maxDelay: Int = 0;
-            var sum: Nat64 = 0;
-            // Is there enough available liquidity in the neurons?
-            // Figure out the unstaking schedule
-            for ((delay, liquidity) in args.neurons.availableLiquidityGraph().vals()) {
-                if (sum >= amount) {
-                    return (maxDelay, sum);
-                };
-                sum += Nat64.min(liquidity, amount-sum);
-                maxDelay := Int.max(maxDelay, delay);
-            };
-            return (maxDelay, sum);
-        };
-
-        public func createWithdrawal(user: Principal, amount: Nat64, availableCash: Nat64): async WithdrawalResult {
+        public func createWithdrawal(user: Principal, amount: Nat64, availableCash: Nat64, delay: Int): async WithdrawalResult {
             let now = Time.now();
 
             // Mark cash as available for instant withdrawal
             let available: Nat64 = Nat64.min(availableCash, amount);
-
-            // If not enough cash for instant payout
-            var maxDelay: Int = 0;
-            var neurons: Nat64 = 0;
-            if (available < amount) {
-                let (delay, sum) = availableLiquidity(amount-available);
-                maxDelay := delay;
-                neurons := sum;
-            };
-            if (neurons+available < amount) {
-                return #err(#InsufficientLiquidity);
-            };
 
             // Burn the tokens from the user. This makes sure there is enough
             // balance for the user, avoiding re-entrancy.
@@ -240,7 +211,7 @@ module {
             // TODO: Re-check we have enough cash+neurons, to avoid re-entrancy or timing attacks
 
             // Store the withdrawal
-            let readyAt = if (available == amount) {
+            let readyAt = if (delay == 0) {
                 ?now
             } else {
                 null
@@ -254,7 +225,7 @@ module {
                 id = id;
                 user = user;
                 createdAt = now;
-                expectedAt = now + (maxDelay * second);
+                expectedAt = now + (delay * second);
                 readyAt = readyAt;
                 disbursedAt = null;
                 total = amount;
