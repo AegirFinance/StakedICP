@@ -1,7 +1,7 @@
 import * as Accordion from '@radix-ui/react-accordion';
 import { ChevronDownIcon, GitHubLogoIcon, TwitterLogoIcon } from '@radix-ui/react-icons';
 import React from 'react';
-import { APR, Code, DepositForm, Flex, Header, Layout, Statistics } from '../components';
+import { APR, Code, DepositForm, Flex, Header, Layout, NavToggle, Statistics } from '../components';
 import { keyframes, styled } from '../stitches.config';
 
 export function Deposit() {
@@ -15,6 +15,7 @@ export function Deposit() {
         </Flex>
         <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
           <div>
+            <NavToggle active="deposit" />
             <DepositForm />
             <Subtitle>Statistics</Subtitle>
             <Statistics />

@@ -720,8 +720,13 @@ shared(init_msg) actor class Deposits(args: {
         }
     };
 
-    // TODO: Make sure we never split one into < 1icp
-    // TODO: Move this to top level deposits module.
+    public type AvailableLiquidityGraph = [(Int, Nat64)];
+
+    // Cache this or memoize it or something to make it cheaper.
+    public func availableLiquidityGraph(): async AvailableLiquidityGraph {
+        staking.availableLiquidityGraph()
+    };
+
     private func availableLiquidity(amount: Nat64): (Int, Nat64) {
         var maxDelay: Int = 0;
         var sum: Nat64 = 0;
