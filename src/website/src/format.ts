@@ -56,3 +56,25 @@ function getMultiplier(decimals: BigNumberish): string {
     throw new Error(`invalid decimal size: ${decimals}`);
 }
 
+
+export function delay(seconds: bigint): string {
+    if (seconds <= 0) {
+        return "instant"
+    }
+    // TODO: pluralization
+    let s: string[] = [];
+    const lop =(min: bigint, unit: string) => {
+        if (seconds >= min) {
+            let amount = seconds/BigInt(min);
+            s.push(`${amount} ${unit}${amount == BigInt(1) ? "" : "s"}`);
+            seconds = seconds % BigInt(min);
+        }
+    };
+    lop(BigInt(31557600), "year");
+    lop(BigInt(2592000), "month");
+    lop(BigInt(86400), "day");
+    lop(BigInt(3600), "hour");
+    lop(BigInt(60), "minute");
+    lop(BigInt(1), "second");
+    return s.join(" ");
+}

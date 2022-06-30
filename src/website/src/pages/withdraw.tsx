@@ -5,6 +5,7 @@ import { AvailableLiquidityGraph, Deposits } from "../../../declarations/deposit
 import { getBackendActor }  from '../agent';
 import { Flex, Header, HelpDialog, Input, Layout, NavToggle } from '../components';
 import { DataTable, DataTableRow, DataTableLabel, DataTableValue } from '../components/DataTable';
+import * as format from "../format";
 import { useAsyncEffect } from "../hooks";
 import { styled } from '../stitches.config';
 import { ConnectButton, useAccount } from "../wallet";
@@ -72,6 +73,7 @@ function WithdrawForm() {
     if (parsed === NaN || parsed === +Infinity || parsed === -Infinity) {
         return 0;
     }
+    // TODO: Enforce max decimals here
     return parsed;
   }, [amount]);
   const [showConfirmationDialog, setShowConfirmationDialog] = React.useState(false);
@@ -133,13 +135,25 @@ function DelayStat({amount}: {amount: number}) {
         setLiquidityGraph(result);
     }, []);
 
+    const delay: bigint = React.useMemo(() => {
+        if (!liquidityGraph) return BigInt(0);
+        let remaining: bigint = BigInt(Math.floor(amount*10_000_000));
+        let maxDelay: bigint = BigInt(0);
+        for (let [d, available] of liquidityGraph) {
+            if (remaining <= 0) return maxDelay;
+            maxDelay = d > maxDelay ? d : maxDelay;
+            remaining -= available;
+        };
+        return maxDelay;
+    }, [liquidityGraph, amount]);
+
     if (amount === 0 || !liquidityGraph) {
         // TODO: proper loading indicator here
         return <>...</>;
     }
 
     // TODO: Calculate the delay for amount given
-    return <>TODO: Delay here</>;
+    return <>{format.delay(delay)}</>;
 }
 
 function WithdrawalsList() {
