@@ -30,6 +30,7 @@ export function Withdraw() {
 
 const Wrapper = styled('div', {
   background: "radial-gradient(circle farthest-corner at 20% 20%, rgba(18,165,148,.16), rgba(242,145,2,.07) 25%, rgba(166,103,10,0) 63%)",
+  minHeight: "100vh",
 });
 
 const Subtitle = styled('h2', {
