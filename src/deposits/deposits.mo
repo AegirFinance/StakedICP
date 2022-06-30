@@ -737,7 +737,7 @@ shared(init_msg) actor class Deposits(args: {
                 return (maxDelay, sum);
             };
             sum += Nat64.min(liquidity, amount-sum);
-maxDelay := Int.max(maxDelay, delay);
+            maxDelay := Int.max(maxDelay, delay);
         };
         return (maxDelay, sum);
     };
@@ -748,15 +748,17 @@ maxDelay := Int.max(maxDelay, delay);
             owners.require(msg.caller);
         };
         let availableCash = await availableBalance();
-        let (delay, availableNeurons): (Int, Nat64) = if (total <= availableCash) {
-            (0, 0)
-        } else {
-            availableLiquidity(total - availableCash)
+        var delay: Int = 0;
+        var availableNeurons: Nat64 = 0;
+        if (total > availableCash) {
+            let (d, a) = availableLiquidity(total - availableCash);
+            delay := d;
+            availableNeurons := a;
         };
         if (availableCash+availableNeurons < total) {
             return #err(#InsufficientLiquidity);
         };
-        await withdrawals.createWithdrawal(user, total, availableCash, delay)
+        return await withdrawals.createWithdrawal(user, total, availableCash, delay);
     };
 
     // ===== UPGRADE FUNCTIONS =====
