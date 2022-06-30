@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+export IC_VERSION=dd3a710b03bd3ae10368a91b255571d012d1ec2f
+
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 existing_neuron_id() {
