@@ -57,6 +57,13 @@ function getMultiplier(decimals: BigNumberish): string {
     throw new Error(`invalid decimal size: ${decimals}`);
 }
 
+export function time(nanoseconds: bigint, timeZone?: string): string {
+    const d = new Date(Number(nanoseconds/BigInt(1_000_000)));
+    return new Intl.DateTimeFormat(
+        'default',
+        timeZone ? {timeZone, timeZoneName: 'short'} : {}
+    ).format(d);
+}
 
 export function delay(seconds: bigint): string {
     if (seconds <= 0) {

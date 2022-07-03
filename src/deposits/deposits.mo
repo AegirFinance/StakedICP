@@ -761,6 +761,13 @@ shared(init_msg) actor class Deposits(args: {
         return await withdrawals.createWithdrawal(user, total, availableCash, delay);
     };
 
+    public shared(msg) func listWithdrawals(user: Principal) : async [Withdrawals.Withdrawal] {
+        if (msg.caller != user) {
+            owners.require(msg.caller);
+        };
+        return withdrawals.listWithdrawals(user);
+    };
+
     // ===== UPGRADE FUNCTIONS =====
 
     system func preupgrade() {

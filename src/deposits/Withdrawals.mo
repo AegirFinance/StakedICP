@@ -42,7 +42,7 @@ module {
         usersCount: Nat64;
     };
 
-    type Withdrawal = {
+    public type Withdrawal = {
         id: Text;
         user: Principal;
         createdAt: Time.Time;
@@ -431,6 +431,21 @@ module {
                 dissolving.vals(),
                 func (n: Neurons.Neuron): Nat64 { n.id }
             ))
+        };
+
+        public func listWithdrawals(user: Principal): [Withdrawal] {
+            let ids : Buffer.Buffer<Text> = Option.get(
+                withdrawalsByUser.get(user),
+                Buffer.Buffer<Text>(0)
+            );
+            let b = Buffer.Buffer<Withdrawal>(ids.size());
+            for (id in ids.vals()) {
+                switch (withdrawals.get(id)) {
+                    case (?w) { b.add(w); };
+                    case (null) { P.unreachable(); };
+                };
+            };
+            b.toArray();
         };
 
         public func mergeMaturity(): async [Neurons.NeuronResult] {

@@ -2,7 +2,7 @@ import { Principal } from '@dfinity/principal';
 import { GitHubLogoIcon, TwitterLogoIcon } from '@radix-ui/react-icons';
 import React from 'react';
 import * as deposits from '../../../declarations/deposits';
-import { AvailableLiquidityGraph, Deposits } from "../../../declarations/deposits/deposits.did.d.js";
+import { AvailableLiquidityGraph, Deposits, Withdrawal } from "../../../declarations/deposits/deposits.did.d.js";
 import { getBackendActor }  from '../agent';
 import {
   ConfirmationDialog,
@@ -181,8 +181,70 @@ function DelayStat({amount, delay}: {amount: number; delay: bigint | undefined})
 }
 
 function WithdrawalsList() {
+    const [data, setData] = React.useState<Withdrawal[] | null>(null);
+    const [{ data: account }] = useAccount();
+    const principal = account?.principal;
+    const depositsCanister = useCanister<Deposits>({
+        // TODO: handle missing canister id better
+        canisterId: deposits.canisterId ?? "",
+        interfaceFactory: deposits.idlFactory,
+    });
+
+    useAsyncEffect(async () => {
+        if (!depositsCanister || !principal) return;
+        let ws = await depositsCanister.listWithdrawals(Principal.fromText(principal));
+        setData(ws);
+    }, [!!depositsCanister, principal]);
+
+    if (data === null) {
+        // TODO: proper loading indicator
+        return (
+            <Flex>...</Flex>
+        );
+    }
+
+    if (data.length === 0) {
+        // TODO: proper loading indicator
+        return (
+            <Flex css={{flexDirection: "column", justifyContent: "flex-start"}}>
+                <p>You have no withdrawals</p>
+            </Flex>
+        );
+    }
+
     return (
-        <div />
+        <Flex css={{flexDirection: "column-reverse", justifyContent: "flex-start", '& > *': {marginTop: '$2', marginBottom: '$2'}}}>
+            {data.map(w => {
+                let eta = w.readyAt.length > 0 ? w.readyAt[0] : w.expectedAt;
+                return (
+                    <DataTable>
+                        <DataTableRow>
+                            <DataTableLabel>Total</DataTableLabel>
+                            <DataTableValue>{format.units(w.total)} ICP</DataTableValue>
+                        </DataTableRow>
+                        <DataTableRow>
+                            <DataTableLabel>Status</DataTableLabel>
+                            <DataTableValue>{
+                                w.disbursed === w.total
+                                    ? "Complete"
+                                    : w.pending === BigInt(0)
+                                    ? "Ready"
+                                    : "Pending"
+                            }</DataTableValue>
+                        </DataTableRow>
+                        <DataTableRow>
+                            <DataTableLabel>ETA</DataTableLabel>
+                            {/* TODO: Better timestamp formatting. Match how we show it when depositing */}
+                            <DataTableValue>{
+                                eta
+                                    ? <time dateTime={format.time(eta, 'UTC')}>{format.time(eta)}</time>
+                                    : '...'
+                            }</DataTableValue>
+                        </DataTableRow>
+                    </DataTable>
+                );
+            })}
+        </Flex>
     );
 }
 
@@ -292,7 +354,7 @@ function WithdrawDialog({
 
 function Links() {
   return (
-    <Flex css={{flexDirection:"row", justifyContent: "center", alignItems:"center", padding: "$2", '& > *': {margin: '$2'}}}>
+    <Flex css={{marginTop: '$4', flexDirection:"row", justifyContent: "center", alignItems:"center", padding: "$2", '& > *': {margin: '$2'}}}>
       <a href="https://github.com/AegirFinance" title="Github"><GitHubLogoIcon /></a>
       <a href="https://twitter.com/StakedICP" title="Twitter"><TwitterLogoIcon /></a>
     </Flex>
