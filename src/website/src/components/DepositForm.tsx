@@ -4,10 +4,9 @@ import { Deposits } from "../../../declarations/deposits/deposits.did";
 import { useAsyncEffect, useReferralCode } from '../hooks';
 import { styled } from '../stitches.config';
 import { ConnectButton, useAccount, useCanister, useContext, useTransaction } from "../wallet";
-import { Button } from "./Button";
+import { ConfirmationDialog } from "./ConfirmationDialog";
 import { DataTable, DataTableRow, DataTableLabel, DataTableValue } from './DataTable';
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "./Dialog";
-import { Flex } from './Flex';
+import { DialogDescription, DialogTitle } from "./Dialog";
 import { HelpDialog } from './HelpDialog';
 import { Input } from "./Input";
 
@@ -119,12 +118,10 @@ function TransferDialog({
     amount,
     open,
     referralCode,
-    onOpenChange: parentOnOpenChange,
+    onOpenChange,
 }: TransferDialogParams) {
   const { setState: setGlobalState } = useContext();
   const [_, sendTransaction] = useTransaction();
-  const [state, setState] = React.useState<"confirm" | "pending" | "complete" | "rejected">("confirm");
-  const error = React.useMemo(() => rawAmount && amount < MINIMUM_DEPOSIT && `Minimum deposit is ${MINIMUM_DEPOSIT} ICP`, [rawAmount, amount])
   const depositsCanister = useCanister<Deposits>({
     // TODO: handle missing canister id better
     canisterId: deposits.canisterId ?? "",
@@ -138,123 +135,82 @@ function TransferDialog({
       await depositsCanister.depositIcp();
   }, [!!depositsCanister]);
 
-  const onOpenChange = React.useCallback((open: boolean) => {
-    setState("confirm");
-    parentOnOpenChange(open);
-  }, [setState, parentOnOpenChange]);
-
   const deposit = React.useCallback(async () => {
-    try {
-      if (!amount) {
-        throw new Error("Amount missing");
-      }
-      if (!depositsCanister) {
-        throw new Error("Deposits canister missing");
-      }
-
-      setState("pending");
-
-      let to = await depositsCanister.getDepositAddress(referralCode ? [referralCode] : []);
-      if (!to) {
-        throw new Error("Failed to get the deposit address");
-      }
-
-      const { data: block_height, error } = await sendTransaction({
-        request: {
-          to,
-          // TODO: Better number handling here than floats.
-          amount: amount*100000000,
-        },
-      });
-      if (error) {
-        throw error;
-      } else if (block_height === undefined) {
-        throw new Error("Transfer failed");
-      }
-
-      await depositsCanister.depositIcp();
-
-      // Bump the cachebuster to refresh balances
-      setGlobalState(x => ({...x, cacheBuster: x.cacheBuster+1}));
-      setState("complete");
-    } catch (err) {
-      console.debug(err);
-      setState("rejected");
+    if (rawAmount && amount < MINIMUM_DEPOSIT) {
+      throw new Error(`Minimum deposit is ${MINIMUM_DEPOSIT} ICP`);
     }
+    if (!amount) {
+      throw new Error("Amount missing");
+    }
+    if (!depositsCanister) {
+      throw new Error("Deposits canister missing");
+    }
+    let to = await depositsCanister.getDepositAddress(referralCode ? [referralCode] : []);
+    if (!to) {
+      throw new Error("Failed to get the deposit address");
+    }
+
+    const { data: block_height, error } = await sendTransaction({
+      request: {
+        to,
+        // TODO: Better number handling here than floats.
+        amount: amount*100000000,
+      },
+    });
+    if (error) {
+      throw error;
+    } else if (block_height === undefined) {
+      throw new Error("Transfer failed");
+    }
+
+    await depositsCanister.depositIcp();
+
+    // Bump the cachebuster to refresh balances
+    setGlobalState(x => ({...x, cacheBuster: x.cacheBuster+1}));
   }, [amount, !!depositsCanister, referralCode]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button disabled={!!error} variant={!!error ? "error" : undefined}>{error || "Deposit"}</Button>
-      </DialogTrigger>
-      {error ? (
-        <DialogContent>
+    <ConfirmationDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      onConfirm={deposit}
+      button={"Deposit"}>
+      {({state, error}) => error ? (
+        <>
           <DialogTitle>Error</DialogTitle>
-          <DialogDescription>
-            {error}
-          </DialogDescription>
-          <Flex css={{ justifyContent: 'flex-end'}}>
-            <DialogClose asChild>
-              <Button variant="error" css={{marginRight: 25}} onClick={() => onOpenChange(false)}>
-              Ok
-              </Button>
-            </DialogClose>
-          </Flex>
-        </DialogContent>
+          <DialogDescription>{error}</DialogDescription>
+        </>
       ) : state === "confirm" ? (
-        <DialogContent>
+        <>
           <DialogTitle>Are you sure?</DialogTitle>
           <DialogDescription>
             This action cannot be undone. Your {amount} ICP will immediately be
-            converted to {amount} stICP, and cannot be converted back to ICP.
+            converted to {amount} stICP, and cannot be converted back to ICP
+            without an unstaking delay.
           </DialogDescription>
-          <Flex css={{ justifyContent: 'flex-end'}}>
-            <DialogClose asChild>
-              <Button variant="cancel" css={{marginRight: 25}} onClick={() => onOpenChange(false)}>
-              Cancel
-              </Button>
-            </DialogClose>
-            <Button onClick={deposit}>Deposit</Button>
-          </Flex>
-        </DialogContent>
+        </>
       ) : state === "pending" ? (
-        <DialogContent>
+        <>
           <DialogTitle>Transfer Pending</DialogTitle>
-            <DialogDescription>
-              Converting {amount} ICP to {amount} stICP...
-            </DialogDescription>
-          <Flex css={{ justifyContent: 'flex-end'}}>
-            <DialogClose asChild onClick={() => onOpenChange(false)}>
-              <Button variant="cancel">Close</Button>
-            </DialogClose>
-          </Flex>
-        </DialogContent>
+          <DialogDescription>
+            Converting {amount} ICP to {amount} stICP...
+          </DialogDescription>
+        </>
       ) : state === "complete" ? (
-        <DialogContent>
+        <>
           <DialogTitle>Transfer Complete</DialogTitle>
           <DialogDescription>
             Successfully converted {amount} ICP to {amount} stICP.
           </DialogDescription>
-          <Flex css={{ justifyContent: 'flex-end'}}>
-            <DialogClose asChild onClick={() => onOpenChange(false)}>
-              <Button>Done</Button>
-            </DialogClose>
-          </Flex>
-        </DialogContent>
+        </>
       ) : (
-        <DialogContent>
+        <>
           <DialogTitle>Transfer Failed</DialogTitle>
           <DialogDescription>
-            <p>Failed to convert {amount} ICP to {amount} stICP.</p>
+            Failed to convert {amount} ICP to {amount} stICP.
           </DialogDescription>
-          <Flex css={{ justifyContent: 'flex-end'}}>
-            <DialogClose asChild onClick={() => onOpenChange(false)}>
-              <Button>Done</Button>
-            </DialogClose>
-          </Flex>
-        </DialogContent>
+        </>
       )}
-    </Dialog>
+    </ConfirmationDialog>
   );
 }

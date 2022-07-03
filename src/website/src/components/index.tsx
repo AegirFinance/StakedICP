@@ -3,6 +3,7 @@ export * from "./AlertDialog";
 export * from "./APR";
 export * from "./Button";
 export * from "./Code";
+export * from "./ConfirmationDialog";
 export * from "./CopyOnClick";
 export * from "./DataTable";
 export * from "./DepositForm";
