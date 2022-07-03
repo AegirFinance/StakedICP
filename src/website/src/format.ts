@@ -1,4 +1,5 @@
 import { BigNumber, BigNumberish } from "@ethersproject/bignumber";
+import { WithdrawalsError, TokenError, TransferError, NeuronsError } from "../../declarations/deposits/deposits.did.d.js";
 
 const Zero = BigNumber.from(0);
 const NegativeOne = BigNumber.from(-1);
@@ -77,4 +78,46 @@ export function delay(seconds: bigint): string {
     lop(BigInt(60), "minute");
     lop(BigInt(1), "second");
     return s.join(" ");
+}
+
+export function withdrawalsError(err: WithdrawalsError): string {
+  if ( 'TransferError' in err ) {
+    return transferError(err.TransferError);
+  } else if ('NeuronsError' in err) {
+    return neuronsError(err.NeuronsError);
+  } else if ('InsufficientBalance' in err) {
+    return "Insufficient balance in your account.";
+  } else if ('InsufficientLiquidity' in err) {
+    return "Insufficient protocol liquidity.";
+  } else if ('Other' in err) {
+    return err.Other;
+  } else if  ('TokenError' in err) {
+    return tokenError(err.TokenError);
+  } else {
+    return "An unexpected error occurred."
+  }
+}
+
+export function neuronsError(_err: NeuronsError): string {
+  // TODO: Implement this with more detail.
+  return "An unexpected error occured.";
+}
+
+export function transferError(_err: TransferError): string {
+  // TODO: Implement this with more detail.
+  return "An unexpected error occured.";
+}
+
+export function tokenError(err: TokenError): string {
+  if ('InsufficientAllowance' in err) {
+    return "Insufficient stICP allowance.";
+  } else if ('InsufficientBalance' in err) {
+    return "Insufficient stICP balance.";
+  } else if ('Unauthorized' in err) {
+    return "Unauthorized";
+  } else if ('Other' in err) {
+    return err.Other;
+  } else {
+    return "An unexpected error occurred."
+  }
 }

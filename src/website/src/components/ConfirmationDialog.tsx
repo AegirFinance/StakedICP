@@ -43,7 +43,7 @@ export function ConfirmationDialog({
       } else if (err instanceof Error) {
         error = err.message;
       } else {
-        error = "An unknown error occured.";
+        error = "An unexpected error occured.";
       }
       setData({state: "rejected", error});
     }

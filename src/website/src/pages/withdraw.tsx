@@ -235,7 +235,7 @@ function WithdrawDialog({
 
     const result = await depositsCanister.createWithdrawal(Principal.fromText(principal), BigInt(amount*100000000));
     if ('err' in result && result.err) {
-      throw result.err;
+      throw new Error(format.withdrawalsError(result.err));
     } else if (!('ok' in result) || !result.ok) {
       throw new Error("Withdrawal failed");
     }

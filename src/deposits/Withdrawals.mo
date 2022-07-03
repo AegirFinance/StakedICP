@@ -55,22 +55,24 @@ module {
         disbursed: Nat64;
     };
 
+    type TokenError = {
+        // Copied from Token.mo
+        #InsufficientAllowance;
+        #InsufficientBalance;
+        #ErrorOperationStyle;
+        #Unauthorized;
+        #LedgerTrap;
+        #ErrorTo;
+        #Other: Text;
+        #BlockUsed;
+        #AmountTooSmall;
+    };
+
     type WithdrawalsError = {
         #InsufficientBalance;
         #InsufficientLiquidity;
         #Other: Text;
-        #TokenError: {
-            // Copied from Token.mo
-            #InsufficientAllowance;
-            #InsufficientBalance;
-            #ErrorOperationStyle;
-            #Unauthorized;
-            #LedgerTrap;
-            #ErrorTo;
-            #Other: Text;
-            #BlockUsed;
-            #AmountTooSmall;
-        };
+        #TokenError: TokenError;
         #NeuronsError: Neurons.NeuronsError;
         #TransferError: Ledger.TransferError;
     };
