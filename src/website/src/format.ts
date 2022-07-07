@@ -96,6 +96,8 @@ export function withdrawalsError(err: WithdrawalsError): string {
     return "Insufficient balance in your account.";
   } else if ('InsufficientLiquidity' in err) {
     return "Insufficient protocol liquidity.";
+  } else if ('InvalidAddress' in err) {
+    return "Invalid address.";
   } else if ('Other' in err) {
     return err.Other;
   } else if  ('TokenError' in err) {

@@ -604,6 +604,11 @@ shared(init_msg) actor class Deposits(args: {
         Account.toText(Account.fromPrincipal(Principal.fromActor(this), Account.principalToSubaccount(msg.caller)));
     };
 
+    public shared(msg) func getDepositAddressFor(user: Principal): async Text {
+        owners.require(msg.caller);
+        Account.toText(Account.fromPrincipal(Principal.fromActor(this), Account.principalToSubaccount(user)));
+    };
+
     public type DepositErr = {
         #BalanceLow;
         #TransferFailure;
@@ -621,17 +626,26 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
-    // After user transfers ICP to the target subaccount
     public shared(msg) func depositIcp(): async DepositReceipt {
+        await doDepositIcpFor(msg.caller);
+    };
+
+    // After user transfers ICP to the target subaccount
+    public shared(msg) func depositIcpFor(user: Principal): async DepositReceipt {
+        owners.require(msg.caller);
+        await doDepositIcpFor(user)
+    };
+
+    private func doDepositIcpFor(user: Principal): async DepositReceipt {
         // Calculate target subaccount
-        let subaccount = Account.principalToSubaccount(msg.caller);
+        let subaccount = Account.principalToSubaccount(user);
         let source_account = Account.fromPrincipal(Principal.fromActor(this), subaccount);
 
         // Check ledger for value
         let balance = await ledger.account_balance({ account = Blob.toArray(source_account) });
 
         // TODO: Refactor this to a TrieMap
-        let key = principalKey(msg.caller);
+        let key = principalKey(user);
         balances := Trie.put(balances, key, Principal.equal, balance.e8s).0;
 
         // Transfer to staking neuron
@@ -659,10 +673,10 @@ shared(init_msg) actor class Deposits(args: {
         balances := Trie.put(balances, key, Principal.equal, 0 : Nat64).0;
 
         // Mint the new tokens
-        Debug.print("[Referrals.convert] user: " # debug_show(msg.caller));
-        referralTracker.convert(msg.caller);
-        ignore queueMint(msg.caller, amount.e8s);
-        ignore await flushMint(msg.caller);
+        Debug.print("[Referrals.convert] user: " # debug_show(user));
+        referralTracker.convert(user);
+        ignore queueMint(user, amount.e8s);
+        ignore await flushMint(user);
 
         return #Ok(Nat64.toNat(amount.e8s));
     };
@@ -724,7 +738,13 @@ shared(init_msg) actor class Deposits(args: {
 
     // Cache this or memoize it or something to make it cheaper.
     public func availableLiquidityGraph(): async AvailableLiquidityGraph {
-        staking.availableLiquidityGraph()
+        let neurons = staking.availableLiquidityGraph();
+        let b = Buffer.Buffer<(Int, Nat64)>(neurons.size()+1);
+        b.add((0, await availableBalance()));
+        for ((delay, balance) in neurons.vals()) {
+            b.add((delay, balance));
+        };
+        b.toArray();
     };
 
     private func availableLiquidity(amount: Nat64): (Int, Nat64) {
@@ -761,11 +781,25 @@ shared(init_msg) actor class Deposits(args: {
         return await withdrawals.createWithdrawal(user, total, availableCash, delay);
     };
 
+    public shared(msg) func completeWithdrawal(user: Principal, amount: Nat64, to: Text): async Withdrawals.PayoutResult {
+        if (msg.caller != user) {
+            owners.require(msg.caller);
+        };
+        switch (Account.fromText(to)) {
+            case (#err(_)) {
+                #err(#InvalidAddress)
+            };
+            case (#ok(toAddress)) {
+                await withdrawals.disburse(user, amount, toAddress);
+            }
+        }
+    };
+
     public shared(msg) func listWithdrawals(user: Principal) : async [Withdrawals.Withdrawal] {
         if (msg.caller != user) {
             owners.require(msg.caller);
         };
-        return withdrawals.listWithdrawals(user);
+        return withdrawals.withdrawalsFor(user);
     };
 
     // ===== UPGRADE FUNCTIONS =====

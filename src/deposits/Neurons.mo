@@ -1,5 +1,6 @@
 import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
+import Int64 "mo:base/Int64";
 import Int "mo:base/Int";
 import Iter "mo:base/Iter";
 import Nat32 "mo:base/Nat32";
@@ -48,16 +49,17 @@ module {
     public type NeuronResult = Result.Result<Neuron, NeuronsError>;
     public type Nat64Result = Result.Result<Nat64, NeuronsError>;
 
-    public func dissolveDelay({dissolveState}: Neuron): Nat64 {
+    public func dissolveDelay({dissolveState}: Neuron): Int {
         switch (dissolveState) {
-            case (?#DissolveDelaySeconds(delay)) { delay };
+            case (?#DissolveDelaySeconds(delay)) { Int64.toInt(Int64.fromNat64(delay)) };
             case (null) { 0 };
             case (?#WhenDissolvedTimestampSeconds(timestamp)) {
-                let now = Nat64.fromNat(Int.abs(Time.now()));
-                if (timestamp <= now) {
+                let now = Time.now();
+                let t = Int64.toInt(Int64.fromNat64(timestamp));
+                if (t <= now) {
                     0
                 } else {
-                    timestamp - now
+                    t - now
                 }
             };
         }

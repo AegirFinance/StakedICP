@@ -71,6 +71,7 @@ module {
     type WithdrawalsError = {
         #InsufficientBalance;
         #InsufficientLiquidity;
+        #InvalidAddress;
         #Other: Text;
         #TokenError: TokenError;
         #NeuronsError: Neurons.NeuronsError;
@@ -78,7 +79,7 @@ module {
     };
 
     public type WithdrawalResult = Result.Result<Withdrawal, WithdrawalsError>;
-    type PayoutResult = Result.Result<Ledger.BlockIndex, WithdrawalsError>;
+    public type PayoutResult = Result.Result<Ledger.BlockIndex, WithdrawalsError>;
 
     type WithdrawalHeapEntry = {
         id: Text;
@@ -239,8 +240,18 @@ module {
             if (available < amount) {
                 pendingWithdrawals := Deque.pushBack(pendingWithdrawals, {id = id; createdAt = now});
             };
+            withdrawalsByUserAdd(withdrawal.user, id);
 
             return #ok(withdrawal);
+        };
+
+        private func withdrawalsByUserAdd(user: Principal, id: Text) {
+            let buf = Option.get<Buffer.Buffer<Text>>(
+                withdrawalsByUser.get(user),
+                Buffer.Buffer<Text>(1)
+            );
+            buf.add(id);
+            withdrawalsByUser.put(user, buf);
         };
 
         public func withdrawalsFor(user: Principal): [Withdrawal] {
@@ -361,7 +372,7 @@ module {
         };
 
 
-        // record a conversion event for this referred user
+        // Transfer unlocked ICP in complete withdrawals to an address
         public func disburse(user: Principal, amount: Nat64, to: Account.AccountIdentifier): async PayoutResult {
             let now = Time.now();
 
@@ -433,21 +444,6 @@ module {
             ))
         };
 
-        public func listWithdrawals(user: Principal): [Withdrawal] {
-            let ids : Buffer.Buffer<Text> = Option.get(
-                withdrawalsByUser.get(user),
-                Buffer.Buffer<Text>(0)
-            );
-            let b = Buffer.Buffer<Withdrawal>(ids.size());
-            for (id in ids.vals()) {
-                switch (withdrawals.get(id)) {
-                    case (?w) { b.add(w); };
-                    case (null) { P.unreachable(); };
-                };
-            };
-            b.toArray();
-        };
-
         public func mergeMaturity(): async [Neurons.NeuronResult] {
             let merges = await args.neurons.mergeMaturities(ids(), 100);
             for (m in merges.vals()) {
@@ -489,12 +485,7 @@ module {
                             });
                         };
 
-                        let buf = Option.get<Buffer.Buffer<Text>>(
-                            withdrawalsByUser.get(withdrawal.user),
-                            Buffer.Buffer<Text>(1)
-                        );
-                        buf.add(id);
-                        withdrawalsByUser.put(withdrawal.user, buf);
+                        withdrawalsByUserAdd(withdrawal.user, id);
                     };
                 };
                 case (_) { return; };

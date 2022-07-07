@@ -5,6 +5,7 @@ import * as deposits from '../../../declarations/deposits';
 import { AvailableLiquidityGraph, Deposits, Withdrawal } from "../../../declarations/deposits/deposits.did.d.js";
 import { getBackendActor }  from '../agent';
 import {
+  Button,
   ConfirmationDialog,
   DialogDescription,
   DialogTitle,
@@ -106,7 +107,7 @@ function WithdrawForm() {
   const delay: bigint | undefined = React.useMemo(() => {
       if (!liquidityGraph) return undefined;
       if (parsedAmount === NaN || parsedAmount === -NaN || parsedAmount === +Infinity || parsedAmount === -Infinity || parsedAmount < 0) return undefined;
-      let remaining: bigint = BigInt(Math.floor(parsedAmount*10_000_000));
+      let remaining: bigint = BigInt(Math.floor(parsedAmount*100_000_000));
       let maxDelay: bigint = BigInt(0);
       for (let [d, available] of liquidityGraph) {
           if (remaining <= 0) return maxDelay;
@@ -212,36 +213,50 @@ function WithdrawalsList() {
         );
     }
 
+    const available = data.map(w => w.available).reduce((s, a) => s+a, BigInt(0));
+
     return (
         <Flex css={{flexDirection: "column-reverse", justifyContent: "flex-start", '& > *': {marginTop: '$2', marginBottom: '$2'}}}>
+            {available > BigInt(0) ? (
+                <CompleteWithdrawalButton disabled={!principal} user={principal} available={available} />
+            ) : null}
             {data.map(w => {
                 let eta = w.readyAt.length > 0 ? w.readyAt[0] : w.expectedAt;
                 return (
-                    <DataTable>
-                        <DataTableRow>
-                            <DataTableLabel>Total</DataTableLabel>
-                            <DataTableValue>{format.units(w.total)} ICP</DataTableValue>
-                        </DataTableRow>
-                        <DataTableRow>
-                            <DataTableLabel>Status</DataTableLabel>
-                            <DataTableValue>{
-                                w.disbursed === w.total
-                                    ? "Complete"
-                                    : w.pending === BigInt(0)
-                                    ? "Ready"
-                                    : "Pending"
-                            }</DataTableValue>
-                        </DataTableRow>
-                        <DataTableRow>
-                            <DataTableLabel>ETA</DataTableLabel>
-                            {/* TODO: Better timestamp formatting. Match how we show it when depositing */}
-                            <DataTableValue>{
-                                eta
-                                    ? <time dateTime={format.time(eta, 'UTC')}>{format.time(eta)}</time>
-                                    : '...'
-                            }</DataTableValue>
-                        </DataTableRow>
-                    </DataTable>
+                    <Flex css={{
+                        padding: '$1 $2',
+                        backgroundColor: '$slate3',
+                        borderRadius: '$1',
+                        flexDirection: 'column',
+                        justifyContent: 'flex-start',
+                        alignItems: 'stretch',
+                        }}>
+                        <DataTable key={w.id}>
+                            <DataTableRow>
+                                <DataTableLabel>Total</DataTableLabel>
+                                <DataTableValue>{format.units(w.total)} ICP</DataTableValue>
+                            </DataTableRow>
+                            <DataTableRow>
+                                <DataTableLabel>Status</DataTableLabel>
+                                <DataTableValue>{
+                                    w.disbursed === w.total
+                                        ? "Complete"
+                                        : w.pending === BigInt(0)
+                                        ? "Ready"
+                                        : "Pending"
+                                }</DataTableValue>
+                            </DataTableRow>
+                            <DataTableRow>
+                                <DataTableLabel>ETA</DataTableLabel>
+                                {/* TODO: Better timestamp formatting. Match how we show it when depositing */}
+                                <DataTableValue>{
+                                    eta
+                                        ? <time dateTime={format.time(eta, 'UTC')}>{format.time(eta)}</time>
+                                        : '...'
+                                }</DataTableValue>
+                            </DataTableRow>
+                        </DataTable>
+                    </Flex>
                 );
             })}
         </Flex>
@@ -311,7 +326,7 @@ function WithdrawDialog({
       open={open}
       onOpenChange={onOpenChange}
       onConfirm={createWithdrawal}
-      button={"Withdraw"}>
+      button={"Start Withdrawal"}>
       {({state, error}) => error ? (
         <>
           <DialogTitle>Error</DialogTitle>
@@ -361,3 +376,19 @@ function Links() {
   );
 }
 
+
+function CompleteWithdrawalButton({
+    disabled,
+    user,
+    available,
+}: {
+    disabled?: boolean;
+    user: string;
+    available: bigint;
+}) {
+    return (
+        <Button disabled={disabled}>
+            Transfer {format.units(available)} ICP
+        </Button>
+    );
+}

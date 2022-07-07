@@ -82,15 +82,18 @@ module {
 
         // Returns array of delays (seconds) and the amount (e8s) becoming
         // available after that delay.
-        // TODO: Implement this properly.
+        // TODO: Group by delay, incase there is any overlap
         public func availableLiquidityGraph(): [(Int, Nat64)] {
             var sum: Nat64 = 0;
+            let b = Buffer.Buffer<(Int, Nat64)>(stakingNeurons.size());
             for (neuron in stakingNeurons.vals()) {
-                sum += neuron.cachedNeuronStakeE8s;
+                if (neuron.cachedNeuronStakeE8s > minimumStake) {
+                    b.add((Neurons.dissolveDelay(neuron), neuron.cachedNeuronStakeE8s - minimumStake));
+                };
             };
-
-            // 8 years in seconds, and sum
-            return [(252_460_800, sum)];
+            Array.sort(b.toArray(), func(a: (Int, Nat64), b: (Int, Nat64)): Order.Order {
+                Int.compare(a.0, b.0)
+            })
         };
 
         public func ids(): [Nat64] {
@@ -137,7 +140,7 @@ module {
         };
 
         func compareDissolveDelay(a: Neurons.Neuron, b: Neurons.Neuron): Order.Order {
-            Nat64.compare(Neurons.dissolveDelay(a), Neurons.dissolveDelay(b))
+            Int.compare(Neurons.dissolveDelay(a), Neurons.dissolveDelay(b))
         };
 
         // Calculate how much we should aim to have in each neuron, and in
