@@ -8,7 +8,11 @@ TESTS = $(wildcard **/*.mo)
 
 TEST_TARGETS = $(patsubst %.mo,_out/%.checked,$(TESTS))
 
-all: $(OUTDIR)/import_all.checked $(TEST_TARGETS)
+all: $(TEST_TARGETS)
+
+# TODO: For now, moc doesn't support compiling async expressions for wasmtime,
+# so we can't import those. boooh.
+# all: $(OUTDIR)/import_all.checked $(TEST_TARGETS)
 
 SOURCE_FILES= $(wildcard $(SOURCE)/**/*.mo)
 
@@ -30,12 +34,15 @@ $(OUTDIR)/import_all.mo: $(SOURCE_FILES) | $(OUTDIR)
 	done
 
 $(OUTDIR)/%.wasm: %.mo | $(OUTDIR)
+	@mkdir -p $(@D)
 	$(MOC) -c $(LOCAL_PKGS) $(VESSEL_PKGS) -wasi-system-api -o $@ $< --debug
 
 $(OUTDIR)/%.wasm: $(OUTDIR)/%.mo | $(OUTDIR)
+	@mkdir -p $(@D)
 	$(MOC) -c $(LOCAL_PKGS) $(VESSEL_PKGS) -wasi-system-api -o $@ $< --debug
 
 $(OUTDIR)/%.checked: $(OUTDIR)/%.wasm
+	@mkdir -p $(@D)
 	wasmtime run $(WASMTIME_OPTIONS) $<
 	touch $@
 
