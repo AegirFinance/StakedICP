@@ -269,15 +269,15 @@ module {
         };
 
         // Apply some ICP towards paying off our deposits balance. Either from
-        // new deposits, or newly disbursed neurons.
+        // new deposits, or newly disbursed neurons. Returns the amount consumed.
         public func applyIcp(amount: Nat64): Nat64 {
             let now = Time.now();
             var remaining = amount;
             while (remaining > 0) {
                 switch (Deque.peekFront(pendingWithdrawals)) {
                     case (null) {
-                        // No pending withdrawals
-                        return remaining;
+                        // No (more) pending withdrawals
+                        return amount-remaining;
                     };
                     case (?{id}) {
                         switch (withdrawals.get(id)) {
@@ -316,7 +316,7 @@ module {
                     };
                 };
             };
-            return remaining;
+            return amount-remaining;
         };
 
         // Disburse and/or create dissolving neurons such that account will receive (now or later) amount_e8s.

@@ -103,6 +103,18 @@ module {
             ))
         };
 
+        public func refreshAll(): async ?Neurons.NeuronsError {
+            for (id in ids().vals()) {
+                switch (await args.neurons.refresh(id)) {
+                    case (#err(err)) {
+                        return ?err;
+                    };
+                    case (#ok(_)) { };
+                };
+            };
+            return null;
+        };
+
         // addOrRefresh idempotently adds a staking neuron, or refreshes it's balance
         public func addOrRefresh(id: Nat64): async Neurons.NeuronResult {
             switch (await args.neurons.refresh(id)) {
@@ -162,7 +174,7 @@ module {
 
             var totalE8s: Nat64 = 0;
             for (n in neurons.vals()) {
-                totalE8s += n.cachedNeuronStakeE8s;
+                totalE8s += n.cachedNeuronStakeE8s - minimumStake;
             };
 
             var remaining = newE8s;
@@ -173,12 +185,12 @@ module {
                     return b.toArray();
                 };
 
-                if (target > n.cachedNeuronStakeE8s) {
+                if (target > n.cachedNeuronStakeE8s+minimumStake) {
                     var amount = Nat64.min(
                         remaining,
                         Nat64.max(
                             minimumStake,
-                            target - n.cachedNeuronStakeE8s
+                            target - n.cachedNeuronStakeE8s - minimumStake
                         )
                     );
                     remaining -= amount;

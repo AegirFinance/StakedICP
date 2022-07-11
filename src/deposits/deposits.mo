@@ -164,6 +164,10 @@ shared(init_msg) actor class Deposits(args: {
         staking.list()
     };
 
+    public shared(msg) func stakingNeuronBalances(): async [(Nat64, Nat64)] {
+        staking.balances()
+    };
+
     private func stakingNeuronBalance(): Nat64 {
         let balances = staking.balances();
         if (balances.size() == 0) {
@@ -295,6 +299,11 @@ shared(init_msg) actor class Deposits(args: {
         result
     };
 
+    public shared(msg) func manualHeartbeat(when: ?Time.Time): async DailyHeartbeatResponse {
+        owners.require(msg.caller);
+        await dailyHeartbeat(when)
+    };
+
     // called every day by the heartbeat function.
     private func dailyHeartbeat(when: ?Time.Time) : async DailyHeartbeatResponse {
         // Disburse all we can from our dissolved neurons. This will add it
@@ -376,20 +385,21 @@ shared(init_msg) actor class Deposits(args: {
             return [];
         };
 
-        balance -= withdrawals.applyIcp(balance);
+        balance -= Nat64.min(balance, withdrawals.applyIcp(balance));
         if (balance == 0) {
             return [];
         };
 
         // retained cash.
         // TODO: Should this come from the withdrawals module?
-        balance -= staking.rebalancingTarget(tokenE8s+balance);
+        balance -= Nat64.min(balance, staking.rebalancingTarget(tokenE8s+balance));
 
         let transfers = staking.depositIcp(balance, null);
         let b = Buffer.Buffer<Ledger.TransferResult>(transfers.size());
         for (transfer in transfers.vals()) {
             b.add(await ledger.transfer(transfer));
         };
+        ignore await staking.refreshAll();
         return b.toArray();
     };
 

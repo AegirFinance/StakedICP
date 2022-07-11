@@ -5,7 +5,7 @@ import * as deposits from '../../../declarations/deposits';
 import { AvailableLiquidityGraph, Deposits, Withdrawal } from "../../../declarations/deposits/deposits.did.d.js";
 import { getBackendActor }  from '../agent';
 import {
-  Button,
+  ActivityIndicator,
   ConfirmationDialog,
   DialogDescription,
   DialogTitle,
@@ -173,8 +173,7 @@ function WithdrawForm() {
 function DelayStat({amount, delay}: {amount: number; delay: bigint | undefined}) {
 
     if (amount === 0 || delay === undefined) {
-        // TODO: proper loading indicator here
-        return <>...</>;
+        return <ActivityIndicator />;
     }
 
     // TODO: Calculate the delay for amount given
@@ -198,14 +197,12 @@ function WithdrawalsList() {
     }, [!!depositsCanister, principal]);
 
     if (data === null) {
-        // TODO: proper loading indicator
         return (
-            <Flex>...</Flex>
+            <Flex><ActivityIndicator /></Flex>
         );
     }
 
     if (data.length === 0) {
-        // TODO: proper loading indicator
         return (
             <Flex css={{flexDirection: "column", justifyContent: "flex-start"}}>
                 <p>You have no withdrawals</p>
@@ -217,9 +214,6 @@ function WithdrawalsList() {
 
     return (
         <Flex css={{flexDirection: "column-reverse", justifyContent: "flex-start", '& > *': {marginTop: '$2', marginBottom: '$2'}}}>
-            {available > BigInt(0) ? (
-                <CompleteWithdrawalButton disabled={!principal} user={principal} available={available} />
-            ) : null}
             {data.map(w => {
                 let eta = w.readyAt.length > 0 ? w.readyAt[0] : w.expectedAt;
                 return (
@@ -233,10 +227,6 @@ function WithdrawalsList() {
                         }}>
                         <DataTable key={w.id}>
                             <DataTableRow>
-                                <DataTableLabel>Total</DataTableLabel>
-                                <DataTableValue>{format.units(w.total)} ICP</DataTableValue>
-                            </DataTableRow>
-                            <DataTableRow>
                                 <DataTableLabel>Status</DataTableLabel>
                                 <DataTableValue>{
                                     w.disbursed === w.total
@@ -245,6 +235,10 @@ function WithdrawalsList() {
                                         ? "Ready"
                                         : "Pending"
                                 }</DataTableValue>
+                            </DataTableRow>
+                            <DataTableRow>
+                                <DataTableLabel>Total</DataTableLabel>
+                                <DataTableValue>{format.units(w.total)} ICP</DataTableValue>
                             </DataTableRow>
                             <DataTableRow>
                                 <DataTableLabel>ETA</DataTableLabel>
@@ -259,6 +253,9 @@ function WithdrawalsList() {
                     </Flex>
                 );
             })}
+            {available > BigInt(0) ? (
+                <CompleteWithdrawalButton amount={available} />
+            ) : null}
         </Flex>
     );
 }
@@ -336,9 +333,17 @@ function WithdrawDialog({
         <>
           <DialogTitle>Are you sure?</DialogTitle>
           <DialogDescription>
-            This action cannot be undone. Your {amount} stICP will be converted
-            to {amount} ICP. They will be locked for up to {delay === undefined ? "<loading>" : format.delay(delay)} while this
-            withdrawal is pending.
+            <p>This action cannot be undone. Your {amount} stICP will be converted
+            to {amount} ICP.</p>
+            <p>
+              {delay === undefined ? (
+                 <ActivityIndicator /> 
+              ) : delay <= 0 ? (
+                "They will be available instantly."
+              ) : (
+                `They will be locked for up to ${format.delay(delay)} while this withdrawal is pending.`
+              )}
+            </p>
           </DialogDescription>
         </>
       ) : state === "pending" ? (
@@ -378,17 +383,100 @@ function Links() {
 
 
 function CompleteWithdrawalButton({
-    disabled,
-    user,
-    available,
+    amount,
 }: {
-    disabled?: boolean;
-    user: string;
-    available: bigint;
+    amount: bigint;
 }) {
-    return (
-        <Button disabled={disabled}>
-            Transfer {format.units(available)} ICP
-        </Button>
-    );
+  const { setState: setGlobalState } = useContext();
+  const [{ data: account }] = useAccount();
+  const principal = account?.principal;
+  const depositsCanister = useCanister<Deposits>({
+    // TODO: handle missing canister id better
+    canisterId: deposits.canisterId ?? "",
+    interfaceFactory: deposits.idlFactory,
+  });
+  const [to, setTo] = React.useState<string|null>(null);
+
+  useAsyncEffect(async () => {
+      if (!depositsCanister) {
+          return;
+      }
+      await depositsCanister.depositIcp();
+  }, [!!depositsCanister]);
+
+  const completeWithdrawal = React.useCallback(async () => {
+    if (!principal) {
+      throw new Error("Wallet not connected");
+    }
+    if (amount < BigInt(MINIMUM_WITHDRAWAL*100_000_000)) {
+      throw new Error(`Minimum withdrawal is ${MINIMUM_WITHDRAWAL} ICP`);
+    }
+    if (!to) {
+      throw new Error("Destination address missing");
+    }
+    if (!depositsCanister) {
+      throw new Error("Deposits canister missing");
+    }
+
+
+    const result = await depositsCanister.completeWithdrawal(Principal.fromText(principal), amount, to);
+    if ('err' in result && result.err) {
+      throw new Error(format.withdrawalsError(result.err));
+    } else if (!('ok' in result) || !result.ok) {
+      throw new Error("Withdrawal failed");
+    }
+
+    // Bump the cachebuster to refresh balances, and reload withdrawals list
+    setGlobalState(x => ({...x, cacheBuster: x.cacheBuster+1}));
+  }, [principal, amount, !!depositsCanister, to]);
+
+  return (
+    <ConfirmationDialog
+      onConfirm={completeWithdrawal}
+      disabled={amount <= 0}
+      button={`Transfer ${format.units(amount)} ICP`}>
+      {({state, error}) => error ? (
+        <>
+          <DialogTitle>Error</DialogTitle>
+          <DialogDescription>{error}</DialogDescription>
+        </>
+      ) : state === "confirm" ? (
+        <>
+          <DialogTitle>Destination</DialogTitle>
+          <DialogDescription css={{display: "flex", flexDirection: "column", alignItems: "stretch"}}>
+            <p>Please enter the destination account to receive the ICP:</p>
+            <Input
+              type="text"
+              name="to" 
+              value={to ?? ""}
+              placeholder="Address"
+              onChange={(e) => {
+                  // TODO: Validate it is a real address here.
+                  setTo(e.currentTarget.value);
+              }} />
+          </DialogDescription>
+        </>
+      ) : state === "pending" ? (
+        <>
+          <DialogTitle>Transfer Pending</DialogTitle>
+          <DialogDescription>
+            Transferring {format.units(amount)} ICP to {to}...
+          </DialogDescription>
+        </>
+      ) : state === "complete" ? (
+        <>
+          <DialogTitle>Transfer Complete</DialogTitle>
+          <DialogDescription>
+            Successfully transferred {format.units(amount)} ICP to {to}.
+          </DialogDescription>
+        </>
+      ) : (
+        <>
+          <DialogTitle>Transfer Failed</DialogTitle>
+          <DialogDescription>
+            Failed to transfer {format.units(amount)} to {to}.
+          </DialogDescription>
+        </>
+      )}
+    </ConfirmationDialog>
 }

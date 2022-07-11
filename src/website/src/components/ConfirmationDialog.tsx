@@ -11,14 +11,16 @@ export type ConfirmationDialogState = {
 export interface ConfirmationDialogParams {
   button: string;
   children: React.ReactNode | ((props: ConfirmationDialogState) => React.ReactNode);
+  disabled?: boolean;
   onConfirm: () => void | Promise<void>;
-  onOpenChange: (open: boolean) => void | Promise<void>;
-  open: boolean;
+  onOpenChange?: (open: boolean) => void | Promise<void>;
+  open?: boolean;
 }
 
 export function ConfirmationDialog({
     button,
     children,
+    disabled=false,
     onConfirm: parentOnConfirm,
     onOpenChange: parentOnOpenChange,
     open,
@@ -28,7 +30,7 @@ export function ConfirmationDialog({
 
   const onOpenChange = React.useCallback(async (open: boolean) => {
     setData({state: "confirm"});
-    await parentOnOpenChange(open);
+    parentOnOpenChange && await parentOnOpenChange(open);
   }, [setData, parentOnOpenChange]);
 
   const onConfirm = React.useCallback(async () => {
@@ -52,7 +54,7 @@ export function ConfirmationDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button disabled={!!error} variant={!!error ? "error" : undefined}>{error || button}</Button>
+        <Button disabled={disabled || !!error} variant={!!error ? "error" : undefined}>{error || button}</Button>
       </DialogTrigger>
       <DialogContent>
       {typeof children == 'function' ? children(data) : children}
