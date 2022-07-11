@@ -194,7 +194,21 @@ shared(init_msg) actor class Deposits(args: {
 
     public shared(msg) func addStakingNeuron(id: Nat64): async Neurons.NeuronResult {
         owners.require(msg.caller);
-        await staking.addOrRefresh(id)
+        let isNew = Option.isNull(Array.find(staking.ids(), func(haystack: Nat64): Bool { haystack == id }));
+
+        switch (await staking.addOrRefresh(id)) {
+            case (#err(err)) {
+                return #err(err);
+            };
+            case (#ok(neuron)) {
+                if isNew {
+                    let canister = Principal.fromActor(this);
+                    ignore queueMint(canister, neuron.cachedNeuronStakeE8s);
+                    ignore await flushMint(canister);
+                };
+                return #ok(neuron);
+            };
+        }
     };
 
     public shared(msg) func proposalNeuron(): async ?Neurons.Neuron {
