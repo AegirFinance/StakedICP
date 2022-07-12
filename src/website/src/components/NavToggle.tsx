@@ -2,11 +2,11 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { styled } from '../stitches.config';
 
-export function NavToggle({active}: {active: 'deposit'|'withdraw'}) {
+export function NavToggle({active}: {active: 'stake'|'unstake'}) {
     return (
         <Nav>
-            <Item to="/" title="Deposit" active={active === 'deposit'}>Deposit</Item>
-            <Item to="/withdraw" title="Withdraw" active={active === 'withdraw'}>Withdraw</Item>
+            <Item to="/" title="Stake" active={active === 'stake'}>Stake</Item>
+            <Item to="/unstake" title="Unstake" active={active === 'unstake'}>Unstake</Item>
         </Nav>
     );
 }

@@ -1,8 +1,10 @@
 import { Principal } from '@dfinity/principal';
 import { GitHubLogoIcon, TwitterLogoIcon } from '@radix-ui/react-icons';
+import * as SliderPrimitive from '@radix-ui/react-slider';
 import React from 'react';
 import * as deposits from '../../../declarations/deposits';
 import { AvailableLiquidityGraph, Deposits, Withdrawal } from "../../../declarations/deposits/deposits.did.d.js";
+import * as token from "../../../declarations/token";
 import { getBackendActor }  from '../agent';
 import {
   ActivityIndicator,
@@ -20,17 +22,17 @@ import { DataTable, DataTableRow, DataTableLabel, DataTableValue } from '../comp
 import * as format from "../format";
 import { useAsyncEffect } from "../hooks";
 import { styled } from '../stitches.config';
-import { ConnectButton, useAccount, useCanister, useContext, useTransaction } from "../wallet";
+import { ConnectButton, useAccount, useBalance, useCanister, useContext } from "../wallet";
 
-export function Withdraw() {
+export function Unstake() {
   return (
     <Wrapper>
       <Layout>
         <Header />
         <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
           <div>
-            <NavToggle active="withdraw" />
-            <WithdrawForm />
+            <NavToggle active="unstake" />
+            <UnstakeForm />
             <Subtitle>Your Withdrawals</Subtitle>
             <WithdrawalsList />
             <Links />
@@ -73,9 +75,10 @@ function parseFloat(str: string): number {
     return +str;
 }
 
-function WithdrawForm() {
+function UnstakeForm() {
   const [{ data: account }] = useAccount();
   const principal = account?.principal;
+  const [{data: sticp}] = useBalance({ token: token.canisterId });
   const [amount, setAmount] = React.useState("");
   const parsedAmount = React.useMemo(() => {
     if (!amount) {
@@ -122,7 +125,7 @@ function WithdrawForm() {
         e.preventDefault();
         setShowConfirmationDialog(!!(principal && parsedAmount >= 0));
     }}>
-      <h3>Withdraw</h3>
+      <h3>Unstake</h3>
       <Input
         type="text"
         name="amount" 
@@ -131,6 +134,21 @@ function WithdrawForm() {
         onChange={(e) => {
           setAmount(e.currentTarget.value);
         }} />
+      <StyledSlider
+        disabled={!principal && sticp !== undefined}
+        value={[Number((parsedAmount ?? 0) * 100_000_000)]}
+        min={0}
+        max={Number(sticp?.value ?? BigInt(0))}
+        step={1}
+        onValueChange={ns => {
+            setAmount((ns[0] / 100_000_000).toFixed(sticp?.decimals ?? 8));
+        }}
+        aria-label="Amount">
+        <StyledTrack>
+          <StyledRange />
+        </StyledTrack>
+        <StyledThumb disabled={!principal && sticp !== undefined} />
+      </StyledSlider>
       {principal ? (
         <>
           <DataTable>
@@ -153,7 +171,7 @@ function WithdrawForm() {
                   <DataTableValue>0 ICP</DataTableValue>
               </DataTableRow>
           </DataTable>
-          <WithdrawDialog
+          <UnstakeDialog
             amount={parsedAmount}
             delay={delay}
             onOpenChange={(open: boolean) => {
@@ -170,14 +188,71 @@ function WithdrawForm() {
   );
 }
 
+
+const StyledSlider = styled(SliderPrimitive.Root, {
+  position: 'relative',
+  display: 'flex',
+  alignItems: 'center',
+  userSelect: 'none',
+  touchAction: 'none',
+
+  '&[data-orientation="horizontal"]': {
+    height: 20,
+  },
+
+  '&[data-orientation="vertical"]': {
+    flexDirection: 'column',
+    width: 20,
+    height: 100,
+  },
+});
+
+const StyledTrack = styled(SliderPrimitive.Track, {
+  backgroundColor: '$slate10',
+  position: 'relative',
+  flexGrow: 1,
+  borderRadius: '9999px',
+
+  '&[data-orientation="horizontal"]': { height: 3 },
+  '&[data-orientation="vertical"]': { width: 3 },
+});
+
+const StyledRange = styled(SliderPrimitive.Range, {
+  position: 'absolute',
+  backgroundColor: '$slate10',
+  borderRadius: '9999px',
+  height: '100%',
+});
+
+const StyledThumb = styled(SliderPrimitive.Thumb, {
+  all: 'unset',
+  display: 'block',
+  width: 20,
+  height: 20,
+  backgroundColor: '$blue9',
+  boxShadow: `0 2px 10px $slate7`,
+  borderRadius: 10,
+  variants: {
+    disabled: {
+      true: {
+        backgroundColor: '$slate10',
+        cursor: 'default',
+      },
+      false: {
+        '&:hover': { backgroundColor: '$blue10', cursor: 'pointer' },
+        '&:focus': { boxShadow: `0 0 0 5px $slate8` },
+      },
+    },
+  },
+});
+
 function DelayStat({amount, delay}: {amount: number; delay: bigint | undefined}) {
 
     if (amount === 0 || delay === undefined) {
         return <ActivityIndicator />;
     }
 
-    // TODO: Calculate the delay for amount given
-    return <>{format.delay(delay)}</>;
+    return <>{format.delay(delay).split(' ').slice(0, 2).join(' ')}</>;
 }
 
 function WithdrawalsList() {
@@ -254,13 +329,13 @@ function WithdrawalsList() {
                 );
             })}
             {available > BigInt(0) ? (
-                <CompleteWithdrawalButton amount={available} />
+                <CompleteUnstakeButton amount={available} />
             ) : null}
         </Flex>
     );
 }
 
-interface WithdrawDialogParams {
+interface UnstakeDialogParams {
   amount: number;
   delay?: bigint;
   onOpenChange: (open: boolean) => void;
@@ -270,7 +345,7 @@ interface WithdrawDialogParams {
 
 const MINIMUM_WITHDRAWAL = 0.001;
 
-function WithdrawDialog({
+function UnstakeDialog({
   amount,
   delay,
   onOpenChange,
@@ -382,7 +457,7 @@ function Links() {
 }
 
 
-function CompleteWithdrawalButton({
+function CompleteUnstakeButton({
     amount,
 }: {
     amount: bigint;
@@ -404,7 +479,7 @@ function CompleteWithdrawalButton({
       await depositsCanister.depositIcp();
   }, [!!depositsCanister]);
 
-  const completeWithdrawal = React.useCallback(async () => {
+  const completeUnstake = React.useCallback(async () => {
     if (!principal) {
       throw new Error("Wallet not connected");
     }
@@ -423,7 +498,7 @@ function CompleteWithdrawalButton({
     if ('err' in result && result.err) {
       throw new Error(format.withdrawalsError(result.err));
     } else if (!('ok' in result) || !result.ok) {
-      throw new Error("Withdrawal failed");
+      throw new Error("Unstaking failed");
     }
 
     // Bump the cachebuster to refresh balances, and reload withdrawals list
@@ -432,7 +507,7 @@ function CompleteWithdrawalButton({
 
   return (
     <ConfirmationDialog
-      onConfirm={completeWithdrawal}
+      onConfirm={completeUnstake}
       disabled={amount <= 0}
       button={`Transfer ${format.units(amount)} ICP`}>
       {({state, error}) => error ? (
