@@ -135,8 +135,8 @@ function UnstakeForm() {
           setAmount(e.currentTarget.value);
         }} />
       <StyledSlider
-        disabled={!principal && sticp !== undefined}
-        value={[Number((parsedAmount ?? 0) * 100_000_000)]}
+        disabled={!principal || sticp === undefined}
+        value={[Math.min(Number((parsedAmount ?? 0) * 100_000_000), Number(sticp?.value ?? BigInt(0)))]}
         min={0}
         max={Number(sticp?.value ?? BigInt(0))}
         step={1}
@@ -147,7 +147,7 @@ function UnstakeForm() {
         <StyledTrack>
           <StyledRange />
         </StyledTrack>
-        <StyledThumb disabled={!principal && sticp !== undefined} />
+        <StyledThumb disabled={!principal || sticp === undefined} />
       </StyledSlider>
       {principal ? (
         <>
