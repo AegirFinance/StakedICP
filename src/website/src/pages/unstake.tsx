@@ -292,7 +292,7 @@ function WithdrawalsList() {
             {data.map(w => {
                 let eta = w.readyAt.length > 0 ? w.readyAt[0] : w.expectedAt;
                 return (
-                    <Flex css={{
+                    <Flex key={w.id} css={{
                         padding: '$1 $2',
                         backgroundColor: '$slate3',
                         borderRadius: '$1',
@@ -351,7 +351,7 @@ function UnstakeDialog({
   onOpenChange,
   open,
   rawAmount,
-}: WithdrawDialogParams) {
+}: UnstakeDialogParams) {
   const { setState: setGlobalState } = useContext();
   const [{ data: account }] = useAccount();
   const principal = account?.principal;
@@ -554,4 +554,5 @@ function CompleteUnstakeButton({
         </>
       )}
     </ConfirmationDialog>
+  );
 }
