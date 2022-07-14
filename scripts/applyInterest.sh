@@ -12,14 +12,12 @@ TIMESTAMP="${3}"
 case "$NETWORK" in
   "ic")
     DFX_OPTS="--network ic"
-    NEURON_ACCOUNT_ID="d0c352c04c8bfd4cf6cf827903a1483253bee4e354b8361b5b7023b72d384007"
     NEURON_ID="16_136_654_443_876_485_299"
     ;;
 
   "local")
     DFX_OPTS=""
-    NEURON_ACCOUNT_ID="94d4eddb1a4f1ef7a99bc5e89b21a1554303258884c35b5daba251fcf409d465"
-    NEURON_ID="$(existing_neuron_id 1)"
+    NEURON_ID="$(local_neuron 2)"
     ;;
 
   *)
