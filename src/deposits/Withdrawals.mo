@@ -170,7 +170,8 @@ module {
             };
         };
 
-        public func addNeurons(ns: [Neurons.Neuron]): async Result.Result<(), Neurons.NeuronsError> {
+        public func addNeurons(ns: [Neurons.Neuron]): async Result.Result<[Neurons.Neuron], Neurons.NeuronsError> {
+            let newNeurons = Buffer.Buffer<Neurons.Neuron>(ns.size());
             for (n in ns.vals()) {
                 let key = Nat64.toText(n.id);
                 if (dissolving.get(key) == null) {
@@ -188,10 +189,11 @@ module {
                         };
                         case (_) { n };
                     };
+                    newNeurons.add(neuron);
                     dissolving.put(key, neuron);
                 }
             };
-            #ok()
+            #ok(newNeurons.toArray())
         };
 
         public func createWithdrawal(user: Principal, amount: Nat64, availableCash: Nat64, delay: Int): async WithdrawalResult {

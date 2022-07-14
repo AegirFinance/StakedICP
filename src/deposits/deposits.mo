@@ -101,6 +101,7 @@ shared(init_msg) actor class Deposits(args: {
             mergeDissolving: [Neurons.NeuronResult];
             flush: [Ledger.TransferResult];
             refresh: ?Neurons.NeuronsError;
+            split: ?Result.Result<[Neurons.Neuron], Neurons.NeuronsError>;
         });
         #Err: Neurons.NeuronsError;
     };
@@ -349,20 +350,22 @@ shared(init_msg) actor class Deposits(args: {
         // figure out how much we have dissolving for withdrawals
         let dissolving = withdrawals.totalDissolving();
         let pending = withdrawals.totalPending();
-        if (pending > dissolving) {
+        let splitResult = if (pending > dissolving) {
             // figure out how much we need dissolving for withdrawals
             let needed = pending - dissolving;
             // Split the difference off from staking neurons
             switch (await staking.splitNeurons(needed)) {
                 case (#err(err)) {
-                    // TODO: Handle errors splitting neurons.
+                    ?#err(err)
                 };
                 case (#ok(newNeurons)) {
                     // Pass the new neurons into the withdrawals manager.
                     // TODO: Handle errors adding neurons.
-                    ignore await withdrawals.addNeurons(newNeurons);
+                    ?(await withdrawals.addNeurons(newNeurons));
                 };
             };
+        } else {
+            null
         };
 
         #Ok({
@@ -372,6 +375,7 @@ shared(init_msg) actor class Deposits(args: {
             mergeDissolving = mergeDissolvingResult;
             flush = flushResult;
             refresh = refreshResult;
+            split = splitResult;
         })
     };
 
