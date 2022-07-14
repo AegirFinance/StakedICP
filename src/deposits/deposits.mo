@@ -393,8 +393,8 @@ shared(init_msg) actor class Deposits(args: {
     private func flushPendingDeposits(tokenE8s: Nat64): async [Ledger.TransferResult] {
         // Basically this is: "use incoming deposits to attempt to rebalance
         // the buckets", where "the buckets" are:
-        // - cash on hand
         // - pending withdrawals
+        // - cash on hand
         // - staking neurons
 
         var balance = await availableBalance();
@@ -402,16 +402,16 @@ shared(init_msg) actor class Deposits(args: {
             return [];
         };
 
-        balance -= Nat64.min(balance, withdrawals.applyIcp(balance));
+
+        let applied = withdrawals.applyIcp(balance);
+        balance -= Nat64.min(balance, applied);
         if (balance == 0) {
             return [];
         };
 
-        // retained cash.
-        // TODO: Should this come from the withdrawals module?
-        balance -= Nat64.min(balance, staking.rebalancingTarget(tokenE8s+balance));
+        let transfers = staking.depositIcp(tokenE8s, balance, null);
 
-        let transfers = staking.depositIcp(balance, null);
+
         let b = Buffer.Buffer<Ledger.TransferResult>(transfers.size());
         for (transfer in transfers.vals()) {
             b.add(await ledger.transfer(transfer));

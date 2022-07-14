@@ -117,8 +117,7 @@ module {
         private var withdrawalsByUser = TrieMap.TrieMap<Principal, Buffer.Buffer<Text>>(Principal.equal, Principal.hash);
 
         // Tell the main contract how much icp to keep on-hand
-        // TODO: Maybe cache this
-        // TODO: Figure out how much cash to keep on hand here as well.
+        // TODO: Maybe precompute and cache this
         public func reservedIcp(): Nat64 {
             var sum: Nat64 = 0;
             for (w in withdrawals.vals()) {
@@ -127,7 +126,7 @@ module {
             return sum;
         };
 
-        // TODO: Maybe cache this
+        // TODO: Maybe precompute and cache this
         public func totalDissolving(): Nat64 {
             var sum: Nat64 = 0;
             for (n in dissolving.vals()) {
@@ -136,7 +135,7 @@ module {
             return sum;
         };
 
-        // TODO: Maybe cache this
+        // TODO: Maybe precompute and cache this
         public func totalPending(): Nat64 {
             var sum: Nat64 = 0;
             for (w in withdrawals.vals()) {

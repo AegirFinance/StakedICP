@@ -165,40 +165,39 @@ module {
 
         // depositIcp takes an amount of e8s to deposit, and returns a list of
         // transfers to make.
-        public func depositIcp(newE8s: Nat64, fromSubaccount: ?Account.Subaccount): [Ledger.TransferArgs] {
-            if (newE8s <= icpFee) {
+        public func depositIcp(totalE8s: Nat64, newE8s: Nat64, fromSubaccount: ?Account.Subaccount): [Ledger.TransferArgs] {
+            if (newE8s <= minimumStake) {
                 return [];
             };
 
-            let neurons = Array.sort(Iter.toArray(stakingNeurons.vals()), compareBalance);
+            // Find the target balance for each neuron + cash
+            let target = rebalancingTarget(totalE8s);
 
-            var totalE8s: Nat64 = 0;
-            for (n in neurons.vals()) {
-                totalE8s += n.cachedNeuronStakeE8s - minimumStake;
-            };
+            // Neurons from lowest to highest balance
+            let neurons = Array.sort(Iter.toArray(stakingNeurons.vals()), compareBalance);
 
             var remaining = newE8s;
             let b = Buffer.Buffer<Ledger.TransferArgs>(neurons.size());
-            let target = rebalancingTarget(totalE8s+newE8s);
             for (n in neurons.vals()) {
-                if (remaining < minimumStake) {
+                if (remaining < minimumStake or remaining <= target) {
                     return b.toArray();
                 };
 
-                if (target > n.cachedNeuronStakeE8s+minimumStake) {
+                // TODO: Account for transfer fees here
+                if (n.cachedNeuronStakeE8s < target) {
                     var amount = Nat64.min(
                         remaining,
                         Nat64.max(
                             minimumStake,
-                            target - n.cachedNeuronStakeE8s - minimumStake
+                            target - n.cachedNeuronStakeE8s
                         )
                     );
-                    remaining -= amount;
-                    if (remaining < minimumStake) {
-                        // If there's <1ICP left, chuck the remainder in here.
-                        amount += remaining;
-                        remaining := 0;
+                    // If we're close to the target, stop here. Don't do
+                    // frivolous small transfers.
+                    if (amount < minimumStake) {
+                        return b.toArray();
                     };
+                    remaining -= amount;
                     b.add({
                         memo : Nat64    = 0;
                         from_subaccount = Option.map(fromSubaccount, Blob.toArray);
