@@ -105,7 +105,7 @@ module {
 
         public func refreshAll(): async ?Neurons.NeuronsError {
             for (id in ids().vals()) {
-                switch (await args.neurons.refresh(id)) {
+                switch (await addOrRefresh(id)) {
                     case (#err(err)) {
                         return ?err;
                     };
