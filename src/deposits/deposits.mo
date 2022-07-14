@@ -100,6 +100,7 @@ shared(init_msg) actor class Deposits(args: {
             mergeStaked: ?[Neurons.NeuronResult];
             mergeDissolving: [Neurons.NeuronResult];
             flush: [Ledger.TransferResult];
+            refresh: ?Neurons.NeuronsError;
         });
         #Err: Neurons.NeuronsError;
     };
@@ -340,6 +341,7 @@ shared(init_msg) actor class Deposits(args: {
         // TODO: do something with the errors here
         let tokenE8s = Nat64.fromNat((await token.getMetadata()).totalSupply);
         let flushResult = await flushPendingDeposits(tokenE8s);
+        let refreshResult = await staking.refreshAll();
 
         // TODO: Figure out withdrawal neuron splitting here.
         // merge the maturity for dissolving neurons
@@ -369,6 +371,7 @@ shared(init_msg) actor class Deposits(args: {
             mergeStaked = mergeStakedResult;
             mergeDissolving = mergeDissolvingResult;
             flush = flushResult;
+            refresh = refreshResult;
         })
     };
 
@@ -413,7 +416,6 @@ shared(init_msg) actor class Deposits(args: {
         for (transfer in transfers.vals()) {
             b.add(await ledger.transfer(transfer));
         };
-        ignore await staking.refreshAll();
         return b.toArray();
     };
 
