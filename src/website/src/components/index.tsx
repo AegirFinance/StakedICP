@@ -13,5 +13,5 @@ export * from "./Header";
 export * from "./HelpDialog";
 export * from "./Input";
 export * from "./Layout";
-export * from "./NavToggle";
+export * from "./StakeForm";
 export * from "./Statistics";

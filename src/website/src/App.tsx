@@ -37,7 +37,6 @@ export default function App() {
             <Route path="/privacy-policy" element={<Pages.PrivacyPolicy />} />
             <Route path="/rewards" element={<Pages.Rewards />} />
             <Route path="/terms-of-use" element={<Pages.TermsOfUse />} />
-            <Route path="/unstake" element={<Pages.Unstake />} />
             <Route path="*" element={<Pages.FourOhFour />} />
           </Routes>
         </BrowserRouter>

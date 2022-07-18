@@ -1,71 +1,24 @@
 import { Principal } from '@dfinity/principal';
-import { GitHubLogoIcon, TwitterLogoIcon } from '@radix-ui/react-icons';
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import React from 'react';
-import * as deposits from '../../../declarations/deposits';
-import { AvailableLiquidityGraph, Deposits, Withdrawal } from "../../../declarations/deposits/deposits.did.d.js";
-import * as token from "../../../declarations/token";
-import { getBackendActor }  from '../agent';
+import * as deposits from '../../../../declarations/deposits';
+import { AvailableLiquidityGraph, Deposits, Withdrawal } from "../../../../declarations/deposits/deposits.did.d.js";
+import * as token from "../../../../declarations/token";
+import { getBackendActor }  from '../../agent';
 import {
   ActivityIndicator,
   ConfirmationDialog,
   DialogDescription,
   DialogTitle,
   Flex,
-  Header,
   HelpDialog,
   Input,
-  Layout,
-  NavToggle
-} from '../components';
-import { DataTable, DataTableRow, DataTableLabel, DataTableValue } from '../components/DataTable';
-import * as format from "../format";
-import { useAsyncEffect } from "../hooks";
-import { styled } from '../stitches.config';
-import { ConnectButton, useAccount, useBalance, useCanister, useContext } from "../wallet";
-
-export function Unstake() {
-  return (
-    <Wrapper>
-      <Layout>
-        <Header />
-        <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
-          <div>
-            <NavToggle active="unstake" />
-            <UnstakeForm />
-            <Subtitle>Your Withdrawals</Subtitle>
-            <WithdrawalsList />
-            <Links />
-          </div>
-        </Flex>
-      </Layout>
-    </Wrapper>
-  );
-}
-
-const Wrapper = styled('div', {
-  background: "radial-gradient(circle farthest-corner at 20% 20%, rgba(18,165,148,.16), rgba(242,145,2,.07) 25%, rgba(166,103,10,0) 63%)",
-  minHeight: "100vh",
-});
-
-const Subtitle = styled('h2', {
-  alignSelf: 'flex-start',
-  marginTop: '$4',
-  marginBottom: '$2',
-});
-
-const FormWrapper = styled('form', {
-  backgroundColor: '$slate3',
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "stretch",
-  padding: "$2",
-  borderRadius: '$1',
-  minWidth: "300px",
-  '& > * + *': {
-    marginTop: '$2',
-  },
-});
+} from '../../components';
+import { DataTable, DataTableRow, DataTableLabel, DataTableValue } from '../../components/DataTable';
+import * as format from "../../format";
+import { useAsyncEffect } from "../../hooks";
+import { styled } from '../../stitches.config';
+import { ConnectButton, useAccount, useBalance, useCanister, useContext } from "../../wallet";
 
 function parseFloat(str: string): number {
     str = str.trim();
@@ -75,7 +28,7 @@ function parseFloat(str: string): number {
     return +str;
 }
 
-function UnstakeForm() {
+export function UnstakePanel() {
   const [{ data: account }] = useAccount();
   const principal = account?.principal;
   const [{data: sticp}] = useBalance({ token: token.canisterId });
@@ -125,12 +78,12 @@ function UnstakeForm() {
         e.preventDefault();
         setShowConfirmationDialog(!!(principal && parsedAmount >= 0));
     }}>
-      <h3>Unstake</h3>
       <Input
+        prefix="stICP"
         type="text"
         name="amount" 
         value={amount ?? ""}
-        placeholder="Amount"
+        placeholder="0.0"
         onChange={(e) => {
           setAmount(e.currentTarget.value);
         }} />
@@ -184,10 +137,24 @@ function UnstakeForm() {
       ) : (
         <ConnectButton />
       )}
+      <h3>Your Withdrawals</h3>
+      <WithdrawalsList />
     </FormWrapper>
   );
 }
 
+const FormWrapper = styled('form', {
+  backgroundColor: '$slate3',
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "stretch",
+  padding: "$2",
+  borderRadius: '$1',
+  minWidth: "300px",
+  '& > * + *': {
+    marginTop: '$2',
+  },
+});
 
 const StyledSlider = styled(SliderPrimitive.Root, {
   position: 'relative',
@@ -270,6 +237,14 @@ function WithdrawalsList() {
         let ws = await depositsCanister.listWithdrawals(Principal.fromText(principal));
         setData(ws);
     }, [!!depositsCanister, principal]);
+
+    if (!principal) {
+        return (
+            <Flex css={{flexDirection: "column", justifyContent: "flex-start"}}>
+                <p>Connect your wallet to see your withdrawals.</p>
+            </Flex>
+        );
+    }
 
     if (data === null) {
         return (
@@ -446,16 +421,6 @@ function UnstakeDialog({
     </ConfirmationDialog>
   );
 }
-
-function Links() {
-  return (
-    <Flex css={{marginTop: '$4', flexDirection:"row", justifyContent: "center", alignItems:"center", padding: "$2", '& > *': {margin: '$2'}}}>
-      <a href="https://github.com/AegirFinance" title="Github"><GitHubLogoIcon /></a>
-      <a href="https://twitter.com/StakedICP" title="Twitter"><TwitterLogoIcon /></a>
-    </Flex>
-  );
-}
-
 
 function CompleteUnstakeButton({
     amount,
