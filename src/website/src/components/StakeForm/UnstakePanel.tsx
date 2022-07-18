@@ -46,6 +46,7 @@ export function UnstakePanel() {
   }, [amount]);
   const [showConfirmationDialog, setShowConfirmationDialog] = React.useState(false);
 
+  const [withdrawals, setWithdrawals] = React.useState<Withdrawal[]|null>(null);
   const [liquidityGraph, setLiquidityGraph] = React.useState<AvailableLiquidityGraph|null>(null);
 
   useAsyncEffect(async () => {
@@ -73,11 +74,30 @@ export function UnstakePanel() {
       return maxDelay;
   }, [liquidityGraph, parsedAmount]);
 
+    const depositsCanister = useCanister<Deposits>({
+        // TODO: handle missing canister id better
+        canisterId: deposits.canisterId ?? "",
+        interfaceFactory: deposits.idlFactory,
+    });
+
+    useAsyncEffect(async () => {
+        if (!depositsCanister || !principal) {
+            setWithdrawals(null);
+            return;
+        }
+        let ws = await depositsCanister.listWithdrawals(Principal.fromText(principal));
+        setWithdrawals(ws);
+    }, [!!depositsCanister, principal]);
+
+
+  const available = withdrawals?.map(w => w.available).reduce((s, a) => s+a, BigInt(0)) ?? BigInt(0);
+
   return (
     <FormWrapper onSubmit={e => {
         e.preventDefault();
         setShowConfirmationDialog(!!(principal && parsedAmount >= 0));
     }}>
+      <h3>Start Withdrawal</h3>
       <Input
         prefix="stICP"
         type="text"
@@ -137,8 +157,19 @@ export function UnstakePanel() {
       ) : (
         <ConnectButton />
       )}
-      <h3>Your Withdrawals</h3>
-      <WithdrawalsList />
+      {!principal ? (
+        <Flex css={{flexDirection: "column", justifyContent: "flex-start"}}>
+          <p>Connect your wallet to see your withdrawals.</p>
+        </Flex>
+      ) : (
+        <>
+          <h3>Pending Withdrawals</h3>
+          <PendingWithdrawalsList items={withdrawals?.filter(w => w.pending > BigInt(0))} />
+          <h3>Ready Withdrawals</h3>
+          <CompleteUnstakeButton disabled={available <= BigInt(0)} amount={available} />
+        </>
+      )}
+
     </FormWrapper>
   );
 }
@@ -222,37 +253,14 @@ function DelayStat({amount, delay}: {amount: number; delay: bigint | undefined})
     return <>{format.delay(delay).split(' ').slice(0, 2).join(' ')}</>;
 }
 
-function WithdrawalsList() {
-    const [data, setData] = React.useState<Withdrawal[] | null>(null);
-    const [{ data: account }] = useAccount();
-    const principal = account?.principal;
-    const depositsCanister = useCanister<Deposits>({
-        // TODO: handle missing canister id better
-        canisterId: deposits.canisterId ?? "",
-        interfaceFactory: deposits.idlFactory,
-    });
-
-    useAsyncEffect(async () => {
-        if (!depositsCanister || !principal) return;
-        let ws = await depositsCanister.listWithdrawals(Principal.fromText(principal));
-        setData(ws);
-    }, [!!depositsCanister, principal]);
-
-    if (!principal) {
-        return (
-            <Flex css={{flexDirection: "column", justifyContent: "flex-start"}}>
-                <p>Connect your wallet to see your withdrawals.</p>
-            </Flex>
-        );
-    }
-
-    if (data === null) {
+function PendingWithdrawalsList({items}: {items: Withdrawal[] | null | undefined}) {
+    if (!items) {
         return (
             <Flex><ActivityIndicator /></Flex>
         );
     }
 
-    if (data.length === 0) {
+    if (items.length === 0) {
         return (
             <Flex css={{flexDirection: "column", justifyContent: "flex-start"}}>
                 <p>You have no withdrawals</p>
@@ -260,53 +268,29 @@ function WithdrawalsList() {
         );
     }
 
-    const available = data.map(w => w.available).reduce((s, a) => s+a, BigInt(0));
+    const total = items.reduce((s, w) => s+w.pending, BigInt(0));
 
     return (
-        <Flex css={{flexDirection: "column-reverse", justifyContent: "flex-start", '& > *': {marginTop: '$2', marginBottom: '$2'}}}>
-            {data.map(w => {
-                let eta = w.readyAt.length > 0 ? w.readyAt[0] : w.expectedAt;
-                return (
-                    <Flex key={w.id} css={{
-                        padding: '$1 $2',
-                        backgroundColor: '$slate3',
-                        borderRadius: '$1',
-                        flexDirection: 'column',
-                        justifyContent: 'flex-start',
-                        alignItems: 'stretch',
-                        }}>
-                        <DataTable key={w.id}>
-                            <DataTableRow>
-                                <DataTableLabel>Status</DataTableLabel>
-                                <DataTableValue>{
-                                    w.disbursed === w.total
-                                        ? "Complete"
-                                        : w.pending === BigInt(0)
-                                        ? "Ready"
-                                        : "Pending"
-                                }</DataTableValue>
-                            </DataTableRow>
-                            <DataTableRow>
-                                <DataTableLabel>Total</DataTableLabel>
-                                <DataTableValue>{format.units(w.total)} ICP</DataTableValue>
-                            </DataTableRow>
-                            <DataTableRow>
-                                <DataTableLabel>ETA</DataTableLabel>
-                                {/* TODO: Better timestamp formatting. Match how we show it when depositing */}
-                                <DataTableValue>{
-                                    eta
-                                        ? <time dateTime={format.time(eta, 'UTC')}>{format.time(eta)}</time>
-                                        : '...'
-                                }</DataTableValue>
-                            </DataTableRow>
-                        </DataTable>
-                    </Flex>
-                );
-            })}
-            {available > BigInt(0) ? (
-                <CompleteUnstakeButton amount={available} />
-            ) : null}
-        </Flex>
+        <DataTable>
+            {items.map(w => (
+                <DataTableRow key={w.id}>
+                    <DataTableLabel>
+                        <time dateTime={format.time(w.expectedAt, 'UTC')}>{format.time(w.expectedAt)}</time>
+                    </DataTableLabel>
+                    <DataTableValue>{format.units(w.pending)} ICP</DataTableValue>
+                </DataTableRow>
+            ))}
+            <DataTableRow key="total" css={{
+                marginTop: '$1',
+                paddingTop: '$1',
+                borderWidth: '$1 0 0 0',
+                borderColor: '$slate6',
+                borderStyle: 'solid',
+                }}>
+                <DataTableLabel><b>Total</b></DataTableLabel>
+                <DataTableValue>{format.units(total)} ICP</DataTableValue>
+            </DataTableRow>
+        </DataTable>
     );
 }
 
@@ -424,8 +408,10 @@ function UnstakeDialog({
 
 function CompleteUnstakeButton({
     amount,
+    disabled,
 }: {
     amount: bigint;
+    disabled: boolean;
 }) {
   const { setState: setGlobalState } = useContext();
   const [{ data: account }] = useAccount();
@@ -473,7 +459,7 @@ function CompleteUnstakeButton({
   return (
     <ConfirmationDialog
       onConfirm={completeUnstake}
-      disabled={amount <= 0}
+      disabled={disabled || amount <= 0}
       button={`Transfer ${format.units(amount)} ICP`}>
       {({state, error}) => error ? (
         <>
