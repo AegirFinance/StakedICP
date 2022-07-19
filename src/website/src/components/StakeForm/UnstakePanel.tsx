@@ -8,13 +8,17 @@ import { getBackendActor }  from '../../agent';
 import {
   ActivityIndicator,
   ConfirmationDialog,
+  DataTable,
+  DataTableLabel,
+  DataTableRow,
+  DataTableValue ,
   DialogDescription,
   DialogTitle,
   Flex,
   HelpDialog,
   Input,
+  STICPLogo,
 } from '../../components';
-import { DataTable, DataTableRow, DataTableLabel, DataTableValue } from '../../components/DataTable';
 import * as format from "../../format";
 import { useAsyncEffect } from "../../hooks";
 import { styled } from '../../stitches.config';
@@ -99,7 +103,9 @@ export function UnstakePanel() {
     }}>
       <h3>Start Withdrawal</h3>
       <Input
-        prefix="stICP"
+        prefix={
+          <Flex css={{flexDirection: "row", alignItems: "center", "* + *": { marginLeft: '$2' }}}><STICPLogo height="24px" /><span>stICP</span></Flex>
+        }
         type="text"
         name="amount" 
         value={amount ?? ""}

@@ -6,8 +6,11 @@ import {
   DataTableRow,
   DataTableValue,
   DialogDescription, DialogTitle,
+  Flex,
   HelpDialog,
+  ICPLogo,
   Input,
+  STICPLogo,
 } from '../index';
 import { styled } from '../../stitches.config';
 import * as deposits from "../../../../declarations/deposits";
@@ -47,7 +50,9 @@ export function StakePanel() {
         setShowTransferDialog(!!(principal && stake >= MINIMUM_DEPOSIT));
     }}>
       <Input
-        prefix="ICP"
+        prefix={
+          <Flex css={{flexDirection: "row", alignItems: "center", "* + *": { marginLeft: '$2' }}}><ICPLogo height="24px" /><span>ICP</span></Flex>
+        }
         type="text"
         name="amount" 
         value={amount ?? ""}
@@ -58,7 +63,9 @@ export function StakePanel() {
       <h5 style={{marginBottom: '0.75rem'}}>You will receive</h5>
       <Input
         disabled
-        prefix="stICP"
+        prefix={
+          <Flex css={{flexDirection: "row", alignItems: "center", "* + *": { marginLeft: '$2' }}}><STICPLogo height="24px" /><span>stICP</span></Flex>
+        }
         type="text"
         name="receive"
         value={stake >= MINIMUM_DEPOSIT ? stake - FEE : 0}

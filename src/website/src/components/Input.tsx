@@ -1,7 +1,7 @@
 import React from "react";
 import { styled } from "../stitches.config";
 
-export type InputParams = Parameters<typeof Element>[0] & {
+export type InputParams = Omit<Parameters<typeof Element>[0], "prefix"> & {
     prefix?: React.ReactNode;
 };
 
