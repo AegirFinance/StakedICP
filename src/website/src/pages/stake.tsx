@@ -1,7 +1,6 @@
 import * as Accordion from '@radix-ui/react-accordion';
 import { ChevronDownIcon, GitHubLogoIcon, TwitterLogoIcon } from '@radix-ui/react-icons';
 import {
-  APR,
   Code,
   Flex,
   Header,
@@ -17,14 +16,16 @@ export function Stake() {
       <Layout>
         <Header />
         <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
-          <APR />
+          <Statistics />
+        </Flex>
+        <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
+          <StakeForm />
+        </Flex>
+        <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
           <Features />
         </Flex>
         <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
           <div>
-            <StakeForm />
-            <Subtitle>Statistics</Subtitle>
-            <Statistics />
             <Subtitle>FAQ</Subtitle>
             <FAQ />
             <Links />
@@ -306,7 +307,7 @@ const AccordionRoot = styled(Accordion.Root, {
 
 const AccordionItem = styled(Accordion.Item, {
   overflow: 'hidden',
-  backgroundColor: '$slate3',
+  backgroundColor: '$slate1',
   marginBottom: '$2',
   padding: '$2',
   borderRadius: '$1',

@@ -1,6 +1,5 @@
 export * from "./ActivityIndicator";
 export * from "./AlertDialog";
-export * from "./APR";
 export * from "./Button";
 export * from "./Code";
 export * from "./ConfirmationDialog";

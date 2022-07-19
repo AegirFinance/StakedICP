@@ -29,7 +29,7 @@ const Nav = styled('nav', {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "baseline",
-    background: '$slate3',
+    background: '$slate1',
     padding: '$1',
     borderRadius: '$1',
 });

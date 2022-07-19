@@ -175,11 +175,11 @@ export function UnstakePanel() {
 }
 
 const FormWrapper = styled('form', {
-  backgroundColor: '$slate3',
+  backgroundColor: '$slate1',
   display: "flex",
   flexDirection: "column",
   alignItems: "stretch",
-  padding: "$2",
+  padding: "$4",
   borderRadius: '$1',
   minWidth: "300px",
   '& > * + *': {
