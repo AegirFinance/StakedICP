@@ -111,7 +111,7 @@ export function UnstakePanel() {
         disabled={!principal || sticp === undefined}
         value={[Math.min(Number((parsedAmount ?? 0) * 100_000_000), Number(sticp?.value ?? BigInt(0)))]}
         min={0}
-        max={Number(sticp?.value ?? BigInt(0))}
+        max={Number(sticp?.value ?? BigInt(100))}
         step={1}
         onValueChange={ns => {
             setAmount((ns[0] / 100_000_000).toFixed(sticp?.decimals ?? 8));
