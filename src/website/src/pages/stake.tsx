@@ -18,10 +18,10 @@ export function Stake() {
         <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
           <Statistics />
         </Flex>
-        <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
+        <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2", marginBottom: '$16'}}>
           <StakeForm />
         </Flex>
-        <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
+        <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2", backgroundColor: '$slate1', zIndex: 999, position: 'relative', marginBottom: '$8'}}>
           <Features />
         </Flex>
         <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>

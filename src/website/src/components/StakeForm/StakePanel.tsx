@@ -114,6 +114,7 @@ const FormWrapper = styled('form', {
   padding: "$4",
   borderRadius: '$1',
   minWidth: "300px",
+  boxShadow: '$large',
   '& > * + *': {
     marginTop: '$2',
   },

@@ -117,6 +117,7 @@ const Item = styled(Flex, {
   flexDirection: 'column',
   alignItems: 'stretch',
   whiteSpace: 'nowrap',
+  boxShadow: '$medium',
   '& h5': {
     display: 'flex',
     flexDirection: 'row',

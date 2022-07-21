@@ -28,7 +28,12 @@ const Wrapper = styled('label', {
     flexDirection: 'row',
     justifyContent: 'stretch',
     alignItems: 'stretch',
+    boxShadow: '$input',
     '&:hover': {
+        borderColor: '$slate8',
+    },
+    '&:focus': {
+        boxShadow: '$inputFocus',
         borderColor: '$slate8',
     },
     '&:active': {

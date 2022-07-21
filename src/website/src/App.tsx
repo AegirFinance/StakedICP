@@ -8,6 +8,9 @@ import { Provider as WalletProvider } from "./wallet";
 import * as Pages from "./pages";
 
 const globalStyles = globalCss({
+  ':root': {
+      webkitFontSmoothing: 'antialiased',
+  },
   '@font-face': {
     fontFamily: 'Manrope',
     src: "url('https://fonts.googleapis.com/css2?family=Manrope:wght@200;400;800&display=swap')",
@@ -21,7 +24,7 @@ const globalStyles = globalCss({
   },
   'body': {
     backgroundColor: '$slate1',
-  }
+  },
 });
 
 export default function App() {

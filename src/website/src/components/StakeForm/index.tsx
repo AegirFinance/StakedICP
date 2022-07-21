@@ -32,6 +32,7 @@ const Nav = styled('nav', {
     background: '$slate1',
     padding: '$1',
     borderRadius: '$1',
+    boxShadow: '$large',
 });
 
 const Item = styled('a', {
