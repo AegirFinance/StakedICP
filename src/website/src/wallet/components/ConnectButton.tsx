@@ -1,5 +1,6 @@
 import React, { SVGProps } from "react";
 import { Button, Flex } from "../../components";
+import * as format from "../../format";
 import { styled } from '../../stitches.config';
 import { useAccount, useConnect } from "../hooks";
 
@@ -20,7 +21,7 @@ export function ConnectButton({
         marginLeft: '0.75rem',
       }}}>
         <Button disabled>
-          {shortPrincipal(account?.principal)}
+          {format.shortPrincipal(account?.principal)}
         </Button>
 
         <Button variant="error" onClick={() => {
@@ -40,15 +41,6 @@ export function ConnectButton({
       </div>
     </PlugConnectButton>
   );
-}
-
-function shortPrincipal(w: any): string {
-  const wstr = `${w}`;
-  const arr = wstr.split('-')
-  if (arr.length <= 1) {
-    return "";
-  }
-  return `${arr[0]}...${arr.slice(-1)[0]}`;
 }
 
 const PlugConnectButton = styled('button', {

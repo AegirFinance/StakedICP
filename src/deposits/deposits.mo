@@ -815,7 +815,28 @@ shared(init_msg) actor class Deposits(args: {
         if (msg.caller != user) {
             owners.require(msg.caller);
         };
-        switch (Account.fromText(to)) {
+
+        // Try to parse as an address
+        let parsed = switch (Account.fromText(to)) {
+            case (#err(_)) {
+                // Try to parse as a principal
+                try {
+                    #ok(Account.fromPrincipal(Principal.fromText(to), Account.defaultSubaccount()))
+                } catch (error) {
+                    #err("Invalid Address")
+                };
+            };
+            case (#ok(toAddress)) {
+                if (Account.validateAccountIdentifier(toAddress)) {
+                    #ok(toAddress)
+                } else {
+                    #err("Invalid Address")
+                }
+            };
+        };
+
+        // See if we got a valid address to send to
+        switch (parsed) {
             case (#err(_)) {
                 #err(#InvalidAddress)
             };

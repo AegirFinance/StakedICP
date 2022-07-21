@@ -57,6 +57,15 @@ function getMultiplier(decimals: BigNumberish): string {
     throw new Error(`invalid decimal size: ${decimals}`);
 }
 
+export function shortPrincipal(w: any): string {
+  const wstr = `${w}`;
+  const arr = wstr.split('-')
+  if (arr.length <= 1) {
+    return "";
+  }
+  return `${arr[0]}...${arr.slice(-1)[0]}`;
+}
+
 export function time(nanoseconds: bigint, timeZone?: string): string {
     const d = new Date(Number(nanoseconds/BigInt(1_000_000)));
     return new Intl.DateTimeFormat(

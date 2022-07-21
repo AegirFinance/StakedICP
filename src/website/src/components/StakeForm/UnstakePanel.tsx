@@ -94,7 +94,7 @@ export function UnstakePanel() {
     }, [!!depositsCanister, principal]);
 
 
-  const available = withdrawals?.map(w => w.available).reduce((s, a) => s+a, BigInt(0)) ?? BigInt(0);
+  const available = withdrawals?.map(w => w.available).reduce((s, a) => s+a, BigInt(0));
 
   return (
     <FormWrapper onSubmit={e => {
@@ -172,7 +172,9 @@ export function UnstakePanel() {
           <h3>Pending Withdrawals</h3>
           <PendingWithdrawalsList items={withdrawals?.filter(w => w.pending > BigInt(0))} />
           <h3>Ready Withdrawals</h3>
-          <CompleteUnstakeButton disabled={available <= BigInt(0)} amount={available} />
+          {available === undefined
+            ? <ActivityIndicator />
+            : <CompleteUnstakeButton disabled={available <= BigInt(0)} amount={available} />}
         </>
       )}
 
@@ -444,15 +446,13 @@ function CompleteUnstakeButton({
     if (amount < BigInt(MINIMUM_WITHDRAWAL*100_000_000)) {
       throw new Error(`Minimum withdrawal is ${MINIMUM_WITHDRAWAL} ICP`);
     }
-    if (!to) {
-      throw new Error("Destination address missing");
-    }
     if (!depositsCanister) {
       throw new Error("Deposits canister missing");
     }
+    ;
 
 
-    const result = await depositsCanister.completeWithdrawal(Principal.fromText(principal), amount, to);
+    const result = await depositsCanister.completeWithdrawal(Principal.fromText(principal), amount, to || principal);
     if ('err' in result && result.err) {
       throw new Error(format.withdrawalsError(result.err));
     } else if (!('ok' in result) || !result.ok) {
@@ -477,12 +477,12 @@ function CompleteUnstakeButton({
         <>
           <DialogTitle>Destination</DialogTitle>
           <DialogDescription css={{display: "flex", flexDirection: "column", alignItems: "stretch"}}>
-            <p>Please enter the destination account to receive the ICP:</p>
+            <p>Please enter the destination address or principal to receive the ICP:</p>
             <Input
               type="text"
               name="to" 
               value={to ?? ""}
-              placeholder="Address"
+              placeholder={`${format.shortPrincipal(principal)} (default)`}
               onChange={(e) => {
                   // TODO: Validate it is a real address here.
                   setTo(e.currentTarget.value);
