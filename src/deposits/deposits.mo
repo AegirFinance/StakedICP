@@ -339,12 +339,10 @@ shared(init_msg) actor class Deposits(args: {
         };
 
         // Flush pending deposits
-        // TODO: do something with the errors here
         let tokenE8s = Nat64.fromNat((await token.getMetadata()).totalSupply);
         let flushResult = await flushPendingDeposits(tokenE8s);
         let refreshResult = await staking.refreshAll();
 
-        // TODO: Figure out withdrawal neuron splitting here.
         // merge the maturity for dissolving neurons
         let mergeDissolvingResult = await withdrawals.mergeMaturity();
         // figure out how much we have dissolving for withdrawals
@@ -360,7 +358,6 @@ shared(init_msg) actor class Deposits(args: {
                 };
                 case (#ok(newNeurons)) {
                     // Pass the new neurons into the withdrawals manager.
-                    // TODO: Handle errors adding neurons.
                     ?(await withdrawals.addNeurons(newNeurons));
                 };
             };

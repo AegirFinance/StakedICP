@@ -21,7 +21,7 @@ import Governance "../governance/Governance";
 import Ledger "../ledger/Ledger";
 
 module {
-    let minimumStake: Nat64 = 100_000_000;
+    public let minimumStake: Nat64 = 100_000_000;
     let icpFee: Nat64 = 10_000;
     let yearSeconds: Int = 31_557_600;
 
@@ -212,13 +212,22 @@ module {
         };
 
         // splitNeurons attempts to split off enough new dissolving neurons to
-        // make "amount" liquidity available.
+        // make sure that at least "amount" liquidity will become available.
         public func splitNeurons(e8s: Nat64): async Result.Result<[Neurons.Neuron], Neurons.NeuronsError> {
-            // Sort by shortest dissolve delay
+            if (e8s == 0) {
+                return #ok([]);
+            };
+
+            // Sort by shortest dissolve delay. We'll split off the shorter
+            // neurons first, so that withdrawals are processed faster, and any
+            // deposit/withdrawal churn is confined to short-term neurons,
+            // allowing longer-term liquidity to maximize earning.
             let neurons = Array.sort(Iter.toArray(stakingNeurons.vals()), compareDissolveDelay);
 
             // Split as much as we can off each, until we are satisfied
-            var remaining = e8s;
+            // To ensure at minimum e8s liquidity will be split, we must do at
+            // least one split. The smallest split we can do it "minimumStake".
+            var remaining = Nat64.max(e8s, minimumStake);
             let toSplit = Buffer.Buffer<(Nat64, Nat64)>(0);
             for (n in neurons.vals()) {
                 // Filter out any we can't split (balance < 2icp+fee)
@@ -234,7 +243,7 @@ module {
                 return #err(#InsufficientStake);
             };
 
-            // Do the splits and find the new neurons.
+            // Do the splits on the nns and find the new neurons.
             let newNeurons = Buffer.Buffer<Neurons.Neuron>(toSplit.size());
             for ((id, amount) in toSplit.vals()) {
                 switch (await args.neurons.split(id, amount+icpFee)) {
