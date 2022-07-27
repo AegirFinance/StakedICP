@@ -813,34 +813,35 @@ shared(init_msg) actor class Deposits(args: {
             owners.require(msg.caller);
         };
 
-        // Try to parse as an address
-        let parsed = switch (Account.fromText(to)) {
+        // See if we got a valid address to send to
+        switch (await parseAddress(to)) {
+            case (null) {
+                #err(#InvalidAddress)
+            };
+            case (?toAddress) {
+                await withdrawals.disburse(user, amount, toAddress);
+            }
+        }
+    };
+
+    private func parseAddress(to: Text): async ?Account.AccountIdentifier {
+        switch (Account.fromText(to)) {
             case (#err(_)) {
                 // Try to parse as a principal
                 try {
-                    #ok(Account.fromPrincipal(Principal.fromText(to), Account.defaultSubaccount()))
+                    ?Account.fromPrincipal(Principal.fromText(to), Account.defaultSubaccount())
                 } catch (error) {
-                    #err("Invalid Address")
+                    null
                 };
             };
             case (#ok(toAddress)) {
                 if (Account.validateAccountIdentifier(toAddress)) {
-                    #ok(toAddress)
+                    ?toAddress
                 } else {
-                    #err("Invalid Address")
+                    null
                 }
             };
         };
-
-        // See if we got a valid address to send to
-        switch (parsed) {
-            case (#err(_)) {
-                #err(#InvalidAddress)
-            };
-            case (#ok(toAddress)) {
-                await withdrawals.disburse(user, amount, toAddress);
-            }
-        }
     };
 
     public shared(msg) func listWithdrawals(user: Principal) : async [Withdrawals.Withdrawal] {

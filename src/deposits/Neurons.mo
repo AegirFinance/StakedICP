@@ -181,7 +181,6 @@ module {
             for ((id, maturity) in (await maturities(ids)).vals()) {
                 if (maturity > icpFee) {
                     b.add(await mergeMaturity(id, percentage));
-                    // TODO: Check the proposals were successful
                 };
             };
             return b.toArray();
