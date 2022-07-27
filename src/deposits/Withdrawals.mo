@@ -321,8 +321,6 @@ module {
         };
 
         // Disburse and/or create dissolving neurons such that account will receive (now or later) amount_e8s.
-        // TODO: Merge maturity on any dissolving neurons which have pending maturity.
-        // TODO: Call this in the heartbeat function
         public func disburseNeurons(account_id : Account.AccountIdentifier): async Neurons.Nat64Result {
             let now = Time.now();
 
@@ -381,7 +379,7 @@ module {
             var remaining : Nat64 = amount;
             var b = Buffer.Buffer<(Nat64, Withdrawal)>(1);
             for (w in withdrawalsFor(user).vals()) {
-                if (remaining > 0 and w.pending == 0 and w.available > 0) {
+                if (remaining > 0 and w.available > 0) {
                     let applied = Nat64.min(w.available, remaining);
                     b.add((applied, w));
                     remaining -= applied;
@@ -405,9 +403,8 @@ module {
             });
             switch (transfer) {
                 case (#Ok(block)) {
-                    // Mark these withdrawals as disbursed.
+                    // Update these withdrawal balances.
                     for ((applied, w) in b.vals()) {
-                        // TODO: Check this updates them in the original array
                         let disbursedAt = if (w.disbursed + applied == w.total) {
                             ?now
                         } else {
