@@ -311,42 +311,6 @@ module {
             };
         };
 
-        // Attempt to disburse a neuron
-        public func disburse(id: Nat64, account: Account.AccountIdentifier): async Nat64Result {
-            let neuron = await refresh(id);
-            switch (neuron) {
-                case (#err(err)) {
-                    return #err(err);
-                };
-                case (#ok(neuron)) {
-                    let title = "Disburse Neuron" # Nat64.toText(id);
-                    let proposal = await propose({
-                        url = "https://stakedicp.com";
-                        title = ?title;
-                        action = ?#ManageNeuron({
-                            id = null;
-                            command = ?#Disburse({
-                                // TODO: Test this hash thing goes to the right account here
-                                to_account = ?{ hash = Blob.toArray(account) };
-                                amount = ?{ e8s = neuron.cachedNeuronStakeE8s };
-                            });
-                            neuron_id_or_subaccount = ?#NeuronId({ id = id });
-                        });
-                        summary = title;
-                    });
-                    switch (proposal) {
-                        case (#err(err)) {
-                            return #err(err);
-                        };
-                        case (#ok(_)) {
-                            // TODO: Is the icpFee subtracted here?
-                            return #ok(neuron.cachedNeuronStakeE8s - icpFee);
-                        };
-                    };
-                };
-            };
-        };
-
         public func preupgrade(): ?UpgradeData {
             return ?#v1({
                 governance = args.governance;

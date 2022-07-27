@@ -95,7 +95,6 @@ shared(init_msg) actor class Deposits(args: {
 
     type DailyHeartbeatResponse = {
         #Ok : ({
-            disburse: Neurons.Nat64Result;
             apply: Result.Result<ApplyInterestResult, Neurons.NeuronsError>;
             mergeStaked: ?[Neurons.NeuronResult];
             mergeDissolving: [Neurons.NeuronResult];
@@ -315,6 +314,20 @@ shared(init_msg) actor class Deposits(args: {
         result
     };
 
+    // List all neurons ready for disbursal. We will disburse them into the
+    // deposit canister's default account, like it is a new deposit.
+    // flushPendingDeposits will then route it to the right place.
+    public shared(msg) func listNeuronsToDisburse(): async Result.Result<[Neurons.Neuron], Neurons.NeuronsError> {
+        owners.require(msg.caller);
+        await withdrawals.listNeuronsToDisburse()
+    };
+
+    // Once we've disbursed them, remove them from the withdrawals neuron tracking
+    public shared(msg) func removeDisbursedNeurons(ids: [Nat64]): async [Neurons.Neuron] {
+        owners.require(msg.caller);
+        withdrawals.removeDisbursedNeurons(ids)
+    };
+
     public shared(msg) func manualHeartbeat(when: ?Time.Time): async DailyHeartbeatResponse {
         owners.require(msg.caller);
         await dailyHeartbeat(when)
@@ -322,11 +335,6 @@ shared(init_msg) actor class Deposits(args: {
 
     // called every day by the heartbeat function.
     private func dailyHeartbeat(when: ?Time.Time) : async DailyHeartbeatResponse {
-        // Disburse all we can from our dissolved neurons. This will add it
-        // into our main account, like it is a new deposit.
-        // flushPendingDeposits will then route it to the right place.
-        let disburseResult = await withdrawals.disburseNeurons(accountIdBlob());
-
         // Merge the interest
         let interest = await stakingNeuronMaturityE8s();
         let (applyInterestResult, mergeStakedResult): (Result.Result<ApplyInterestResult, Neurons.NeuronsError>, ?[Neurons.NeuronResult]) = if (interest <= 10_000) {
@@ -366,7 +374,6 @@ shared(init_msg) actor class Deposits(args: {
         };
 
         #Ok({
-            disburse = disburseResult;
             apply = applyInterestResult;
             mergeStaked = mergeStakedResult;
             mergeDissolving = mergeDissolvingResult;

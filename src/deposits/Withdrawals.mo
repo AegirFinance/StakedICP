@@ -154,6 +154,10 @@ module {
             };
         };
 
+        public func listNeurons(): [Neurons.Neuron] {
+            Iter.toArray(dissolving.vals())
+        };
+
         public func addNeurons(ns: [Neurons.Neuron]): async Result.Result<[Neurons.Neuron], Neurons.NeuronsError> {
             let newNeurons = Buffer.Buffer<Neurons.Neuron>(ns.size());
             for (n in ns.vals()) {
@@ -305,10 +309,10 @@ module {
         };
 
         // Disburse and/or create dissolving neurons such that account will receive (now or later) amount_e8s.
-        public func disburseNeurons(account_id : Account.AccountIdentifier): async Neurons.Nat64Result {
+        public func listNeuronsToDisburse(): async Result.Result<[Neurons.Neuron], Neurons.NeuronsError> {
             let now = Time.now();
 
-            var disbursed: Nat64 = 0;
+            let ns = Buffer.Buffer<Neurons.Neuron>(0);
             for (neuron in dissolving.vals()) {
                 let isDissolved = switch (neuron.dissolveState) {
                     case (?#DissolveDelaySeconds(delay)) {
@@ -339,21 +343,27 @@ module {
                 };
 
                 if (isDissolved) {
-                    switch (await args.neurons.disburse(neuron.id, account_id)) {
-                        case (#err(err)) {
-                            return #err(err);
-                        };
-                        case (#ok(amount)) {
-                            disbursed += amount;
-                            dissolving.delete(Nat64.toText(neuron.id));
-                        };
-                    };
+                    ns.add(neuron);
                 };
             };
 
-            return #ok(disbursed);
+            return #ok(ns.toArray());
         };
 
+        public func removeDisbursedNeurons(ids: [Nat64]): [Neurons.Neuron] {
+            let ns = Buffer.Buffer<Neurons.Neuron>(ids.size());
+            for (id in ids.vals()) {
+                let key = Nat64.toText(id);
+                switch (dissolving.get(key)) {
+                    case (null) {};
+                    case (?n) {
+                        ns.add(n);
+                        dissolving.delete(key);
+                    };
+                }
+            };
+            ns.toArray()
+        };
 
         // Transfer unlocked ICP in complete withdrawals to an address
         public func disburse(user: Principal, amount: Nat64, to: Account.AccountIdentifier): async PayoutResult {
