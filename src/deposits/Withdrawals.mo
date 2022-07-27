@@ -81,26 +81,10 @@ module {
     public type WithdrawalResult = Result.Result<Withdrawal, WithdrawalsError>;
     public type PayoutResult = Result.Result<Ledger.BlockIndex, WithdrawalsError>;
 
-    type WithdrawalHeapEntry = {
+    type WithdrawalQueueEntry = {
         id: Text;
         createdAt: Time.Time;
     };
-
-    // func heapToArray<T>(root: Heap.Heap<T>): [T] {
-    //     var q = Deque.pushBack(Deque.empty<Heap.Tree<T>>(), root.share());
-    //     var b = Buffer.Buffer<T>(1);
-    //     for {
-    //         switch (q.popFront()) {
-    //             case (null) {};
-    //             case (?(_, x, l, r)) {
-    //                 b.add(x);
-    //                 q := Deque.pushBack(q, l);
-    //                 q := Deque.pushBack(q, r);
-    //             };
-    //         };
-    //     };
-    //     b.toArray()
-    // };
 
     public class Manager(args: {
         token: Principal;
@@ -113,7 +97,7 @@ module {
         private let ledger: Ledger.Self = actor(Principal.toText(args.ledger));
         private var dissolving = TrieMap.TrieMap<Text, Neurons.Neuron>(Text.equal, Text.hash);
         private var withdrawals = TrieMap.TrieMap<Text, Withdrawal>(Text.equal, Text.hash);
-        private var pendingWithdrawals = Deque.empty<WithdrawalHeapEntry>();
+        private var pendingWithdrawals = Deque.empty<WithdrawalQueueEntry>();
         private var withdrawalsByUser = TrieMap.TrieMap<Principal, Buffer.Buffer<Text>>(Principal.equal, Principal.hash);
 
         // Tell the main contract how much icp to keep on-hand
