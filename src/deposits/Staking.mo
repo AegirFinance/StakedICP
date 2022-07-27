@@ -132,8 +132,6 @@ module {
             await args.neurons.maturities(ids())
         };
 
-        // TODO: How do we take our cut here?
-        // TODO: Move this to the new StakingManager module and use mergeMaturity above
         public func mergeMaturity(percentage: Nat32): async [Neurons.NeuronResult] {
             let merges = await args.neurons.mergeMaturities(ids(), percentage);
             for (m in merges.vals()) {
