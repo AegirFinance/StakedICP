@@ -42,7 +42,7 @@ module {
 
     // The StakingManager manages our staking. Specifically, the staking
     // neurons, routing deposits to the neurons, merging maturity, and
-    // splitting new neurons off to be dissolved.
+    // splitting new neurons off to be dissolved for withdrawals.
     public class Manager(args: {
         governance: Principal;
         neurons: Neurons.Manager;
@@ -60,6 +60,7 @@ module {
             return {};
         };
 
+        // Lists the staking neurons
         public func list(): [{ id : Governance.NeuronId ; accountId : Text }] {
             let b = Buffer.Buffer<{ id : Governance.NeuronId ; accountId : Text }>(stakingNeurons.size());
             for (neuron in stakingNeurons.vals()) {
@@ -71,7 +72,7 @@ module {
             return b.toArray();
         };
 
-        // balances is the balances of the staking neurons
+        // Balances is the balances of the staking neurons
         public func balances(): [(Nat64, Nat64)] {
             let b = Buffer.Buffer<(Nat64, Nat64)>(stakingNeurons.size());
             for (neuron in stakingNeurons.vals()) {
@@ -96,6 +97,7 @@ module {
             })
         };
 
+        // Get the ids of the staking neurons
         public func ids(): [Nat64] {
             Iter.toArray(Iter.map(
                 stakingNeurons.vals(),
@@ -103,6 +105,9 @@ module {
             ))
         };
 
+        // Refresh all neurons, fetching current data from the NNS. This is
+        // needed e.g. if we have transferred more ICP into a staking neuron,
+        // to update the cached balances.
         public func refreshAll(): async ?Neurons.NeuronsError {
             for (id in ids().vals()) {
                 switch (await addOrRefresh(id)) {
@@ -128,10 +133,12 @@ module {
             };
         };
 
+        // Return the maturities available for each neuron.
         public func maturities(): async [(Nat64, Nat64)] {
             await args.neurons.maturities(ids())
         };
 
+        // Merge a percentage of maturity on all staking neurons
         public func mergeMaturity(percentage: Nat32): async [Neurons.NeuronResult] {
             let merges = await args.neurons.mergeMaturities(ids(), percentage);
             for (m in merges.vals()) {
@@ -145,10 +152,12 @@ module {
             merges
         };
 
+        // helper to allow sorting neurons by balance
         func compareBalance(a: Neurons.Neuron, b: Neurons.Neuron): Order.Order {
             Nat64.compare(a.cachedNeuronStakeE8s, b.cachedNeuronStakeE8s)
         };
 
+        // helper to allow sorting neurons by dissolve delay
         func compareDissolveDelay(a: Neurons.Neuron, b: Neurons.Neuron): Order.Order {
             Int.compare(Neurons.dissolveDelay(a), Neurons.dissolveDelay(b))
         };
@@ -162,7 +171,7 @@ module {
         };
 
         // depositIcp takes an amount of e8s to deposit, and returns a list of
-        // transfers to make.
+        // transfers to make, routing the deposit ICP to the staking neurons.
         public func depositIcp(totalE8s: Nat64, newE8s: Nat64, fromSubaccount: ?Account.Subaccount): [Ledger.TransferArgs] {
             if (newE8s <= minimumStake) {
                 return [];
@@ -211,6 +220,8 @@ module {
 
         // splitNeurons attempts to split off enough new dissolving neurons to
         // make sure that at least "amount" liquidity will become available.
+        // This is used to ensure there is at least enough ICP dissolving in
+        // the ICP to eventually fulfill all pending deposits.
         public func splitNeurons(e8s: Nat64): async Result.Result<[Neurons.Neuron], Neurons.NeuronsError> {
             if (e8s == 0) {
                 return #ok([]);
@@ -255,6 +266,8 @@ module {
             };
             return #ok(newNeurons.toArray());
         };
+
+        // ===== UPGRADE FUNCTIONS =====
 
         public func preupgrade(): ?UpgradeData {
             return ?#v1({

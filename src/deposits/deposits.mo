@@ -33,6 +33,9 @@ import Governance "../governance/Governance";
 import Ledger "../ledger/Ledger";
 import Token "../DIP20/motoko/src/token";
 
+// The deposits canister is the main backend canister for StakedICP. It
+// forwards calls to several submodules, and manages daily recurring jobs via
+// heartbeats.
 shared(init_msg) actor class Deposits(args: {
     governance: Principal;
     ledger: Principal;
@@ -41,18 +44,22 @@ shared(init_msg) actor class Deposits(args: {
     owners: [Principal];
     stakingNeuron: ?{ id : { id : Nat64 }; accountId : Text };
 }) = this {
+    // Referrals subsystem
     private let referralTracker = Referrals.Tracker();
     private stable var stableReferralData : ?Referrals.UpgradeData = null;
 
+    // Proposal-based neuron management subsystem
     private let neurons = Neurons.Manager({ governance = args.governance });
     private stable var stableNeuronsData : ?Neurons.UpgradeData = null;
 
+    // Staking management subsystem
     private let staking = Staking.Manager({
         governance = args.governance;
         neurons = neurons;
     });
     private stable var stableStakingData : ?Staking.UpgradeData = null;
 
+    // Withdrawals management subsystem
     private let withdrawals = Withdrawals.Manager({
         token = args.token;
         ledger = args.ledger;
@@ -193,6 +200,9 @@ shared(init_msg) actor class Deposits(args: {
         sum
     };
 
+    // Idempotently add a neuron to the tracked staking neurons. The neurons
+    // added here must be manageable by the proposal neuron. The starting
+    // balance will be minted as stICP to the canister's token account.
     public shared(msg) func addStakingNeuron(id: Nat64): async Neurons.NeuronResult {
         owners.require(msg.caller);
         let isNew = Option.isNull(Array.find(staking.ids(), func(haystack: Nat64): Bool { haystack == id }));
@@ -251,6 +261,8 @@ shared(init_msg) actor class Deposits(args: {
         // TODO: Add neurons metrics
     };
 
+    // Expose metrics to track canister performance, and behaviour. These are
+    // ingested and served by the "metrics" canister.
     public shared(msg) func metrics() : async Metrics {
         if (not owners.is(msg.caller)) {
             switch (metricsCanister) {
@@ -301,11 +313,12 @@ shared(init_msg) actor class Deposits(args: {
 
     // ===== INTEREST FUNCTIONS =====
 
+    // helper to short ApplyInterestResults
     private func sortInterestByTime(a: ApplyInterestResult, b: ApplyInterestResult): Order.Order {
       Int.compare(a.timestamp, b.timestamp)
     };
 
-    // Buffers have not sort, implement it ourselves.
+    // Buffers don't have sort, implement it ourselves.
     private func sortBuffer<A>(buf: Buffer.Buffer<A>, cmp: (A, A) -> Order.Order): Buffer.Buffer<A> {
         let result = Buffer.Buffer<A>(buf.size());
         for (x in Array.sort(buf.toArray(), cmp).vals()) {
@@ -328,6 +341,9 @@ shared(init_msg) actor class Deposits(args: {
         withdrawals.removeDisbursedNeurons(ids)
     };
 
+    // In case there was an issue with the automatic daily heartbeat, the
+    // canister owner can call it manually. Repeated calling should be
+    // effectively idempotent.
     public shared(msg) func manualHeartbeat(when: ?Time.Time): async DailyHeartbeatResponse {
         owners.require(msg.caller);
         await dailyHeartbeat(when)
@@ -383,6 +399,7 @@ shared(init_msg) actor class Deposits(args: {
         })
     };
 
+    // Distribute newly earned interest to token holders.
     private func applyInterest(interest: Nat64, when: ?Time.Time) : async (Nat64, ApplyInterestResult) {
         let now = Option.get(when, Time.now());
 
@@ -398,13 +415,12 @@ shared(init_msg) actor class Deposits(args: {
         return (percentage, result);
     };
 
+    // Use new incoming deposits to attempt to rebalance the buckets, where
+    // "the buckets" are:
+    // - pending withdrawals
+    // - ICP in the canister
+    // - staking neurons
     private func flushPendingDeposits(tokenE8s: Nat64): async [Ledger.TransferResult] {
-        // Basically this is: "use incoming deposits to attempt to rebalance
-        // the buckets", where "the buckets" are:
-        // - pending withdrawals
-        // - cash on hand
-        // - staking neurons
-
         var balance = await availableBalance();
         if (balance == 0) {
             return [];
@@ -434,6 +450,7 @@ shared(init_msg) actor class Deposits(args: {
         return await token.getHolders(0, info.holderNumber*2);
     };
 
+    // Calculate shares owed and distribute interest to token holders.
     private func applyInterestToToken(now: Time.Time, interest: Nat): async ApplyInterestResult {
         let nextHolders = await getAllHolders();
         let holders = Option.get(snapshot, nextHolders);
@@ -561,6 +578,8 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
+    // Recalculate and update the cached mean interest for the last 7 days.
+    //
     // 1 microbip is 0.000000001%
     // convert the result to apy % with:
     // (((1+(aprMicrobips / 100_000_000))^365.25) - 1)*100
@@ -577,7 +596,7 @@ shared(init_msg) actor class Deposits(args: {
         // supply.before should always be > 0, because initial supply is 1, but...
         assert(last.supply.before.e8s > 0);
 
-        // 7 days from the last time we applied interest, truncated to the utc day start.
+        // 7 days from the last time we applied interest, truncated to the utc Day start.
         let start = ((last.timestamp - (day * 6)) / day) * day;
 
         // sum all interest applications that are in that period.
@@ -608,6 +627,7 @@ shared(init_msg) actor class Deposits(args: {
         Debug.print("meanAprMicrobips: " # debug_show(meanAprMicrobips));
     };
 
+    // Getter for the current APR in microbips
     public query func aprMicrobips() : async Nat64 {
         return meanAprMicrobips;
     };
@@ -620,6 +640,7 @@ shared(init_msg) actor class Deposits(args: {
         earned: Nat;
     };
 
+    // Get a user's current referral stats. Used for the "Rewards" page.
     public shared(msg) func getReferralStats(): async ReferralStats {
         let stats = referralTracker.getStats(msg.caller);
         return {
@@ -631,13 +652,16 @@ shared(init_msg) actor class Deposits(args: {
 
     // ===== DEPOSIT FUNCTIONS =====
 
-    // Return the account ID specific to this user's subaccount
+    // Return the account ID specific to this user's subaccount. This is the
+    // address where the user should transfer their deposit ICP.
     public shared(msg) func getDepositAddress(code: ?Text): async Text {
         Debug.print("[Referrals.touch] user: " # debug_show(msg.caller) # ", code: " # debug_show(code));
         referralTracker.touch(msg.caller, code);
         Account.toText(Account.fromPrincipal(Principal.fromActor(this), Account.principalToSubaccount(msg.caller)));
     };
 
+    // Same as getDepositAddress, but allows the canister owner to find it for
+    // a specific user.
     public shared(msg) func getDepositAddressFor(user: Principal): async Text {
         owners.require(msg.caller);
         Account.toText(Account.fromPrincipal(Principal.fromActor(this), Account.principalToSubaccount(user)));
@@ -660,11 +684,14 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
+    // After the user transfers their ICP to their depositAddress, process the
+    // deposit, be minting the tokens.
     public shared(msg) func depositIcp(): async DepositReceipt {
         await doDepositIcpFor(msg.caller);
     };
 
-    // After user transfers ICP to the target subaccount
+    // After the user transfers their ICP to their depositAddress, process the
+    // deposit, be minting the tokens.
     public shared(msg) func depositIcpFor(user: Principal): async DepositReceipt {
         owners.require(msg.caller);
         await doDepositIcpFor(user)
@@ -715,7 +742,8 @@ shared(init_msg) actor class Deposits(args: {
         return #Ok(Nat64.toNat(amount.e8s));
     };
 
-    // First we queue them locally, in case the async mint call fails.
+    // For safety, minting tokens is a two-step process. First we queue them
+    // locally, in case the async mint call fails.
     private func queueMint(to : Principal, amount : Nat64) : Nat64 {
         let key = principalKey(to);
         let existing = Option.get(Trie.find(pendingMints, key, Principal.equal), 0 : Nat64);
@@ -724,6 +752,7 @@ shared(init_msg) actor class Deposits(args: {
         return total;
     };
 
+    // Execute the pending mints for a specific user on the token canister.
     private func flushMint(to : Principal) : async TxReceipt {
         let key = principalKey(to);
         let total = Option.get(Trie.find(pendingMints, key, Principal.equal), 0 : Nat64);
@@ -736,6 +765,7 @@ shared(init_msg) actor class Deposits(args: {
         return result;
     };
 
+    // Execute all the pending mints on the token canister.
     private func flushAllMints() : async TxReceipt {
         let mints = Trie.toArray<Principal, Nat64, (Principal, Nat)>(pendingMints, func(k, v) {
             (k, Nat64.toNat(v))
@@ -756,6 +786,8 @@ shared(init_msg) actor class Deposits(args: {
 
     // ===== WITHDRAWAL FUNCTIONS =====
 
+    // Show currently available ICP in this canister. This ICP retained for
+    // withdrawals.
     public shared(msg) func availableBalance() : async Nat64 {
         let balance = (await ledger.account_balance({
             account = Blob.toArray(accountIdBlob());
@@ -768,9 +800,13 @@ shared(init_msg) actor class Deposits(args: {
         }
     };
 
+    // Datapoints representing available liquidity at a point in time.
+    // `[(delay, amount)]`
     public type AvailableLiquidityGraph = [(Int, Nat64)];
 
-    // Cache this or memoize it or something to make it cheaper.
+    // Generate datapoints for a graph representing how much total liquidity is
+    // available over time.
+    // TODO: Cache this or memoize it or something to make it cheaper.
     public func availableLiquidityGraph(): async AvailableLiquidityGraph {
         let neurons = staking.availableLiquidityGraph();
         let b = Buffer.Buffer<(Int, Nat64)>(neurons.size()+1);
@@ -797,6 +833,8 @@ shared(init_msg) actor class Deposits(args: {
     };
 
 
+    // Create a new withdrawal for a user. This will burn the corresponding
+    // amount of tokens, locking them while the withdrawal is pending.
     public shared(msg) func createWithdrawal(user: Principal, total: Nat64) : async Withdrawals.WithdrawalResult {
         if (msg.caller != user) {
             owners.require(msg.caller);
@@ -815,6 +853,8 @@ shared(init_msg) actor class Deposits(args: {
         return await withdrawals.createWithdrawal(user, total, availableCash, delay);
     };
 
+    // Complete withdrawal(s), transferring the ready amount to the
+    // address/principal of a user's choosing.
     public shared(msg) func completeWithdrawal(user: Principal, amount: Nat64, to: Text): async Withdrawals.PayoutResult {
         if (msg.caller != user) {
             owners.require(msg.caller);
@@ -831,6 +871,8 @@ shared(init_msg) actor class Deposits(args: {
         }
     };
 
+    // Try to parse text as an address or a principal. If a principal, return
+    // the default subaccount address for that principal.
     private func parseAddress(to: Text): async ?Account.AccountIdentifier {
         switch (Account.fromText(to)) {
             case (#err(_)) {
@@ -851,11 +893,77 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
+    // List all withdrawals for a user.
     public shared(msg) func listWithdrawals(user: Principal) : async [Withdrawals.Withdrawal] {
         if (msg.caller != user) {
             owners.require(msg.caller);
         };
         return withdrawals.withdrawalsFor(user);
+    };
+
+    // ===== HELPER FUNCTIONS =====
+
+    public shared(msg) func setInitialSnapshot(): async (Text, [(Principal, Nat)]) {
+        owners.require(msg.caller);
+        switch (snapshot) {
+            case (null) {
+                let holders = await getAllHolders();
+                snapshot := ?holders;
+                return ("new", holders);
+            };
+            case (?holders) {
+                return ("existing", holders);
+            };
+        };
+    };
+
+    public shared(msg) func getAppliedInterestResults(): async [ApplyInterestResult] {
+        owners.require(msg.caller);
+        return Iter.toArray(appliedInterestEntries.vals());
+    };
+
+    public shared(msg) func neuronAccountId(controller: Principal, nonce: Nat64): async Text {
+        owners.require(msg.caller);
+        return Account.toText(Util.neuronAccountId(args.governance, controller, nonce));
+    };
+
+    public shared(msg) func neuronAccountIdSub(controller: Principal, subaccount: Blob.Blob): async Text {
+        owners.require(msg.caller);
+        return Account.toText(Account.fromPrincipal(args.governance, subaccount));
+    };
+
+    // ===== HEARTBEAT FUNCTIONS =====
+
+    private stable var lastHeartbeatAt : Time.Time = if (appliedInterest.size() > 0) {
+        appliedInterest.get(appliedInterest.size()-1).timestamp
+    } else {
+        Time.now()
+    };
+    private stable var lastHeartbeatResult : ?DailyHeartbeatResponse = null;
+
+    system func heartbeat() : async () {
+        let next = lastHeartbeatAt + day;
+        let now = Time.now();
+        if (now < next) {
+            return;
+        };
+        lastHeartbeatAt := now;
+        try {
+            lastHeartbeatResult := ?(await dailyHeartbeat(?now));
+        } catch (error) {
+            lastHeartbeatResult := ?#Err(#Other(Error.message(error)));
+        };
+    };
+
+    public shared(msg) func getLastHeartbeatResult(): async ?DailyHeartbeatResponse {
+        owners.require(msg.caller);
+        lastHeartbeatResult
+    };
+
+    // For manual recovery, in case of an issue with the most recent heartbeat.
+    public shared(msg) func setLastHeartbeatAt(when: Time.Time): async () {
+        owners.require(msg.caller);
+        lastHeartbeatAt := when;
     };
 
     // ===== UPGRADE FUNCTIONS =====
@@ -896,74 +1004,6 @@ shared(init_msg) actor class Deposits(args: {
 
         owners.postupgrade(stableOwners);
         stableOwners := null;
-    };
-
-    public shared(msg) func setInitialSnapshot(): async (Text, [(Principal, Nat)]) {
-        owners.require(msg.caller);
-        switch (snapshot) {
-            case (null) {
-                let holders = await getAllHolders();
-                snapshot := ?holders;
-                return ("new", holders);
-            };
-            case (?holders) {
-                return ("existing", holders);
-            };
-        };
-    };
-
-    public shared(msg) func getAppliedInterestResults(): async [ApplyInterestResult] {
-        owners.require(msg.caller);
-        return Iter.toArray(appliedInterestEntries.vals());
-    };
-
-    public shared(msg) func neuronAccountId(controller: Principal, nonce: Nat64): async Text {
-        owners.require(msg.caller);
-        return Account.toText(Util.neuronAccountId(args.governance, controller, nonce));
-    };
-
-    public shared(msg) func neuronAccountIdSub(controller: Principal, subaccount: Blob.Blob): async Text {
-        owners.require(msg.caller);
-        return Account.toText(Account.fromPrincipal(args.governance, subaccount));
-    };
-
-    // ===== HEARTBEAT FUNCTION =====
-
-    private stable var lastHeartbeatAt : Time.Time = if (appliedInterest.size() > 0) {
-        appliedInterest.get(appliedInterest.size()-1).timestamp
-    } else {
-        Time.now()
-    };
-    private stable var lastHeartbeatResult : ?DailyHeartbeatResponse = null;
-
-    system func heartbeat() : async () {
-        let next = lastHeartbeatAt + day;
-        let now = Time.now();
-        if (now < next) {
-            return;
-        };
-        lastHeartbeatAt := now;
-        try {
-            lastHeartbeatResult := ?(await dailyHeartbeat(?now));
-        } catch (error) {
-            lastHeartbeatResult := ?#Err(#Other(Error.message(error)));
-        };
-    };
-
-    public shared(msg) func getLastHeartbeatResult(): async ?DailyHeartbeatResponse {
-        owners.require(msg.caller);
-        lastHeartbeatResult
-    };
-
-    public shared(msg) func setLastHeartbeatAt(when: Time.Time): async () {
-        owners.require(msg.caller);
-        lastHeartbeatAt := when;
-    };
-
-    // TODO: Remove this when done.
-    public shared(msg) func splitNeuron(id: Nat64, amount_e8s: Nat64): async Neurons.NeuronResult {
-        owners.require(msg.caller);
-        await neurons.split(id, amount_e8s)
     };
 
 };

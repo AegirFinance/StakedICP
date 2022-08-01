@@ -44,6 +44,9 @@ module {
         earned: Nat;
     };
 
+    // The Referrals Tracker manages out referral program. It tracks leads,
+    // conversions, earnings, and calculates how much an affiliate is owed when
+    // there is a conversion. See the "Rewards" page.
     public class Tracker() {
         // 30 days
         private var second = 1_000_000_000;
@@ -100,6 +103,9 @@ module {
             return sum;
         };
 
+        // Get the code for an affiliate. Codes are randomly generated, so the
+        // first time this is called for an affiliate it generates a new code
+        // and stores it for them.
         public func getCode(affiliate: Principal) : async Text {
             switch (codesByPrincipal.get(affiliate)) {
                 case (?existing) { return existing };
@@ -116,6 +122,8 @@ module {
             }
         };
 
+        // Get the current conversion and earning stats for an affiliate (for
+        // the "Rewards" page).
         public func getStats(affiliate: Principal) : Stats {
             return {
                 count = switch (conversions.get(affiliate)) {
@@ -126,7 +134,7 @@ module {
             };
         };
 
-        // record a touch event for this referred user. If they already have a
+        // Record a touch event for this referred user. If they already have a
         // touch within the last 30 days, this is a no-op.
         public func touch(user: Principal, code: ?Text) {
             let now = Time.now();
@@ -176,7 +184,9 @@ module {
             });
         };
 
-        // record a conversion event for this referred user
+        // Record a conversion event for this referred user. This permanently
+        // associates them with their affiliate if it is still within the
+        // conversion lookback window.
         public func convert(user: Principal) {
             let now = Time.now();
 
@@ -224,7 +234,8 @@ module {
             }
         };
 
-        // record a payout event for this referred user
+        // Record a payout event for this referred user. e.g. the user earning
+        // interest. This calculates how much the affiliate is owed.
         public func payout(user: Principal, conversionValue: Nat): ?(Principal, Nat) {
             // Look up the lead
             let lead = switch (leads.get(user)) {
@@ -262,6 +273,8 @@ module {
                 };
             };
         };
+
+        // ===== UPGRADE FUNCTIONS =====
 
         public func preupgrade() : ?UpgradeData {
             return ?#v1({

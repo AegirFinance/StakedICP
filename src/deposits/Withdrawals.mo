@@ -86,6 +86,8 @@ module {
         createdAt: Time.Time;
     };
 
+    // Withdrawals manager creates and manages all pending deposits. It
+    // fulfills pending deposits from new deposits and dissolved neurons.
     public class Manager(args: {
         token: Principal;
         ledger: Principal;
@@ -100,7 +102,7 @@ module {
         private var pendingWithdrawals = Deque.empty<WithdrawalQueueEntry>();
         private var withdrawalsByUser = TrieMap.TrieMap<Principal, Buffer.Buffer<Text>>(Principal.equal, Principal.hash);
 
-        // Tell the main contract how much icp to keep on-hand
+        // Tell the main contract how much icp to keep on-hand for pending deposits.
         // TODO: Maybe precompute and cache this
         public func reservedIcp(): Nat64 {
             var sum: Nat64 = 0;
@@ -110,6 +112,7 @@ module {
             return sum;
         };
 
+        // Calculate the total amount of ICP currently dissolving in the NNS.
         // TODO: Maybe precompute and cache this
         public func totalDissolving(): Nat64 {
             var sum: Nat64 = 0;
@@ -119,6 +122,7 @@ module {
             return sum;
         };
 
+        // Calculate the total amount of ICP currently pending for withdrawals.
         // TODO: Maybe precompute and cache this
         public func totalPending(): Nat64 {
             var sum: Nat64 = 0;
@@ -154,10 +158,13 @@ module {
             };
         };
 
+        // List all dissolving withdrawal neurons.
         public func listNeurons(): [Neurons.Neuron] {
             Iter.toArray(dissolving.vals())
         };
 
+        // Idempotently add a neuron which should be dissolved and used to fill
+        // pending withdrawals.
         public func addNeurons(ns: [Neurons.Neuron]): async Result.Result<[Neurons.Neuron], Neurons.NeuronsError> {
             let newNeurons = Buffer.Buffer<Neurons.Neuron>(ns.size());
             for (n in ns.vals()) {
@@ -184,6 +191,10 @@ module {
             #ok(newNeurons.toArray())
         };
 
+        // Attempt to create a new withdrawal for the user. If there is enough
+        // available cash, the withdrawal is filled immediately. Otherwise the
+        // remainder is "pending" until enough new deposits or dissolving ICP
+        // are available.
         public func createWithdrawal(user: Principal, amount: Nat64, availableCash: Nat64, delay: Int): async WithdrawalResult {
             let now = Time.now();
 
@@ -243,6 +254,7 @@ module {
             withdrawalsByUser.put(user, buf);
         };
 
+        // List all withdrawals for a user.
         public func withdrawalsFor(user: Principal): [Withdrawal] {
             var sources = Buffer.Buffer<Withdrawal>(0);
             let ids = Option.get<Buffer.Buffer<Text>>(withdrawalsByUser.get(user), Buffer.Buffer<Text>(0));
@@ -257,8 +269,9 @@ module {
             return sources.toArray();
         };
 
-        // Apply some ICP towards paying off our deposits balance. Either from
-        // new deposits, or newly disbursed neurons. Returns the amount consumed.
+        // Apply some "incoming" ICP towards paying off our pending
+        // withdrawals. ICP should be incoming either from new deposits, or
+        // newly disbursed neurons. Returns the amount consumed.
         public func applyIcp(amount: Nat64): Nat64 {
             let now = Time.now();
             var remaining = amount;
@@ -308,7 +321,7 @@ module {
             return amount-remaining;
         };
 
-        // Disburse and/or create dissolving neurons such that account will receive (now or later) amount_e8s.
+        // For now, neurons must be disbursed manually. List the neurons with are ready to be disbursed.
         public func listNeuronsToDisburse(): async Result.Result<[Neurons.Neuron], Neurons.NeuronsError> {
             let now = Time.now();
 
@@ -350,6 +363,7 @@ module {
             return #ok(ns.toArray());
         };
 
+        // Once a neuron has been manually disbursed, we can forget about it.
         public func removeDisbursedNeurons(ids: [Nat64]): [Neurons.Neuron] {
             let ns = Buffer.Buffer<Neurons.Neuron>(ids.size());
             for (id in ids.vals()) {
@@ -365,7 +379,8 @@ module {
             ns.toArray()
         };
 
-        // Transfer unlocked ICP in complete withdrawals to an address
+        // Users call this to transfer their unlocked ICP in completed
+        // withdrawals to an address of their choosing.
         public func disburse(user: Principal, amount: Nat64, to: Account.AccountIdentifier): async PayoutResult {
             let now = Time.now();
 
@@ -436,6 +451,9 @@ module {
             ))
         };
 
+        // Merge maturity on dissolving neurons. Merged maturity here will be
+        // disbursed when the neuron is dissolved, and will be a "bonus" put
+        // towards filling pending withdrawals early.
         public func mergeMaturity(): async [Neurons.NeuronResult] {
             let merges = await args.neurons.mergeMaturities(ids(), 100);
             for (m in merges.vals()) {
@@ -448,6 +466,8 @@ module {
             };
             merges
         };
+
+        // ===== UPGRADE FUNCTIONS =====
 
         public func preupgrade() : ?UpgradeData {
             return ?#v1({

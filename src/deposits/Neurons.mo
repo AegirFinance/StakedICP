@@ -18,6 +18,7 @@ import Governance "../governance/Governance";
 import Ledger "../ledger/Ledger";
 
 module {
+    // NNS constants
     let minimumStake: Nat64 = 100_000_000;
     let icpFee: Nat64 = 10_000;
 
@@ -28,9 +29,11 @@ module {
         };
     };
 
+    // TODO: Add some metrics here.
     public type Metrics = {
     };
 
+    // Neuron is the local state we store about a neuron.
     public type Neuron = {
         id : Nat64;
         accountId : Account.AccountIdentifier;
@@ -49,6 +52,7 @@ module {
     public type NeuronResult = Result.Result<Neuron, NeuronsError>;
     public type Nat64Result = Result.Result<Nat64, NeuronsError>;
 
+    // Find and normalize the dissolve delay for a neuron.
     public func dissolveDelay({dissolveState}: Neuron): Int {
         switch (dissolveState) {
             case (?#DissolveDelaySeconds(delay)) { Int64.toInt(Int64.fromNat64(delay)) };
@@ -65,23 +69,22 @@ module {
         }
     };
 
-    // Proposal-based neuron management. Let's our canister "directly" manage
-    // NNS neurons. Used by other modules, like Withdrawals, and Staking.
+    // Proposal-based neuron management. Lets our canister "directly" manage
+    // NNS neurons, by creating proposals. Used by other modules, like
+    // Withdrawals, and Staking. The assumption is that the managed neurons
+    // have the "proposal neuron" added as a hot key. This allows the proposal
+    // neuron to submit proposals managing the managed neurons.
     public class Manager(args: {
         governance: Principal;
     }) {
-        // 30 days
-        private var second = 1_000_000_000;
-        private var minute = 60*second;
-        private var hour = 60*minute;
-        private var day = 24*hour;
-
         private var governance: Governance.Interface = actor(Principal.toText(args.governance));
         private var proposalNeuron: ?Neuron = null;
 
         public func metrics(): Metrics {
             return {};
         };
+
+        // ===== PROPOSAL NEURON MANAGEMENT FUNCTIONS =====
 
         public func getProposalNeuron(): ?Neuron {
             proposalNeuron
@@ -103,6 +106,8 @@ module {
             };
             return null;
         };
+
+        // ===== NEURON INFO FUNCTIONS =====
 
         // Fetch maturity info for a list of neuron ids, as an array of [(id, e8s)].
         public func maturities(ids: [Nat64]): async [(Nat64, Nat64)] {
@@ -151,6 +156,8 @@ module {
                 };
         };
 
+        // ===== PROPOSAL COMMAND FUNCTIONS =====
+
         public func mergeMaturity(id: Nat64, percentage: Nat32): async NeuronResult {
             let proposal = await propose({
                 url = "https://stakedicp.com";
@@ -186,13 +193,67 @@ module {
             return b.toArray();
         };
 
-        private func okOr<Ok, Error>(x : ?Ok, e : Error) : Result.Result<Ok, Error> {
-            switch x {
-                case (?x)   { #ok(x) };
-                case (null) { #err(e) };
-            }
+
+        public func split(id: Nat64, amount_e8s: Nat64): async NeuronResult {
+            if (amount_e8s < minimumStake + icpFee) {
+                return #err(#InsufficientStake)
+            };
+
+            let title = "Split Neuron" # Nat64.toText(id);
+            let proposal = await propose({
+                url = "https://stakedicp.com";
+                title = ?title;
+                action = ?#ManageNeuron({
+                    id = null;
+                    command = ?#Split({
+                        amount_e8s = amount_e8s;
+                    });
+                    neuron_id_or_subaccount = ?#NeuronId({ id = id });
+                });
+                summary = title;
+            });
+            switch (proposal) {
+                case (#err(err)) {
+                    return #err(err);
+                };
+                case (#ok(p)) {
+                    let result = await findNewNeuron(
+                        p.executed_timestamp_seconds,
+                        amount_e8s - icpFee
+                    );
+                    return okOr(result, #Other("Neuron not found, proposal: " # debug_show(p.id)));
+                };
+            };
         };
 
+        // Start a neuron dissolving
+        public func dissolve(id: Nat64): async NeuronResult {
+            let title = "Start Dissolving Neuron" # Nat64.toText(id);
+            let proposal = await propose({
+                url = "https://stakedicp.com";
+                title = ?title;
+                action = ?#ManageNeuron({
+                    id = null;
+                    command = ?#Configure({
+                        operation = ?#StartDissolving({});
+                    });
+                    neuron_id_or_subaccount = ?#NeuronId({ id = id });
+                });
+                summary = title;
+            });
+            switch (proposal) {
+                case (#err(err)) {
+                    return #err(err);
+                };
+                case (#ok(_)) {
+                    return await refresh(id);
+                };
+            };
+        };
+
+        // ===== HELPER FUNCTIONS =====
+
+        // Lower-level proposal submission helper
         private func propose(proposal: Governance.Proposal): async Result.Result<Governance.ProposalInfo, NeuronsError> {
             let proposalNeuronId: Nat64 = switch (proposalNeuron) {
                 case (null) { return #err(#ProposalNeuronMissing); };
@@ -231,36 +292,11 @@ module {
             return #ok(proposalInfo);
         };
 
-        public func split(id: Nat64, amount_e8s: Nat64): async NeuronResult {
-            if (amount_e8s < minimumStake + icpFee) {
-                return #err(#InsufficientStake)
-            };
-
-            let title = "Split Neuron" # Nat64.toText(id);
-            let proposal = await propose({
-                url = "https://stakedicp.com";
-                title = ?title;
-                action = ?#ManageNeuron({
-                    id = null;
-                    command = ?#Split({
-                        amount_e8s = amount_e8s;
-                    });
-                    neuron_id_or_subaccount = ?#NeuronId({ id = id });
-                });
-                summary = title;
-            });
-            switch (proposal) {
-                case (#err(err)) {
-                    return #err(err);
-                };
-                case (#ok(p)) {
-                    let result = await findNewNeuron(
-                        p.executed_timestamp_seconds,
-                        amount_e8s - icpFee
-                    );
-                    return okOr(result, #Other("Neuron not found, proposal: " # debug_show(p.id)));
-                };
-            };
+        private func okOr<Ok, Error>(x : ?Ok, e : Error) : Result.Result<Ok, Error> {
+            switch x {
+                case (?x)   { #ok(x) };
+                case (null) { #err(e) };
+            }
         };
 
         private func findNewNeuron(createdTimestampSeconds: Nat64, stakeE8s: Nat64): async ?Neuron {
@@ -286,30 +322,7 @@ module {
             return null;
         };
 
-        // Start a neuron dissolving
-        public func dissolve(id: Nat64): async NeuronResult {
-            let title = "Start Dissolving Neuron" # Nat64.toText(id);
-            let proposal = await propose({
-                url = "https://stakedicp.com";
-                title = ?title;
-                action = ?#ManageNeuron({
-                    id = null;
-                    command = ?#Configure({
-                        operation = ?#StartDissolving({});
-                    });
-                    neuron_id_or_subaccount = ?#NeuronId({ id = id });
-                });
-                summary = title;
-            });
-            switch (proposal) {
-                case (#err(err)) {
-                    return #err(err);
-                };
-                case (#ok(_)) {
-                    return await refresh(id);
-                };
-            };
-        };
+        // ===== UPGRADE FUNCTIONS =====
 
         public func preupgrade(): ?UpgradeData {
             return ?#v1({
