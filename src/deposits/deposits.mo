@@ -205,19 +205,16 @@ shared(init_msg) actor class Deposits(args: {
     // balance will be minted as stICP to the canister's token account.
     public shared(msg) func addStakingNeuron(id: Nat64): async Neurons.NeuronResult {
         owners.require(msg.caller);
-        let isNew = Option.isNull(Array.find(staking.ids(), func(haystack: Nat64): Bool { haystack == id }));
-
-        switch (await staking.addOrRefresh(id)) {
-            case (#err(err)) {
-                return #err(err);
-            };
+        switch (await neurons.refresh(id)) {
+            case (#err(err)) { #err(err) };
             case (#ok(neuron)) {
+                let isNew = staking.addOrRefresh(neuron);
                 if isNew {
                     let canister = Principal.fromActor(this);
                     ignore queueMint(canister, neuron.cachedNeuronStakeE8s);
                     ignore await flushMint(canister);
                 };
-                return #ok(neuron);
+                #ok(neuron)
             };
         }
     };
@@ -365,7 +362,7 @@ shared(init_msg) actor class Deposits(args: {
         // Flush pending deposits
         let tokenE8s = Nat64.fromNat((await token.getMetadata()).totalSupply);
         let flushResult = await flushPendingDeposits(tokenE8s);
-        let refreshResult = await staking.refreshAll();
+        let refreshResult = await refreshAllStakingNeurons();
 
         // merge the maturity for dissolving neurons
         let mergeDissolvingResult = await withdrawals.mergeMaturity();
@@ -625,6 +622,21 @@ shared(init_msg) actor class Deposits(args: {
         meanAprMicrobips := sum / span;
 
         Debug.print("meanAprMicrobips: " # debug_show(meanAprMicrobips));
+    };
+
+    // Refresh all neurons, fetching current data from the NNS. This is
+    // needed e.g. if we have transferred more ICP into a staking neuron,
+    // to update the cached balances.
+    public func refreshAllStakingNeurons(): async ?Neurons.NeuronsError {
+        for (id in staking.ids().vals()) {
+            switch (await neurons.refresh(id)) {
+                case (#err(err)) { return ?err };
+                case (#ok(neuron)) {
+                    ignore staking.addOrRefresh(neuron);
+                };
+            };
+        };
+        return null;
     };
 
     // Getter for the current APR in microbips

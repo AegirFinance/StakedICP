@@ -105,32 +105,12 @@ module {
             ))
         };
 
-        // Refresh all neurons, fetching current data from the NNS. This is
-        // needed e.g. if we have transferred more ICP into a staking neuron,
-        // to update the cached balances.
-        public func refreshAll(): async ?Neurons.NeuronsError {
-            for (id in ids().vals()) {
-                switch (await addOrRefresh(id)) {
-                    case (#err(err)) {
-                        return ?err;
-                    };
-                    case (#ok(_)) { };
-                };
-            };
-            return null;
-        };
-
         // addOrRefresh idempotently adds a staking neuron, or refreshes it's balance
-        public func addOrRefresh(id: Nat64): async Neurons.NeuronResult {
-            switch (await args.neurons.refresh(id)) {
-                case (#err(err)) {
-                    return #err(err);
-                };
-                case (#ok(neuron)) {
-                    stakingNeurons.put(Nat64.toText(id), neuron);
-                    return #ok(neuron);
-                };
-            };
+        public func addOrRefresh(neuron: Neurons.Neuron): Bool {
+            let id = Nat64.toText(neuron.id);
+            let isNew = Option.isNull(stakingNeurons.get(id));
+            stakingNeurons.put(id, neuron);
+            isNew
         };
 
         // Return the maturities available for each neuron.
