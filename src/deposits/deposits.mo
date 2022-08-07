@@ -178,9 +178,6 @@ shared(init_msg) actor class Deposits(args: {
 
     private func stakingNeuronBalance(): Nat64 {
         let balances = staking.balances();
-        if (balances.size() == 0) {
-            return 0;
-        };
         var sum : Nat64 = 0;
         for ((id, balance) in balances.vals()) {
             sum += balance;
@@ -190,9 +187,6 @@ shared(init_msg) actor class Deposits(args: {
 
     private func stakingNeuronMaturityE8s() : async Nat64 {
         let maturities = await staking.maturities();
-        if (maturities.size() == 0) {
-            return 0;
-        };
         var sum : Nat64 = 0;
         for ((id, maturities) in maturities.vals()) {
             sum += maturities;
