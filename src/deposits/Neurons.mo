@@ -50,6 +50,7 @@ module {
     };
 
     public type NeuronResult = Result.Result<Neuron, NeuronsError>;
+    public type NeuronsResult = Result.Result<[Neuron], NeuronsError>;
     public type Nat64Result = Result.Result<Nat64, NeuronsError>;
 
     // Find and normalize the dissolve delay for a neuron.

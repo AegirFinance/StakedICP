@@ -107,7 +107,7 @@ shared(init_msg) actor class Deposits(args: {
             mergeDissolving: [Neurons.NeuronResult];
             flush: [Ledger.TransferResult];
             refresh: ?Neurons.NeuronsError;
-            split: ?Result.Result<[Neurons.Neuron], Neurons.NeuronsError>;
+            split: ?Neurons.NeuronsResult;
         });
         #Err: Neurons.NeuronsError;
     };
@@ -186,7 +186,7 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     private func stakingNeuronMaturityE8s() : async Nat64 {
-        let maturities = await staking.maturities();
+        let maturities = await neurons.maturities(staking.ids());
         var sum : Nat64 = 0;
         for ((id, maturities) in maturities.vals()) {
             sum += maturities;
@@ -320,9 +320,9 @@ shared(init_msg) actor class Deposits(args: {
     // List all neurons ready for disbursal. We will disburse them into the
     // deposit canister's default account, like it is a new deposit.
     // flushPendingDeposits will then route it to the right place.
-    public shared(msg) func listNeuronsToDisburse(): async Result.Result<[Neurons.Neuron], Neurons.NeuronsError> {
+    public shared(msg) func listNeuronsToDisburse(): async [Neurons.Neuron] {
         owners.require(msg.caller);
-        await withdrawals.listNeuronsToDisburse()
+        withdrawals.listNeuronsToDisburse()
     };
 
     // Once we've disbursed them, remove them from the withdrawals neuron tracking
@@ -362,7 +362,7 @@ shared(init_msg) actor class Deposits(args: {
         // figure out how much we have dissolving for withdrawals
         let dissolving = withdrawals.totalDissolving();
         let pending = withdrawals.totalPending();
-        let splitResult = if (pending > dissolving) {
+        let splitResult: ?Neurons.NeuronsResult = if (pending > dissolving) {
             // figure out how much we need dissolving for withdrawals
             let needed = pending - dissolving;
             // Split the difference off from staking neurons
@@ -372,9 +372,12 @@ shared(init_msg) actor class Deposits(args: {
                 };
                 case (#ok(newNeurons)) {
                     // Pass the new neurons into the withdrawals manager.
-                    ?(await withdrawals.addNeurons(newNeurons));
+                    switch (await dissolveNeurons(newNeurons)) {
+                        case (#err(err)) { ?#err(err) };
+                        case (#ok(newNeurons)) { ?#ok(withdrawals.addNeurons(newNeurons)) };
+                    }
                 };
-            };
+            }
         } else {
             null
         };
@@ -387,6 +390,28 @@ shared(init_msg) actor class Deposits(args: {
             refresh = refreshResult;
             split = splitResult;
         })
+    };
+
+    private func dissolveNeurons(ns: [Neurons.Neuron]): async Neurons.NeuronsResult {
+        let newNeurons = Buffer.Buffer<Neurons.Neuron>(ns.size());
+        for (n in ns.vals()) {
+            let neuron = switch (n.dissolveState) {
+                case (?#DissolveDelaySeconds(delay)) {
+                    // Make sure the neuron is dissolving
+                    switch (await neurons.dissolve(n.id)) {
+                        case (#err(err)) {
+                            return #err(err);
+                        };
+                        case (#ok(n)) {
+                            n
+                        };
+                    }
+                };
+                case (_) { n };
+            };
+            newNeurons.add(neuron);
+        };
+        #ok(newNeurons.toArray())
     };
 
     // Distribute newly earned interest to token holders.

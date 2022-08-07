@@ -113,11 +113,6 @@ module {
             isNew
         };
 
-        // Return the maturities available for each neuron.
-        public func maturities(): async [(Nat64, Nat64)] {
-            await args.neurons.maturities(ids())
-        };
-
         // Merge a percentage of maturity on all staking neurons
         public func mergeMaturity(percentage: Nat32): async [Neurons.NeuronResult] {
             let merges = await args.neurons.mergeMaturities(ids(), percentage);

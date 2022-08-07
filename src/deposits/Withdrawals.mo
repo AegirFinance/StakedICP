@@ -165,30 +165,11 @@ module {
 
         // Idempotently add a neuron which should be dissolved and used to fill
         // pending withdrawals.
-        public func addNeurons(ns: [Neurons.Neuron]): async Result.Result<[Neurons.Neuron], Neurons.NeuronsError> {
-            let newNeurons = Buffer.Buffer<Neurons.Neuron>(ns.size());
+        public func addNeurons(ns: [Neurons.Neuron]): [Neurons.Neuron] {
             for (n in ns.vals()) {
-                let key = Nat64.toText(n.id);
-                if (dissolving.get(key) == null) {
-                    let neuron = switch (n.dissolveState) {
-                        case (?#DissolveDelaySeconds(delay)) {
-                            // Make sure the neuron is dissolving
-                            switch (await args.neurons.dissolve(n.id)) {
-                                case (#err(err)) {
-                                    return #err(err);
-                                };
-                                case (#ok(n)) {
-                                    n
-                                };
-                            }
-                        };
-                        case (_) { n };
-                    };
-                    newNeurons.add(neuron);
-                    dissolving.put(key, neuron);
-                }
+                dissolving.put(Nat64.toText(n.id), n);
             };
-            #ok(newNeurons.toArray())
+            ns
         };
 
         // Attempt to create a new withdrawal for the user. If there is enough
@@ -322,27 +303,14 @@ module {
         };
 
         // For now, neurons must be disbursed manually. List the neurons with are ready to be disbursed.
-        public func listNeuronsToDisburse(): async Result.Result<[Neurons.Neuron], Neurons.NeuronsError> {
+        public func listNeuronsToDisburse(): [Neurons.Neuron] {
             let now = Time.now();
 
             let ns = Buffer.Buffer<Neurons.Neuron>(0);
             for (neuron in dissolving.vals()) {
                 let isDissolved = switch (neuron.dissolveState) {
                     case (?#DissolveDelaySeconds(delay)) {
-                        // Not dissolving. start it. This shouldn't happen,
-                        // because we should start the neurons dissolving when
-                        // we first split them, but just in case, this will
-                        // recover.
-                        switch (await args.neurons.dissolve(neuron.id)) {
-                            case (#err(err)) {
-                                return #err(err);
-                            };
-                            case (#ok(n)) {
-                                dissolving.put(Nat64.toText(neuron.id), n);
-                            };
-                        };
-                        // If the delay was 0, it'll dissolve immediately, so
-                        // we can disburse it.
+                        // If the delay was 0, we can disburse it.
                         delay == 0
                     };
                     case (null) {
@@ -360,7 +328,7 @@ module {
                 };
             };
 
-            return #ok(ns.toArray());
+            ns.toArray()
         };
 
         // Once a neuron has been manually disbursed, we can forget about it.
