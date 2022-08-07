@@ -258,8 +258,7 @@ shared(init_msg) actor class Deposits(args: {
         if (not owners.is(msg.caller)) {
             switch (metricsCanister) {
                 case (null) {
-                    assert(false);
-                    loop {};
+                    throw Error.reject("metrics canister missing");
                 };
                 case (?expected) {
                     assert(msg.caller == expected);
