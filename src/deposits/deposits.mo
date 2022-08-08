@@ -915,7 +915,7 @@ shared(init_msg) actor class Deposits(args: {
                 #err(#InvalidAddress)
             };
             case (?toAddress) {
-                await withdrawals.disburse(user, amount, toAddress);
+                await withdrawals.completeWithdrawal(user, amount, toAddress);
             }
         }
     };

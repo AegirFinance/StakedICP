@@ -349,7 +349,7 @@ module {
 
         // Users call this to transfer their unlocked ICP in completed
         // withdrawals to an address of their choosing.
-        public func disburse(user: Principal, amount: Nat64, to: Account.AccountIdentifier): async PayoutResult {
+        public func completeWithdrawal(user: Principal, amount: Nat64, to: Account.AccountIdentifier): async PayoutResult {
             let now = Time.now();
 
             // Figure out which available withdrawals we're disbursing
