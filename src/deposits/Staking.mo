@@ -34,12 +34,6 @@ module {
     public type Metrics = {
     };
 
-
-    public type MergeMaturityResult = Result.Result<
-        Neurons.Neuron,
-        Neurons.NeuronsError
-    >;
-
     // The StakingManager manages our staking. Specifically, the staking
     // neurons, routing deposits to the neurons, merging maturity, and
     // splitting new neurons off to be dissolved for withdrawals.
@@ -113,20 +107,6 @@ module {
             isNew
         };
 
-        // Merge a percentage of maturity on all staking neurons
-        public func mergeMaturity(percentage: Nat32): async [Neurons.NeuronResult] {
-            let merges = await args.neurons.mergeMaturities(ids(), percentage);
-            for (m in merges.vals()) {
-                switch (m) {
-                    case (#err(err)) { };
-                    case (#ok(neuron)) {
-                        stakingNeurons.put(Nat64.toText(neuron.id), neuron);
-                    };
-                };
-            };
-            merges
-        };
-
         // helper to allow sorting neurons by balance
         func compareBalance(a: Neurons.Neuron, b: Neurons.Neuron): Order.Order {
             Nat64.compare(a.cachedNeuronStakeE8s, b.cachedNeuronStakeE8s)
@@ -197,7 +177,9 @@ module {
         // make sure that at least "amount" liquidity will become available.
         // This is used to ensure there is at least enough ICP dissolving in
         // the ICP to eventually fulfill all pending deposits.
-        public func splitNeurons(e8s: Nat64): async Result.Result<[Neurons.Neuron], Neurons.NeuronsError> {
+        //
+        // If successful, it returns: [(NeuronID, AmountToSplit+Fee)]
+        public func splitNeurons(e8s: Nat64): Result.Result<[(Nat64, Nat64)], Neurons.NeuronsError> {
             if (e8s == 0) {
                 return #ok([]);
             };
@@ -218,7 +200,7 @@ module {
                 if (remaining > 0 and n.cachedNeuronStakeE8s >= (minimumStake*2)+icpFee) {
                     let amountToSplit = Nat64.min(remaining, n.cachedNeuronStakeE8s - minimumStake - icpFee);
                     remaining -= amountToSplit;
-                    toSplit.add((n.id, amountToSplit));
+                    toSplit.add((n.id, amountToSplit+icpFee));
                 };
             };
 
@@ -227,19 +209,7 @@ module {
                 return #err(#InsufficientStake);
             };
 
-            // Do the splits on the nns and find the new neurons.
-            let newNeurons = Buffer.Buffer<Neurons.Neuron>(toSplit.size());
-            for ((id, amount) in toSplit.vals()) {
-                switch (await args.neurons.split(id, amount+icpFee)) {
-                    case (#err(err)) {
-                        // TODO: Error handling
-                    };
-                    case (#ok(n)) {
-                        newNeurons.add(n);
-                    };
-                };
-            };
-            return #ok(newNeurons.toArray());
+            return #ok(toSplit.toArray());
         };
 
         // ===== UPGRADE FUNCTIONS =====

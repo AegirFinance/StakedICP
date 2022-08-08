@@ -103,7 +103,7 @@ shared(init_msg) actor class Deposits(args: {
     type DailyHeartbeatResponse = {
         #Ok : ({
             apply: Result.Result<ApplyInterestResult, Neurons.NeuronsError>;
-            mergeStaked: ?[Neurons.NeuronResult];
+            mergeStaked: ?[Neurons.Neuron];
             mergeDissolving: [Neurons.NeuronResult];
             flush: [Ledger.TransferResult];
             refresh: ?Neurons.NeuronsError;
@@ -343,13 +343,20 @@ shared(init_msg) actor class Deposits(args: {
     private func dailyHeartbeat(when: ?Time.Time) : async DailyHeartbeatResponse {
         // Merge the interest
         let interest = await stakingNeuronMaturityE8s();
-        let (applyInterestResult, mergeStakedResult): (Result.Result<ApplyInterestResult, Neurons.NeuronsError>, ?[Neurons.NeuronResult]) = if (interest <= 10_000) {
+        let (applyInterestResult, mergeStakedResult): (Result.Result<ApplyInterestResult, Neurons.NeuronsError>, ?[Neurons.Neuron]) = if (interest <= 10_000) {
             (#err(#InsufficientMaturity), null)
         } else {
             let (percentage, applyResult) = await applyInterest(interest, when);
             // TODO: Error handling here. Do this first to confirm it worked? After
             // is nice as we can the merge "manually" to ensure it merges.
-            (#ok(applyResult), ?(await staking.mergeMaturity(Nat32.fromNat(Nat64.toNat(percentage)))))
+            let merges: [Neurons.Neuron] = Array.mapFilter<Result.Result<Neurons.Neuron, Neurons.NeuronsError>, Neurons.Neuron>(
+                await neurons.mergeMaturities(staking.ids(), Nat32.fromNat(Nat64.toNat(percentage))),
+                func(r) { Result.toOption(r) },
+            );
+            for (n in merges.vals()) {
+                ignore staking.addOrRefresh(n);
+            };
+            (#ok(applyResult), ?merges)
         };
 
         // Flush pending deposits
@@ -366,13 +373,25 @@ shared(init_msg) actor class Deposits(args: {
             // figure out how much we need dissolving for withdrawals
             let needed = pending - dissolving;
             // Split the difference off from staking neurons
-            switch (await staking.splitNeurons(needed)) {
+            switch (staking.splitNeurons(needed)) {
                 case (#err(err)) {
                     ?#err(err)
                 };
-                case (#ok(newNeurons)) {
+                case (#ok(toSplit)) {
+                    // Do the splits on the nns and find the new neurons.
+                    let newNeurons = Buffer.Buffer<Neurons.Neuron>(toSplit.size());
+                    for ((id, amount) in toSplit.vals()) {
+                        switch (await neurons.split(id, amount)) {
+                            case (#err(err)) {
+                                // TODO: Error handling
+                            };
+                            case (#ok(n)) {
+                                newNeurons.add(n);
+                            };
+                        };
+                    };
                     // Pass the new neurons into the withdrawals manager.
-                    switch (await dissolveNeurons(newNeurons)) {
+                    switch (await dissolveNeurons(newNeurons.toArray())) {
                         case (#err(err)) { ?#err(err) };
                         case (#ok(newNeurons)) { ?#ok(withdrawals.addNeurons(newNeurons)) };
                     }
