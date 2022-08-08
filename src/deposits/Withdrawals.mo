@@ -16,7 +16,6 @@ import Time "mo:base/Time";
 import TrieMap "mo:base/TrieMap";
 
 import Account "./Account";
-import Nanoid "./Nanoid";
 import Neurons "./Neurons";
 import Governance "../governance/Governance";
 import Ledger "../ledger/Ledger";
@@ -55,7 +54,7 @@ module {
         disbursed: Nat64;
     };
 
-    type TokenError = {
+    public type TokenError = {
         // Copied from Token.mo
         #InsufficientAllowance;
         #InsufficientBalance;
@@ -68,7 +67,7 @@ module {
         #AmountTooSmall;
     };
 
-    type WithdrawalsError = {
+    public type WithdrawalsError = {
         #InsufficientBalance;
         #InsufficientLiquidity;
         #InvalidAddress;
@@ -78,7 +77,6 @@ module {
         #TransferError: Ledger.TransferError;
     };
 
-    public type WithdrawalResult = Result.Result<Withdrawal, WithdrawalsError>;
     public type PayoutResult = Result.Result<Ledger.BlockIndex, WithdrawalsError>;
 
     type WithdrawalQueueEntry = {
@@ -176,23 +174,11 @@ module {
         // available cash, the withdrawal is filled immediately. Otherwise the
         // remainder is "pending" until enough new deposits or dissolving ICP
         // are available.
-        public func createWithdrawal(user: Principal, amount: Nat64, availableCash: Nat64, delay: Int): async WithdrawalResult {
+        public func createWithdrawal(user: Principal, amount: Nat64, availableCash: Nat64, delay: Int): Withdrawal {
             let now = Time.now();
 
             // Mark cash as available for instant withdrawal
             let available: Nat64 = Nat64.min(availableCash, amount);
-
-            // Burn the tokens from the user. This makes sure there is enough
-            // balance for the user, avoiding re-entrancy.
-            let burn = await token.burnFor(user, Nat64.toNat(amount));
-            switch (burn) {
-                case (#Err(err)) {
-                    return #err(#TokenError(err));
-                };
-                case (#Ok(_)) { };
-            };
-
-            // TODO: Re-check we have enough cash+neurons, to avoid re-entrancy or timing attacks
 
             // Store the withdrawal
             let readyAt = if (delay == 0) {
@@ -200,11 +186,8 @@ module {
             } else {
                 null
             };
-            var id = await Nanoid.new();
-            while (Option.isSome(withdrawals.get(id))) {
-                // Re-generate if there's a collision.
-                id := await Nanoid.new();
-            };
+
+            let id = nextWithdrawalId(user);
             let withdrawal: Withdrawal = {
                 id = id;
                 user = user;
@@ -223,7 +206,15 @@ module {
             };
             withdrawalsByUserAdd(withdrawal.user, id);
 
-            return #ok(withdrawal);
+            return withdrawal;
+        };
+
+        private func nextWithdrawalId(user: Principal): Text {
+            let count = Option.get<Buffer.Buffer<Text>>(
+                withdrawalsByUser.get(user),
+                Buffer.Buffer<Text>(0)
+            ).size();
+            Principal.toText(user) # "-" # Nat.toText(count+1)
         };
 
         private func withdrawalsByUserAdd(user: Principal, id: Text) {
@@ -349,16 +340,16 @@ module {
 
         // Users call this to transfer their unlocked ICP in completed
         // withdrawals to an address of their choosing.
-        public func completeWithdrawal(user: Principal, amount: Nat64, to: Account.AccountIdentifier): async PayoutResult {
+        public func completeWithdrawal(user: Principal, amount: Nat64, to: Account.AccountIdentifier): Result.Result<(Ledger.TransferArgs, () -> ()), WithdrawalsError> {
             let now = Time.now();
 
             // Figure out which available withdrawals we're disbursing
             var remaining : Nat64 = amount;
-            var b = Buffer.Buffer<(Nat64, Withdrawal)>(1);
+            var b = Buffer.Buffer<(Withdrawal, Nat64)>(1);
             for (w in withdrawalsFor(user).vals()) {
                 if (remaining > 0 and w.available > 0) {
                     let applied = Nat64.min(w.available, remaining);
-                    b.add((applied, w));
+                    b.add((w, applied));
                     remaining -= applied;
                 };
             };
@@ -370,22 +361,42 @@ module {
             // TODO: Make sure you can't spam this to trigger race condition
             // for infinite withdrawal.
 
-            let transfer = await ledger.transfer({
+            // Update these withdrawal balances.
+            for ((w, applied) in b.vals()) {
+                let disbursedAt = if (w.disbursed + applied == w.total) {
+                    ?now
+                } else {
+                    null
+                };
+                withdrawals.put(w.id, {
+                        id = w.id;
+                        user = w.user;
+                        createdAt = w.createdAt;
+                        expectedAt = w.expectedAt;
+                        readyAt = w.readyAt;
+                        disbursedAt = disbursedAt;
+                        total = w.total;
+                        pending = w.pending;
+                        available = w.available - applied;
+                        disbursed = w.disbursed + applied;
+                        });
+            };
+
+            #ok((
+                {
                     memo : Nat64    = 0;
                     from_subaccount = null;
                     to              = Blob.toArray(to);
                     amount          = { e8s = amount - icpFee };
                     fee             = { e8s = icpFee };
                     created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(now)) };
-            });
-            switch (transfer) {
-                case (#Ok(block)) {
-                    // Update these withdrawal balances.
-                    for ((applied, w) in b.vals()) {
-                        let disbursedAt = if (w.disbursed + applied == w.total) {
-                            ?now
-                        } else {
-                            null
+                },
+                // Prepare a reversion in case the transfer fails
+                func() {
+                    for (({id}, applied) in b.vals()) {
+                        let w = switch (withdrawals.get(id)) {
+                            case (null) { P.unreachable() };
+                            case (?w) { w };
                         };
                         withdrawals.put(w.id, {
                             id = w.id;
@@ -393,23 +404,15 @@ module {
                             createdAt = w.createdAt;
                             expectedAt = w.expectedAt;
                             readyAt = w.readyAt;
-                            disbursedAt = disbursedAt;
+                            disbursedAt = null;
                             total = w.total;
                             pending = w.pending;
-                            available = w.available - applied;
-                            disbursed = w.disbursed + applied;
+                            available = w.available + applied;
+                            disbursed = w.disbursed - applied;
                         });
                     };
-                    #ok(block)
-                };
-                case (#Err(#InsufficientFunds{})) {
-                    // Not enough ICP in the contract
-                    #err(#InsufficientLiquidity)
-                };
-                case (#Err(err)) {
-                    #err(#TransferError(err))
-                };
-            }
+                }
+            ))
         };
 
         public func ids(): [Nat64] {
@@ -417,22 +420,6 @@ module {
                 dissolving.vals(),
                 func (n: Neurons.Neuron): Nat64 { n.id }
             ))
-        };
-
-        // Merge maturity on dissolving neurons. Merged maturity here will be
-        // disbursed when the neuron is dissolved, and will be a "bonus" put
-        // towards filling pending withdrawals early.
-        public func mergeMaturity(): async [Neurons.NeuronResult] {
-            let merges = await args.neurons.mergeMaturities(ids(), 100);
-            for (m in merges.vals()) {
-                switch (m) {
-                    case (#err(err)) { };
-                    case (#ok(neuron)) {
-                        dissolving.put(Nat64.toText(neuron.id), neuron);
-                    };
-                };
-            };
-            merges
         };
 
         // ===== UPGRADE FUNCTIONS =====

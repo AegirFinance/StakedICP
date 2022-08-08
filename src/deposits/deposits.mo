@@ -104,7 +104,7 @@ shared(init_msg) actor class Deposits(args: {
         #Ok : ({
             apply: Result.Result<ApplyInterestResult, Neurons.NeuronsError>;
             mergeStaked: ?[Neurons.Neuron];
-            mergeDissolving: [Neurons.NeuronResult];
+            mergeDissolving: [Neurons.Neuron];
             flush: [Ledger.TransferResult];
             refresh: ?Neurons.NeuronsError;
             split: ?Neurons.NeuronsResult;
@@ -349,10 +349,7 @@ shared(init_msg) actor class Deposits(args: {
             let (percentage, applyResult) = await applyInterest(interest, when);
             // TODO: Error handling here. Do this first to confirm it worked? After
             // is nice as we can the merge "manually" to ensure it merges.
-            let merges: [Neurons.Neuron] = Array.mapFilter<Result.Result<Neurons.Neuron, Neurons.NeuronsError>, Neurons.Neuron>(
-                await neurons.mergeMaturities(staking.ids(), Nat32.fromNat(Nat64.toNat(percentage))),
-                func(r) { Result.toOption(r) },
-            );
+            let merges = await mergeMaturities(staking.ids(), Nat32.fromNat(Nat64.toNat(percentage)));
             for (n in merges.vals()) {
                 ignore staking.addOrRefresh(n);
             };
@@ -364,8 +361,11 @@ shared(init_msg) actor class Deposits(args: {
         let flushResult = await flushPendingDeposits(tokenE8s);
         let refreshResult = await refreshAllStakingNeurons();
 
-        // merge the maturity for dissolving neurons
-        let mergeDissolvingResult = await withdrawals.mergeMaturity();
+        // Merge maturity on dissolving neurons. Merged maturity here will be
+        // disbursed when the neuron is dissolved, and will be a "bonus" put
+        // towards filling pending withdrawals early.
+        let mergeDissolvingResult = await mergeMaturities(withdrawals.ids(), 100);
+        ignore withdrawals.addNeurons(mergeDissolvingResult);
         // figure out how much we have dissolving for withdrawals
         let dissolving = withdrawals.totalDissolving();
         let pending = withdrawals.totalPending();
@@ -431,6 +431,13 @@ shared(init_msg) actor class Deposits(args: {
             newNeurons.add(neuron);
         };
         #ok(newNeurons.toArray())
+    };
+
+    private func mergeMaturities(ids: [Nat64], percentage: Nat32): async [Neurons.Neuron] {
+        Array.mapFilter<Result.Result<Neurons.Neuron, Neurons.NeuronsError>, Neurons.Neuron>(
+            await neurons.mergeMaturities(withdrawals.ids(), percentage),
+            func(r) { Result.toOption(r) },
+        )
     };
 
     // Distribute newly earned interest to token holders.
@@ -884,7 +891,7 @@ shared(init_msg) actor class Deposits(args: {
 
     // Create a new withdrawal for a user. This will burn the corresponding
     // amount of tokens, locking them while the withdrawal is pending.
-    public shared(msg) func createWithdrawal(user: Principal, total: Nat64) : async Withdrawals.WithdrawalResult {
+    public shared(msg) func createWithdrawal(user: Principal, total: Nat64) : async Result.Result<Withdrawals.Withdrawal, Withdrawals.WithdrawalsError> {
         if (msg.caller != user) {
             owners.require(msg.caller);
         };
@@ -899,7 +906,20 @@ shared(init_msg) actor class Deposits(args: {
         if (availableCash+availableNeurons < total) {
             return #err(#InsufficientLiquidity);
         };
-        return await withdrawals.createWithdrawal(user, total, availableCash, delay);
+
+        // Burn the tokens from the user. This makes sure there is enough
+        // balance for the user, avoiding re-entrancy.
+        let burn = await token.burnFor(user, Nat64.toNat(total));
+        switch (burn) {
+            case (#Err(err)) {
+                return #err(#TokenError(err));
+            };
+            case (#Ok(_)) { };
+        };
+
+        // TODO: Re-check we have enough cash+neurons, to avoid re-entrancy or timing attacks
+
+        return #ok(withdrawals.createWithdrawal(user, total, availableCash, delay));
     };
 
     // Complete withdrawal(s), transferring the ready amount to the
@@ -909,37 +929,52 @@ shared(init_msg) actor class Deposits(args: {
             owners.require(msg.caller);
         };
 
-        // See if we got a valid address to send to
-        switch (await parseAddress(to)) {
-            case (null) {
-                #err(#InvalidAddress)
-            };
-            case (?toAddress) {
-                await withdrawals.completeWithdrawal(user, amount, toAddress);
-            }
-        }
-    };
-
-    // Try to parse text as an address or a principal. If a principal, return
-    // the default subaccount address for that principal.
-    private func parseAddress(to: Text): async ?Account.AccountIdentifier {
-        switch (Account.fromText(to)) {
+        // See if we got a valid address to send to.
+        //
+        // Try to parse text as an address or a principal. If a principal, return
+        // the default subaccount address for that principal.
+        let toAddress = switch (Account.fromText(to)) {
             case (#err(_)) {
                 // Try to parse as a principal
                 try {
-                    ?Account.fromPrincipal(Principal.fromText(to), Account.defaultSubaccount())
+                    Account.fromPrincipal(Principal.fromText(to), Account.defaultSubaccount())
                 } catch (error) {
-                    null
+                    return #err(#InvalidAddress);
                 };
             };
             case (#ok(toAddress)) {
                 if (Account.validateAccountIdentifier(toAddress)) {
-                    ?toAddress
+                    toAddress
                 } else {
-                    null
+                    return #err(#InvalidAddress);
                 }
             };
         };
+
+        let (transferArgs, revert) = switch (withdrawals.completeWithdrawal(user, amount, toAddress)) {
+            case (#err(err)) { return #err(err); };
+            case (#ok(a)) { a };
+        };
+        try {
+            let transfer = await ledger.transfer(transferArgs);
+            switch (transfer) {
+                case (#Ok(block)) {
+                    #ok(block)
+                };
+                case (#Err(#InsufficientFunds{})) {
+                    // Not enough ICP in the contract
+                    revert();
+                    #err(#InsufficientLiquidity)
+                };
+                case (#Err(err)) {
+                    revert();
+                    #err(#TransferError(err))
+                };
+            }
+        } catch (error) {
+            revert();
+            #err(#Other(Error.message(error)))
+        }
     };
 
     // List all withdrawals for a user.
