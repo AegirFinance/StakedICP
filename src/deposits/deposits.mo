@@ -19,7 +19,7 @@ import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
-import Trie "mo:base/Trie";
+import TrieMap "mo:base/TrieMap";
 
 import Account      "./Account";
 import Hex          "./Hex";
@@ -140,7 +140,9 @@ shared(init_msg) actor class Deposits(args: {
 
     private stable var token : Token.Token = actor(Principal.toText(args.token));
 
-    private stable var pendingMints : Trie.Trie<Principal, Nat64> = Trie.empty();
+    private var pendingMints = TrieMap.TrieMap<Principal, Nat64>(Principal.equal, Principal.hash);
+    private stable var stablePendingMints : ?[(Principal, Nat64)] = null;
+
     private stable var snapshot : ?[(Principal, Nat)] = null;
 
     private stable var appliedInterestEntries : [ApplyInterestResult] = [];
@@ -729,13 +731,6 @@ shared(init_msg) actor class Deposits(args: {
         #Err: DepositErr;
     };
 
-    private func principalKey(p: Principal) : Trie.Key<Principal> {
-        return {
-            key = p;
-            hash = Principal.hash(p);
-        };
-    };
-
     // After the user transfers their ICP to their depositAddress, process the
     // deposit, be minting the tokens.
     public shared(msg) func depositIcp(): async DepositReceipt {
@@ -791,31 +786,31 @@ shared(init_msg) actor class Deposits(args: {
     // For safety, minting tokens is a two-step process. First we queue them
     // locally, in case the async mint call fails.
     private func queueMint(to : Principal, amount : Nat64) : Nat64 {
-        let key = principalKey(to);
-        let existing = Option.get(Trie.find(pendingMints, key, Principal.equal), 0 : Nat64);
+        let existing = Option.get(pendingMints.get(to), 0 : Nat64);
         let total = existing + amount;
-        pendingMints := Trie.replace(pendingMints, key, Principal.equal, ?total).0;
+        pendingMints.put(to, total);
         return total;
     };
 
     // Execute the pending mints for a specific user on the token canister.
     private func flushMint(to : Principal) : async TxReceipt {
-        let key = principalKey(to);
-        let total = Option.get(Trie.find(pendingMints, key, Principal.equal), 0 : Nat64);
+        let total = Option.get(pendingMints.get(to), 0 : Nat64);
         if (total == 0) {
             return #Err(#AmountTooSmall);
         };
         Debug.print("minting: " # debug_show(total) # " to " # debug_show(to));
         let result = await token.mint(to, Nat64.toNat(total));
-        pendingMints := Trie.remove(pendingMints, key, Principal.equal).0;
+        pendingMints.delete(to);
         return result;
     };
 
     // Execute all the pending mints on the token canister.
     private func flushAllMints() : async TxReceipt {
-        let mints = Trie.toArray<Principal, Nat64, (Principal, Nat)>(pendingMints, func(k, v) {
-            (k, Nat64.toNat(v))
-        });
+        let mints = Iter.toArray(
+            Iter.map<(Principal, Nat64), (Principal, Nat)>(pendingMints.entries(), func((to, total)) {
+                (to, Nat64.toNat(total))
+            })
+        );
         for ((to, total) in mints.vals()) {
             Debug.print("minting: " # debug_show(total) # " to " # debug_show(to));
         };
@@ -824,7 +819,7 @@ shared(init_msg) actor class Deposits(args: {
                 return #Err(err);
             };
             case (#Ok(count)) {
-                pendingMints := Trie.empty();
+                pendingMints := TrieMap.TrieMap(Principal.equal, Principal.hash);
                 return #Ok(count);
             };
         };
@@ -1043,6 +1038,8 @@ shared(init_msg) actor class Deposits(args: {
     // ===== UPGRADE FUNCTIONS =====
 
     system func preupgrade() {
+        stablePendingMints := ?Iter.toArray(pendingMints.entries());
+
         // convert the buffer to a stable array
         appliedInterestEntries := appliedInterest.toArray();
 
@@ -1058,6 +1055,14 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     system func postupgrade() {
+        switch (stablePendingMints) {
+            case (null) {};
+            case (?entries) {
+                pendingMints := TrieMap.fromEntries<Principal, Nat64>(entries.vals(), Principal.equal, Principal.hash);
+                stablePendingMints := null;
+            };
+        };
+
         // convert the stable array back to a buffer.
         appliedInterest := Buffer.Buffer(appliedInterestEntries.size());
         for (x in appliedInterestEntries.vals()) {
