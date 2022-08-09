@@ -140,7 +140,6 @@ shared(init_msg) actor class Deposits(args: {
 
     private stable var token : Token.Token = actor(Principal.toText(args.token));
 
-    private stable var balances : Trie.Trie<Principal, Nat64> = Trie.empty();
     private stable var pendingMints : Trie.Trie<Principal, Nat64> = Trie.empty();
     private stable var snapshot : ?[(Principal, Nat)] = null;
 
@@ -177,9 +176,8 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     private func stakingNeuronBalance(): Nat64 {
-        let balances = staking.balances();
         var sum : Nat64 = 0;
-        for ((id, balance) in balances.vals()) {
+        for ((id, balance) in staking.balances().vals()) {
             sum += balance;
         };
         sum
@@ -270,9 +268,6 @@ shared(init_msg) actor class Deposits(args: {
         var balance = (await ledger.account_balance({
             account = Blob.toArray(accountIdBlob());
         })).e8s;
-        for ((_, amount) in Trie.iter(balances)) {
-            balance := balance + amount;
-        };
         return {
             aprMicrobips = await aprMicrobips();
             balances = [
@@ -762,10 +757,6 @@ shared(init_msg) actor class Deposits(args: {
         // Check ledger for value
         let balance = await ledger.account_balance({ account = Blob.toArray(source_account) });
 
-        // TODO: Refactor this to a TrieMap
-        let key = principalKey(user);
-        balances := Trie.put(balances, key, Principal.equal, balance.e8s).0;
-
         // Transfer to staking neuron
         if (Nat64.toNat(balance.e8s) <= minimumDeposit) {
             return #Err(#BalanceLow);
@@ -787,8 +778,6 @@ shared(init_msg) actor class Deposits(args: {
             };
             case _ {};
         };
-
-        balances := Trie.put(balances, key, Principal.equal, 0 : Nat64).0;
 
         // Mint the new tokens
         Debug.print("[Referrals.convert] user: " # debug_show(user));
