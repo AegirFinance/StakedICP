@@ -209,7 +209,7 @@ module {
                         p.executed_timestamp_seconds,
                         amount_e8s - icpFee
                     );
-                    return okOr(result, #Other("Neuron not found, proposal: " # debug_show(p.id)));
+                    return Result.fromOption(result, #Other("Neuron not found, proposal: " # debug_show(p.id)));
                 };
             };
         };
@@ -278,13 +278,6 @@ module {
             };
 
             return #ok(proposalInfo);
-        };
-
-        private func okOr<Ok, Error>(x : ?Ok, e : Error) : Result.Result<Ok, Error> {
-            switch x {
-                case (?x)   { #ok(x) };
-                case (null) { #err(e) };
-            }
         };
 
         private func findNewNeuron(createdTimestampSeconds: Nat64, stakeE8s: Nat64): async ?Neuron {
