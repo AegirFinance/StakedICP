@@ -217,11 +217,12 @@ shared(init_msg) actor class Deposits(args: {
         neurons.getProposalNeuron()
     };
 
-    public shared(msg) func setProposalNeuron(id: Nat64): async ?Governance.GovernanceError {
+    public shared(msg) func setProposalNeuron(id: Nat64): async Neurons.NeuronResult {
         owners.require(msg.caller);
-        await neurons.setProposalNeuron(id)
+        let neuron = await neurons.refresh(id);
+        Result.iterate(neuron, neurons.setProposalNeuron);
+        neuron
     };
-
 
     public shared(msg) func accountId() : async Text {
         return Account.toText(accountIdBlob());

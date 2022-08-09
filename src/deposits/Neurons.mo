@@ -91,21 +91,8 @@ module {
             proposalNeuron
         };
 
-        public func setProposalNeuron(id: Nat64): async ?Governance.GovernanceError {
-            switch (await governance.get_full_neuron(id)) {
-                case (#Err(err)) {
-                    return ?err;
-                };
-                case (#Ok(neuron)) {
-                    proposalNeuron := ?{
-                        id = id;
-                        accountId = Account.fromPrincipal(args.governance, Blob.fromArray(neuron.account));
-                        dissolveState = neuron.dissolve_state;
-                        cachedNeuronStakeE8s = neuron.cached_neuron_stake_e8s;
-                    };
-                };
-            };
-            return null;
+        public func setProposalNeuron(neuron: Neuron) {
+            proposalNeuron := ?neuron;
         };
 
         // ===== NEURON INFO FUNCTIONS =====
