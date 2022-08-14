@@ -598,11 +598,11 @@ shared(init_msg) actor class Deposits(args: {
         // Check everything matches up
         assert(applied+affiliatePayouts+remainder == interest);
 
-        // Execute the mints.
-        let flush = await flushAllMints();
-
         // Update the snapshot for next time.
         snapshot := ?nextHolders;
+
+        // Execute the mints.
+        let flush = await flushAllMints();
 
         return {
             timestamp = now;
