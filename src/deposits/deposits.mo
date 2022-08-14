@@ -760,7 +760,7 @@ shared(init_msg) actor class Deposits(args: {
         };
         let fee = { e8s = Nat64.fromNat(icpFee) };
         let amount = { e8s = balance.e8s - fee.e8s };
-        let icp_receipt = await ledger.transfer({
+        let icpReceipt = await ledger.transfer({
             memo : Nat64    = 0;
             from_subaccount = ?Blob.toArray(subaccount);
             to              = Blob.toArray(accountIdBlob());
@@ -769,8 +769,8 @@ shared(init_msg) actor class Deposits(args: {
             created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
         });
 
-        switch icp_receipt {
-            case ( #Err _) {
+        switch icpReceipt {
+            case (#Err(_)) {
                 return #Err(#TransferFailure);
             };
             case _ {};
