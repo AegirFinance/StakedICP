@@ -271,7 +271,7 @@ shared(init_msg) actor class Deposits(args: {
             account = Blob.toArray(accountIdBlob());
         })).e8s;
         return {
-            aprMicrobips = await aprMicrobips();
+            aprMicrobips = meanAprMicrobips;
             balances = [
                 ("ICP", balance),
                 ("cycles", Nat64.fromNat(ExperimentalCycles.balance()))
@@ -795,17 +795,26 @@ shared(init_msg) actor class Deposits(args: {
 
     // Execute the pending mints for a specific user on the token canister.
     private func flushMint(to : Principal) : async TxReceipt {
-        let total = Option.get(pendingMints.get(to), 0 : Nat64);
+        let total = Option.get(pendingMints.remove(to), 0 : Nat64);
         if (total == 0) {
             return #Err(#AmountTooSmall);
         };
         Debug.print("minting: " # debug_show(total) # " to " # debug_show(to));
-        let result = await token.mint(to, Nat64.toNat(total));
-        switch (result) {
-            case (#Ok(_)) { pendingMints.delete(to) };
-            case _ {};
-        };
-        return result;
+        try {
+            let result = await token.mint(to, Nat64.toNat(total));
+            switch (result) {
+                case (#Err(_)) {
+                    // Mint failed, revert
+                    pendingMints.put(to, total + Option.get(pendingMints.remove(to), 0 : Nat64));
+                };
+                case _ {};
+            };
+            result
+        } catch (error) {
+            // Mint failed, revert
+            pendingMints.put(to, total + Option.get(pendingMints.remove(to), 0 : Nat64));
+            #Err(#Other(Error.message(error)))
+        }
     };
 
     // Execute all the pending mints on the token canister.
@@ -818,15 +827,26 @@ shared(init_msg) actor class Deposits(args: {
         for ((to, total) in mints.vals()) {
             Debug.print("minting: " # debug_show(total) # " to " # debug_show(to));
         };
-        switch (await token.mintAll(mints)) {
-            case (#Err(err)) {
-                return #Err(err);
+        pendingMints := TrieMap.TrieMap(Principal.equal, Principal.hash);
+        try {
+            let result = await token.mintAll(mints);
+            switch (result) {
+                case (#Err(err)) {
+                    // Mint failed, revert
+                    for ((to, amount) in mints.vals()) {
+                        pendingMints.put(to, Nat64.fromNat(amount) + Option.get(pendingMints.get(to), 0 : Nat64));
+                    };
+                };
+                case _ { };
             };
-            case (#Ok(count)) {
-                pendingMints := TrieMap.TrieMap(Principal.equal, Principal.hash);
-                return #Ok(count);
+            result
+        } catch (error) {
+            // Mint failed, revert
+            for ((to, amount) in mints.vals()) {
+                pendingMints.put(to, Nat64.fromNat(amount) + Option.get(pendingMints.get(to), 0 : Nat64));
             };
-        };
+            #Err(#Other(Error.message(error)))
+        }
     };
 
     // ===== WITHDRAWAL FUNCTIONS =====
