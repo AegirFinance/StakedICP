@@ -105,7 +105,7 @@ shared(init_msg) actor class Deposits(args: {
             apply: Result.Result<ApplyInterestResult, Neurons.NeuronsError>;
             mergeStaked: ?[Neurons.Neuron];
             mergeDissolving: [Neurons.Neuron];
-            flush: [Ledger.TransferResult];
+            flush: [Ledger.TransferArgs];
             refresh: ?Neurons.NeuronsError;
             split: ?Neurons.NeuronsResult;
         });
@@ -356,7 +356,10 @@ shared(init_msg) actor class Deposits(args: {
 
         // Flush pending deposits
         let tokenE8s = Nat64.fromNat((await token.getMetadata()).totalSupply);
-        let flushResult = await flushPendingDeposits(tokenE8s);
+
+        var balance = await availableBalance();
+        let flushResult = await flushPendingDeposits(balance, tokenE8s);
+
         let refreshResult = await refreshAllStakingNeurons();
 
         // Merge maturity on dissolving neurons. Merged maturity here will be
@@ -459,27 +462,25 @@ shared(init_msg) actor class Deposits(args: {
     // - pending withdrawals
     // - ICP in the canister
     // - staking neurons
-    private func flushPendingDeposits(tokenE8s: Nat64): async [Ledger.TransferResult] {
-        var balance = await availableBalance();
-        if (balance == 0) {
+    private func flushPendingDeposits(totalBalance: Nat64, tokenE8s: Nat64): async [Ledger.TransferArgs] {
+        if (totalBalance == 0) {
             return [];
         };
 
-
-        let applied = withdrawals.applyIcp(balance);
-        balance -= Nat64.min(balance, applied);
+        let applied = withdrawals.applyIcp(totalBalance);
+        let balance = totalBalance - Nat64.min(totalBalance, applied);
         if (balance == 0) {
             return [];
         };
 
         let transfers = staking.depositIcp(tokenE8s, balance, null);
-
-
-        let b = Buffer.Buffer<Ledger.TransferResult>(transfers.size());
         for (transfer in transfers.vals()) {
-            b.add(await ledger.transfer(transfer));
+            // Start the transfer. Best effort here. If the transfer fails,
+            // it'll be retried next time. But not awaiting means this function
+            // is atomic.
+            ignore ledger.transfer(transfer);
         };
-        return b.toArray();
+        return transfers;
     };
 
     private func getAllHolders(): async [(Principal, Nat)] {
