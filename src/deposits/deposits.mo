@@ -100,18 +100,6 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
-    type DailyHeartbeatResponse = {
-        #Ok : ({
-            apply: Result.Result<ApplyInterestResult, Neurons.NeuronsError>;
-            mergeStaked: ?[Neurons.Neuron];
-            mergeDissolving: [Neurons.Neuron];
-            flush: [Ledger.TransferArgs];
-            refresh: ?Neurons.NeuronsError;
-            split: ?Neurons.NeuronsResult;
-        });
-        #Err: Neurons.NeuronsError;
-    };
-
     type ApplyInterestResult = {
         timestamp : Time.Time;
         supply : {
@@ -121,7 +109,6 @@ shared(init_msg) actor class Deposits(args: {
         applied : Ledger.Tokens;
         remainder : Ledger.Tokens;
         totalHolders: Nat;
-        flush : ?TxReceipt;
         affiliatePayouts: Nat;
     };
 
@@ -148,6 +135,8 @@ shared(init_msg) actor class Deposits(args: {
     private stable var appliedInterestEntries : [ApplyInterestResult] = [];
     private var appliedInterest : Buffer.Buffer<ApplyInterestResult> = Buffer.Buffer(0);
     private stable var meanAprMicrobips : Nat64 = 0;
+
+    private stable var cachedLedgerBalanceE8s : Nat64 = 0;
 
     // ===== OWNER FUNCTIONS =====
 
@@ -232,6 +221,11 @@ shared(init_msg) actor class Deposits(args: {
         return Account.fromPrincipal(Principal.fromActor(this), Account.defaultSubaccount());
     };
 
+    // Getter for the current APR in microbips
+    public query func aprMicrobips() : async Nat64 {
+        return meanAprMicrobips;
+    };
+
     // ===== METRICS FUNCTIONS =====
 
     private stable var metricsCanister : ?Principal = null;
@@ -286,20 +280,12 @@ shared(init_msg) actor class Deposits(args: {
             referralLeads = referralTracker.leadMetrics();
             referralPayoutsSum = referralTracker.payoutsSum();
             lastHeartbeatAt = lastHeartbeatAt;
-            lastHeartbeatOk = switch (lastHeartbeatResult) {
-                case (?#Ok(_)) { true };
-                case (_)       { false };
-            };
-            lastHeartbeatInterestApplied = switch (lastHeartbeatResult) {
-                case (?#Ok({apply})) {
-                    switch (apply) {
-                        case (#ok({applied; remainder; affiliatePayouts})) {
-                            applied.e8s + remainder.e8s + Nat64.fromNat(affiliatePayouts)
-                        };
-                        case (_) { 0 };
-                    };
+            lastHeartbeatOk = lastHeartbeatError == null;
+            lastHeartbeatInterestApplied = switch (lastHeartbeatApply) {
+                case (?#ok({applied; remainder; affiliatePayouts})) {
+                    applied.e8s + remainder.e8s + Nat64.fromNat(affiliatePayouts)
                 };
-                case (_)       { 0 };
+                case (_) { 0 };
             };
             pendingMints = pendingMintAmount;
         };
@@ -338,108 +324,35 @@ shared(init_msg) actor class Deposits(args: {
     // In case there was an issue with the automatic daily heartbeat, the
     // canister owner can call it manually. Repeated calling should be
     // effectively idempotent.
-    public shared(msg) func manualHeartbeat(when: ?Time.Time): async DailyHeartbeatResponse {
+    public shared(msg) func manualHeartbeat(when: ?Time.Time): async () {
         owners.require(msg.caller);
-        await dailyHeartbeat(when)
+        await dailyHeartbeat(when);
     };
 
     // called every day by the heartbeat function.
-    private func dailyHeartbeat(when: ?Time.Time) : async DailyHeartbeatResponse {
+    private func dailyHeartbeat(when: ?Time.Time) : async () {
+        // Reset all the daily heartbeat state where we record the results
+        lastHeartbeatError := null;
+        lastHeartbeatApply := null;
+        lastHeartbeatMergeDissolving := null;
+        lastHeartbeatFlush := null;
+        lastHeartbeatRefresh := null;
+        lastHeartbeatSplit := null;
+
         // Merge the interest
-        let interest = await stakingNeuronMaturityE8s();
-        let (applyInterestResult, mergeStakedResult): (Result.Result<ApplyInterestResult, Neurons.NeuronsError>, ?[Neurons.Neuron]) = if (interest <= 10_000) {
-            (#err(#InsufficientMaturity), null)
-        } else {
-            let applyResult = await applyInterest(interest, when);
-            // TODO: Error handling here?
-            let merges = await mergeMaturities(staking.ids(), 100);
-            for (n in merges.vals()) {
-                ignore staking.addOrRefresh(n);
-            };
-            (#ok(applyResult), ?merges)
-        };
+        await applyInterest(when);
 
         // Flush pending deposits
-        let tokenE8s = Nat64.fromNat((await token.getMetadata()).totalSupply);
+        await flushPendingDeposits();
 
-        var balance = await availableBalance();
-        let flushResult = await flushPendingDeposits(balance, tokenE8s);
+        // merge the maturity for our dissolving withdrawal neurons
+        await mergeWithdrawalMaturity();
 
-        // Update the staked neuron balances after they've been topped up
-        let refreshResult = await refreshAllStakingNeurons();
-
-        // Merge maturity on dissolving neurons. Merged maturity here will be
-        // disbursed when the neuron is dissolved, and will be a "bonus" put
-        // towards filling pending withdrawals early.
-        let mergeDissolvingResult = await mergeMaturities(withdrawals.ids(), 100);
-        ignore withdrawals.addNeurons(mergeDissolvingResult);
-        // figure out how much we have dissolving for withdrawals
-        let dissolving = withdrawals.totalDissolving();
-        let pending = withdrawals.totalPending();
-
-        // Split and dissolve enough new neurons to satisfy pending withdrawals
-        let splitResult: ?Neurons.NeuronsResult = if (pending <= dissolving) {
-            null
-        } else {
-            // figure out how much we need dissolving for withdrawals
-            let needed = pending - dissolving;
-            // Split the difference off from staking neurons
-            switch (staking.splitNeurons(needed)) {
-                case (#err(err)) {
-                    ?#err(err)
-                };
-                case (#ok(toSplit)) {
-                    // Do the splits on the nns and find the new neurons.
-                    let newNeurons = Buffer.Buffer<Neurons.Neuron>(toSplit.size());
-                    for ((id, amount) in toSplit.vals()) {
-                        switch (await neurons.split(id, amount)) {
-                            case (#err(err)) {
-                                // TODO: Error handling
-                            };
-                            case (#ok(n)) {
-                                newNeurons.add(n);
-                            };
-                        };
-                    };
-                    // Pass the new neurons into the withdrawals manager.
-                    switch (await dissolveNeurons(newNeurons.toArray())) {
-                        case (#err(err)) { ?#err(err) };
-                        case (#ok(newNeurons)) { ?#ok(withdrawals.addNeurons(newNeurons)) };
-                    }
-                };
-            }
-        };
-
-        #Ok({
-            apply = applyInterestResult;
-            mergeStaked = mergeStakedResult;
-            mergeDissolving = mergeDissolvingResult;
-            flush = flushResult;
-            refresh = refreshResult;
-            split = splitResult;
-        })
-    };
-
-    private func dissolveNeurons(ns: [Neurons.Neuron]): async Neurons.NeuronsResult {
-        let newNeurons = Buffer.Buffer<Neurons.Neuron>(ns.size());
-        for (n in ns.vals()) {
-            let neuron = switch (n.dissolveState) {
-                case (?#DissolveDelaySeconds(delay)) {
-                    // Make sure the neuron is dissolving
-                    switch (await neurons.dissolve(n.id)) {
-                        case (#err(err)) {
-                            return #err(err);
-                        };
-                        case (#ok(n)) {
-                            n
-                        };
-                    }
-                };
-                case (_) { n };
-            };
-            newNeurons.add(neuron);
-        };
-        #ok(newNeurons.toArray())
+        // Split off as many staking neurons as we need to ensure withdrawals
+        // will be satisfied.
+        //
+        // Note: This needs to happen *after* everything above, hence the awaits.
+        ignore splitNewWithdrawalNeurons();
     };
 
     private func mergeMaturities(ids: [Nat64], percentage: Nat32): async [Neurons.Neuron] {
@@ -450,17 +363,43 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     // Distribute newly earned interest to token holders.
-    private func applyInterest(interest: Nat64, when: ?Time.Time) : async ApplyInterestResult {
+    private func applyInterest(when: ?Time.Time) : async () {
         let now = Option.get(when, Time.now());
 
-        let result = await applyInterestToToken(now, Nat64.toNat(interest));
+        // take a snapshot of the holders for tomorrow's interest.
+        let nextHolders = await getAllHolders();
 
-        appliedInterest.add(result);
+        // See how much maturity we have pending
+        let interest = await stakingNeuronMaturityE8s();
+        if (interest <= 10_000) {
+            return;
+        };
+
+        // Note: We might "leak" a tiny bit of interest here because maturity
+        // could increase before we merge. It would be ideal if the NNS allowed
+        // specify maturity to merge as an e8s, but alas.
+        let merges = await mergeMaturities(staking.ids(), 100);
+        for (n in merges.vals()) {
+            ignore staking.addOrRefresh(n);
+        };
+
+        // Apply the interest to the holders
+        let apply = applyInterestToToken(
+            now,
+            Nat64.toNat(interest),
+            Option.get(snapshot, nextHolders)
+        );
+
+        // Update the snapshot for next time.
+        snapshot := ?nextHolders;
+
+        // Update the APY calculation
+        appliedInterest.add(apply);
         appliedInterest := sortBuffer(appliedInterest, sortInterestByTime);
-
         updateMeanAprMicrobips();
 
-        return result;
+        // Save the result in the daily heartbeat where this is called from.
+        lastHeartbeatApply := ?#ok(apply);
     };
 
     // Use new incoming deposits to attempt to rebalance the buckets, where
@@ -468,15 +407,18 @@ shared(init_msg) actor class Deposits(args: {
     // - pending withdrawals
     // - ICP in the canister
     // - staking neurons
-    private func flushPendingDeposits(totalBalance: Nat64, tokenE8s: Nat64): async [Ledger.TransferArgs] {
+    private func flushPendingDeposits(): async () {
+        let tokenE8s = Nat64.fromNat((await token.getMetadata()).totalSupply);
+        let totalBalance = _availableBalance();
+
         if (totalBalance == 0) {
-            return [];
+            return;
         };
 
         let applied = withdrawals.applyIcp(totalBalance);
         let balance = totalBalance - Nat64.min(totalBalance, applied);
         if (balance == 0) {
-            return [];
+            return;
         };
 
         let transfers = staking.depositIcp(tokenE8s, balance, null);
@@ -486,7 +428,17 @@ shared(init_msg) actor class Deposits(args: {
             // is atomic.
             ignore ledger.transfer(transfer);
         };
-        return transfers;
+        if (transfers.size() > 0) {
+            // If we did outbound transfers, refresh the ledger balance afterwards.
+            ignore refreshAvailableBalance();
+        };
+
+        // Save the result in the daily heartbeat where this is called from.
+        lastHeartbeatFlush := ?transfers;
+
+        // Update the staked neuron balances after they've been topped up
+        let refresh = await refreshAllStakingNeurons();
+        lastHeartbeatRefresh := refresh;
     };
 
     private func getAllHolders(): async [(Principal, Nat)] {
@@ -497,10 +449,7 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     // Calculate shares owed and distribute interest to token holders.
-    private func applyInterestToToken(now: Time.Time, interest: Nat): async ApplyInterestResult {
-        let nextHolders = await getAllHolders();
-        let holders = Option.get(snapshot, nextHolders);
-
+    private func applyInterestToToken(now: Time.Time, interest: Nat, holders: [(Principal, Nat)]): ApplyInterestResult {
         // Calculate everything
         var beforeSupply : Nat = 0;
         for (i in Iter.range(0, holders.size() - 1)) {
@@ -518,11 +467,9 @@ shared(init_msg) actor class Deposits(args: {
                 applied = { e8s = 0 : Nat64 };
                 remainder = { e8s = 0 : Nat64 };
                 totalHolders = holders.size();
-                flush = null;
                 affiliatePayouts = 0;
             };
         };
-        assert(interest > 0);
 
         var holdersPortion = (interest * 9) / 10;
         var remainder = interest;
@@ -572,12 +519,6 @@ shared(init_msg) actor class Deposits(args: {
         // Check everything matches up
         assert(applied+affiliatePayouts+remainder == interest);
 
-        // Update the snapshot for next time.
-        snapshot := ?nextHolders;
-
-        // Execute the mints.
-        let flush = await flushAllMints();
-
         return {
             timestamp = now;
             supply = {
@@ -587,7 +528,6 @@ shared(init_msg) actor class Deposits(args: {
             applied = { e8s = Nat64.fromNat(applied) };
             remainder = { e8s = Nat64.fromNat(remainder) };
             totalHolders = holders.size();
-            flush = ?flush;
             affiliatePayouts = affiliatePayouts;
         };
     };
@@ -656,10 +596,77 @@ shared(init_msg) actor class Deposits(args: {
         return null;
     };
 
-    // Getter for the current APR in microbips
-    public query func aprMicrobips() : async Nat64 {
-        return meanAprMicrobips;
+    private func mergeWithdrawalMaturity() : async () {
+        // Merge maturity on dissolving neurons. Merged maturity here will be
+        // disbursed when the neuron is dissolved, and will be a "bonus" put
+        // towards filling pending withdrawals early.
+        let merge = await mergeMaturities(withdrawals.ids(), 100);
+        ignore withdrawals.addNeurons(merge);
+        lastHeartbeatMergeDissolving := ?merge;
     };
+
+    // Split off as many staking neurons as we need to satisfy pending withdrawals.
+    private func splitNewWithdrawalNeurons() : async () {
+        // figure out how much we have dissolving for withdrawals
+        let dissolving = withdrawals.totalDissolving();
+        let pending = withdrawals.totalPending();
+
+        // Split and dissolve enough new neurons to satisfy pending withdrawals
+        lastHeartbeatSplit := if (pending <= dissolving) {
+            null
+        } else {
+            // figure out how much we need dissolving for withdrawals
+            let needed = pending - dissolving;
+            // Split the difference off from staking neurons
+            switch (staking.splitNeurons(needed)) {
+                case (#err(err)) {
+                    ?#err(err)
+                };
+                case (#ok(toSplit)) {
+                    // Do the splits on the nns and find the new neurons.
+                    let newNeurons = Buffer.Buffer<Neurons.Neuron>(toSplit.size());
+                    for ((id, amount) in toSplit.vals()) {
+                        switch (await neurons.split(id, amount)) {
+                            case (#err(err)) {
+                                // TODO: Error handling
+                            };
+                            case (#ok(n)) {
+                                newNeurons.add(n);
+                            };
+                        };
+                    };
+                    // Pass the new neurons into the withdrawals manager.
+                    switch (await dissolveNeurons(newNeurons.toArray())) {
+                        case (#err(err)) { ?#err(err) };
+                        case (#ok(newNeurons)) { ?#ok(withdrawals.addNeurons(newNeurons)) };
+                    }
+                };
+            }
+        };
+    };
+
+    private func dissolveNeurons(ns: [Neurons.Neuron]): async Neurons.NeuronsResult {
+        let newNeurons = Buffer.Buffer<Neurons.Neuron>(ns.size());
+        for (n in ns.vals()) {
+            let neuron = switch (n.dissolveState) {
+                case (?#DissolveDelaySeconds(delay)) {
+                    // Make sure the neuron is dissolving
+                    switch (await neurons.dissolve(n.id)) {
+                        case (#err(err)) {
+                            return #err(err);
+                        };
+                        case (#ok(n)) {
+                            n
+                        };
+                    }
+                };
+                case (_) { n };
+            };
+            newNeurons.add(neuron);
+        };
+        #ok(newNeurons.toArray())
+    };
+
 
     // ===== REFERRAL FUNCTIONS =====
 
@@ -829,9 +836,11 @@ shared(init_msg) actor class Deposits(args: {
     // Show currently available ICP in this canister. This ICP retained for
     // withdrawals.
     public shared(msg) func availableBalance() : async Nat64 {
-        let balance = (await ledger.account_balance({
-            account = Blob.toArray(accountIdBlob());
-        })).e8s;
+        _availableBalance()
+    };
+
+    private func _availableBalance() : Nat64 {
+        let balance = cachedLedgerBalanceE8s;
         let reserved = withdrawals.reservedIcp();
         if (reserved >= balance) {
             0
@@ -840,17 +849,23 @@ shared(init_msg) actor class Deposits(args: {
         }
     };
 
+    // Update the canister's cached local balance
+    private func refreshAvailableBalance() : async () {
+        cachedLedgerBalanceE8s := (await ledger.account_balance({
+            account = Blob.toArray(accountIdBlob());
+        })).e8s;
+    };
+
     // Datapoints representing available liquidity at a point in time.
     // `[(delay, amount)]`
     public type AvailableLiquidityGraph = [(Int, Nat64)];
 
     // Generate datapoints for a graph representing how much total liquidity is
     // available over time.
-    // TODO: Cache this or memoize it or something to make it cheaper.
-    public func availableLiquidityGraph(): async AvailableLiquidityGraph {
+    public shared(msg) func availableLiquidityGraph(): async AvailableLiquidityGraph {
         let neurons = staking.availableLiquidityGraph();
         let b = Buffer.Buffer<(Int, Nat64)>(neurons.size()+1);
-        b.add((0, await availableBalance()));
+        b.add((0, _availableBalance()));
         for ((delay, balance) in neurons.vals()) {
             b.add((delay, balance));
         };
@@ -891,7 +906,7 @@ shared(init_msg) actor class Deposits(args: {
         };
 
         // Check we have enough cash+neurons
-        let availableCash = await availableBalance();
+        let availableCash = _availableBalance();
         var delay: Int = 0;
         var availableNeurons: Nat64 = 0;
         if (total > availableCash) {
@@ -945,6 +960,7 @@ shared(init_msg) actor class Deposits(args: {
         };
         try {
             let transfer = await ledger.transfer(transferArgs);
+            ignore refreshAvailableBalance();
             switch (transfer) {
                 case (#Ok(block)) {
                     #ok(block)
@@ -1011,9 +1027,19 @@ shared(init_msg) actor class Deposits(args: {
     } else {
         Time.now()
     };
-    private stable var lastHeartbeatResult : ?DailyHeartbeatResponse = null;
+    private stable var lastHeartbeatError: ?Neurons.NeuronsError = null;
+    private stable var lastHeartbeatApply: ?Result.Result<ApplyInterestResult, Neurons.NeuronsError> = null;
+    private stable var lastHeartbeatMergeDissolving: ?[Neurons.Neuron] = null;
+    private stable var lastHeartbeatFlush: ?[Ledger.TransferArgs] = null;
+    private stable var lastHeartbeatRefresh: ?Neurons.NeuronsError = null;
+    private stable var lastHeartbeatSplit: ?Neurons.NeuronsResult = null;
 
     system func heartbeat() : async () {
+        ignore refreshAvailableBalance();
+
+        // Execute any pending mints.
+        ignore flushAllMints();
+
         let next = lastHeartbeatAt + day;
         let now = Time.now();
         if (now < next) {
@@ -1022,15 +1048,10 @@ shared(init_msg) actor class Deposits(args: {
         // Lock out other calls to this, which might overlap
         lastHeartbeatAt := now;
         try {
-            lastHeartbeatResult := ?(await dailyHeartbeat(?now));
+            await dailyHeartbeat(?now);
         } catch (error) {
-            lastHeartbeatResult := ?#Err(#Other(Error.message(error)));
+            lastHeartbeatError := ?#Other(Error.message(error));
         };
-    };
-
-    public shared(msg) func getLastHeartbeatResult(): async ?DailyHeartbeatResponse {
-        owners.require(msg.caller);
-        lastHeartbeatResult
     };
 
     // For manual recovery, in case of an issue with the most recent heartbeat.
