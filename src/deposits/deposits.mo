@@ -365,6 +365,7 @@ shared(init_msg) actor class Deposits(args: {
         var balance = await availableBalance();
         let flushResult = await flushPendingDeposits(balance, tokenE8s);
 
+        // Update the staked neuron balances after they've been topped up
         let refreshResult = await refreshAllStakingNeurons();
 
         // Merge maturity on dissolving neurons. Merged maturity here will be
@@ -375,7 +376,11 @@ shared(init_msg) actor class Deposits(args: {
         // figure out how much we have dissolving for withdrawals
         let dissolving = withdrawals.totalDissolving();
         let pending = withdrawals.totalPending();
-        let splitResult: ?Neurons.NeuronsResult = if (pending > dissolving) {
+
+        // Split and dissolve enough new neurons to satisfy pending withdrawals
+        let splitResult: ?Neurons.NeuronsResult = if (pending <= dissolving) {
+            null
+        } else {
             // figure out how much we need dissolving for withdrawals
             let needed = pending - dissolving;
             // Split the difference off from staking neurons
@@ -403,8 +408,6 @@ shared(init_msg) actor class Deposits(args: {
                     }
                 };
             }
-        } else {
-            null
         };
 
         #Ok({
@@ -1016,6 +1019,7 @@ shared(init_msg) actor class Deposits(args: {
         if (now < next) {
             return;
         };
+        // Lock out other calls to this, which might overlap
         lastHeartbeatAt := now;
         try {
             lastHeartbeatResult := ?(await dailyHeartbeat(?now));
