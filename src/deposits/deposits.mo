@@ -670,7 +670,7 @@ shared(init_msg) actor class Deposits(args: {
     // Refresh all neurons, fetching current data from the NNS. This is
     // needed e.g. if we have transferred more ICP into a staking neuron,
     // to update the cached balances.
-    public func refreshAllStakingNeurons(): async ?Neurons.NeuronsError {
+    private func refreshAllStakingNeurons(): async ?Neurons.NeuronsError {
         for (id in staking.ids().vals()) {
             switch (await neurons.refresh(id)) {
                 case (#err(err)) { return ?err };
@@ -697,9 +697,10 @@ shared(init_msg) actor class Deposits(args: {
 
     // Get a user's current referral stats. Used for the "Rewards" page.
     public shared(msg) func getReferralStats(): async ReferralStats {
+        let code = await referralTracker.getCode(msg.caller)
         let stats = referralTracker.getStats(msg.caller);
         return {
-            code = await referralTracker.getCode(msg.caller);
+            code = code;
             count = stats.count;
             earned = stats.earned;
         };
