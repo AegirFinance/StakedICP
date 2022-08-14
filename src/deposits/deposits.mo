@@ -905,6 +905,18 @@ shared(init_msg) actor class Deposits(args: {
         if (msg.caller != user) {
             owners.require(msg.caller);
         };
+
+        // Burn the tokens from the user. This makes sure there is enough
+        // balance for the user.
+        let burn = await token.burnFor(user, Nat64.toNat(total));
+        switch (burn) {
+            case (#Err(err)) {
+                return #err(#TokenError(err));
+            };
+            case (#Ok(_)) { };
+        };
+
+        // Check we have enough cash+neurons
         let availableCash = await availableBalance();
         var delay: Int = 0;
         var availableNeurons: Nat64 = 0;
@@ -914,20 +926,12 @@ shared(init_msg) actor class Deposits(args: {
             availableNeurons := a;
         };
         if (availableCash+availableNeurons < total) {
+            // Refund the user's burnt tokens. In practice, this should never
+            // happen, as cash+neurons should be >= totalTokens.
+            ignore queueMint(user, total);
+            ignore flushMint(user);
             return #err(#InsufficientLiquidity);
         };
-
-        // Burn the tokens from the user. This makes sure there is enough
-        // balance for the user, avoiding re-entrancy.
-        let burn = await token.burnFor(user, Nat64.toNat(total));
-        switch (burn) {
-            case (#Err(err)) {
-                return #err(#TokenError(err));
-            };
-            case (#Ok(_)) { };
-        };
-
-        // TODO: Re-check we have enough cash+neurons, to avoid re-entrancy or timing attacks
 
         return #ok(withdrawals.createWithdrawal(user, total, availableCash, delay));
     };
