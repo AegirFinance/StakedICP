@@ -176,7 +176,7 @@ module {
         // splitNeurons attempts to split off enough new dissolving neurons to
         // make sure that at least "amount" liquidity will become available.
         // This is used to ensure there is at least enough ICP dissolving in
-        // the ICP to eventually fulfill all pending deposits.
+        // the NNS to eventually fulfill all pending deposits.
         //
         // If successful, it returns: [(NeuronID, AmountToSplit+Fee)]
         public func splitNeurons(e8s: Nat64): Result.Result<[(Nat64, Nat64)], Neurons.NeuronsError> {
