@@ -206,7 +206,7 @@ shared(init_msg) actor class Deposits(args: {
                 if isNew {
                     let canister = Principal.fromActor(this);
                     ignore queueMint(canister, neuron.cachedNeuronStakeE8s);
-                    ignore await flushMint(canister);
+                    ignore flushMint(canister);
                 };
                 #ok(neuron)
             };
@@ -779,7 +779,7 @@ shared(init_msg) actor class Deposits(args: {
         Debug.print("[Referrals.convert] user: " # debug_show(user));
         referralTracker.convert(user);
         ignore queueMint(user, amount.e8s);
-        ignore await flushMint(user);
+        ignore flushMint(user);
 
         return #Ok(Nat64.toNat(amount.e8s));
     };
@@ -801,7 +801,10 @@ shared(init_msg) actor class Deposits(args: {
         };
         Debug.print("minting: " # debug_show(total) # " to " # debug_show(to));
         let result = await token.mint(to, Nat64.toNat(total));
-        pendingMints.delete(to);
+        switch (result) {
+            case (#Ok(_)) { pendingMints.delete(to) };
+            case _ {};
+        };
         return result;
     };
 
