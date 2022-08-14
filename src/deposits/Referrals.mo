@@ -115,9 +115,11 @@ module {
                         // Re-generate if there's a collision.
                         generated := await Nanoid.new();
                     };
-                    codesByPrincipal.put(affiliate, generated);
-                    principalsByCode.put(generated, affiliate);
-                    return generated;
+                    // check we didn't generate one in the meantime.
+                    let newCode = Option.get(codesByPrincipal.get(affiliate), generated);
+                    codesByPrincipal.put(affiliate, newCode);
+                    principalsByCode.put(newCode, affiliate);
+                    return newCode;
                 };
             }
         };
