@@ -250,6 +250,7 @@ shared(init_msg) actor class Deposits(args: {
         lastHeartbeatAt: Time.Time;
         lastHeartbeatOk: Bool;
         lastHeartbeatInterestApplied: Nat64;
+        pendingMints: Nat64;
         // TODO: Add neurons metrics
     };
 
@@ -270,6 +271,10 @@ shared(init_msg) actor class Deposits(args: {
         var balance = (await ledger.account_balance({
             account = Blob.toArray(accountIdBlob());
         })).e8s;
+        var pendingMintAmount : Nat64 = 0;
+        for (amount in pendingMints.vals()) {
+            pendingMintAmount += amount;
+        };
         return {
             aprMicrobips = meanAprMicrobips;
             balances = [
@@ -296,6 +301,7 @@ shared(init_msg) actor class Deposits(args: {
                 };
                 case (_)       { 0 };
             };
+            pendingMints = pendingMintAmount;
         };
     };
 
