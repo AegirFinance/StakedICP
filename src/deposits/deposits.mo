@@ -697,7 +697,7 @@ shared(init_msg) actor class Deposits(args: {
 
     // Get a user's current referral stats. Used for the "Rewards" page.
     public shared(msg) func getReferralStats(): async ReferralStats {
-        let code = await referralTracker.getCode(msg.caller)
+        let code = await referralTracker.getCode(msg.caller);
         let stats = referralTracker.getStats(msg.caller);
         return {
             code = code;
