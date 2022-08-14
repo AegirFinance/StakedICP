@@ -344,10 +344,9 @@ shared(init_msg) actor class Deposits(args: {
         let (applyInterestResult, mergeStakedResult): (Result.Result<ApplyInterestResult, Neurons.NeuronsError>, ?[Neurons.Neuron]) = if (interest <= 10_000) {
             (#err(#InsufficientMaturity), null)
         } else {
-            let (percentage, applyResult) = await applyInterest(interest, when);
-            // TODO: Error handling here. Do this first to confirm it worked? After
-            // is nice as we can the merge "manually" to ensure it merges.
-            let merges = await mergeMaturities(staking.ids(), Nat32.fromNat(Nat64.toNat(percentage)));
+            let applyResult = await applyInterest(interest, when);
+            // TODO: Error handling here?
+            let merges = await mergeMaturities(staking.ids(), 100);
             for (n in merges.vals()) {
                 ignore staking.addOrRefresh(n);
             };
@@ -442,7 +441,7 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     // Distribute newly earned interest to token holders.
-    private func applyInterest(interest: Nat64, when: ?Time.Time) : async (Nat64, ApplyInterestResult) {
+    private func applyInterest(interest: Nat64, when: ?Time.Time) : async ApplyInterestResult {
         let now = Option.get(when, Time.now());
 
         let result = await applyInterestToToken(now, Nat64.toNat(interest));
@@ -452,9 +451,7 @@ shared(init_msg) actor class Deposits(args: {
 
         updateMeanAprMicrobips();
 
-        // Figure out the percentage to merge
-        let percentage = ((interest - result.remainder.e8s) * 100) / interest;
-        return (percentage, result);
+        return result;
     };
 
     // Use new incoming deposits to attempt to rebalance the buckets, where
@@ -554,45 +551,13 @@ shared(init_msg) actor class Deposits(args: {
             }
         };
 
-        // Deal with our share
-        //
-        // If there is 1+ icp left, we'll spawn, so return it as a remainder,
-        // otherwise mint it to the root so the neuron matches up.
+        // Deal with our share. For now, just mint it to this canister.
         if (remainder > 0) {
-            // The gotcha here is that we can only merge maturity in whole
-            // percentages, so round down to the nearest whole percentage.
-            let spawnablePercentage = (remainder * 100) / interest;
-            let spawnableE8s = (interest * spawnablePercentage) / 100;
-            assert(spawnableE8s <= remainder);
-
             let root = Principal.fromActor(this);
-            if (spawnableE8s < 100_000_000) {
-                // Less than than 1 icp left, but there is some remainder, so
-                // just mint all the remainder to root. This keeps the neuron
-                // and token matching, and tidy.
-                Debug.print("remainder: " # debug_show(remainder) # " to " # debug_show(root));
-                ignore queueMint(root, Nat64.fromNat(remainder));
-                applied += remainder;
-                remainder := 0;
-            } else {
-                // More than 1 icp left, so we can spawn!
-
-                // Gap is the fractional percentage we can't spawn, so we'll merge
-                // it, and mint to root
-                //
-                // e.g. if the remainder is 7.5% of total, we can't merge
-                // 92.5%, so merge 93%, and mint the gap 0.5%, to root.
-                let gap = remainder - spawnableE8s;
-
-                // Mint the gap to root
-                Debug.print("remainder: " # debug_show(gap) # " to " # debug_show(root));
-                ignore queueMint(root, Nat64.fromNat(gap));
-                applied += gap;
-
-                // Return the spawnable amount as remainder. This is what we'll
-                // get when we spawn our cut from the neuron.
-                remainder := spawnableE8s;
-            };
+            Debug.print("remainder: " # debug_show(remainder) # " to " # debug_show(root));
+            ignore queueMint(root, Nat64.fromNat(remainder));
+            applied += remainder;
+            remainder := 0;
         };
 
         // Check everything matches up
