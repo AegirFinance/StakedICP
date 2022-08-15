@@ -89,19 +89,20 @@ shared(init_msg) actor class Deposits(args: {
     type NeuronId = { id : Nat64; };
 
     // Copied from Token due to compiler weirdness
+    type TxReceiptError = {
+        #InsufficientAllowance;
+        #InsufficientBalance;
+        #ErrorOperationStyle;
+        #Unauthorized;
+        #LedgerTrap;
+        #ErrorTo;
+        #Other: Text;
+        #BlockUsed;
+        #AmountTooSmall;
+    };
     type TxReceipt = {
         #Ok: Nat;
-        #Err: {
-            #InsufficientAllowance;
-            #InsufficientBalance;
-            #ErrorOperationStyle;
-            #Unauthorized;
-            #LedgerTrap;
-            #ErrorTo;
-            #Other: Text;
-            #BlockUsed;
-            #AmountTooSmall;
-        };
+        #Err: TxReceiptError;
     };
 
     type ApplyInterestResult = {
@@ -783,7 +784,7 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     // Execute all the pending mints on the token canister.
-    private func flushAllMints() : async TxReceipt {
+    private func flushAllMints() : async Result.Result<Nat, TxReceiptError> {
         let mints = Iter.toArray(
             Iter.map<(Principal, Nat64), (Principal, Nat)>(pendingMints.entries(), func((to, total)) {
                 (to, Nat64.toNat(total))
@@ -794,23 +795,24 @@ shared(init_msg) actor class Deposits(args: {
         };
         pendingMints := TrieMap.TrieMap(Principal.equal, Principal.hash);
         try {
-            let result = await token.mintAll(mints);
-            switch (result) {
+            switch (await token.mintAll(mints)) {
                 case (#Err(err)) {
                     // Mint failed, revert
                     for ((to, amount) in mints.vals()) {
                         pendingMints.put(to, Nat64.fromNat(amount) + Option.get(pendingMints.get(to), 0 : Nat64));
                     };
+                    #err(err)
                 };
-                case _ { };
-            };
-            result
+                case (#Ok(count)) {
+                    #ok(count)
+                };
+            }
         } catch (error) {
             // Mint failed, revert
             for ((to, amount) in mints.vals()) {
                 pendingMints.put(to, Nat64.fromNat(amount) + Option.get(pendingMints.get(to), 0 : Nat64));
             };
-            #Err(#Other(Error.message(error)))
+            #err(#Other(Error.message(error)))
         }
     };
 
@@ -833,10 +835,11 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     // Update the canister's cached local balance
-    private func refreshAvailableBalance() : async () {
+    private func refreshAvailableBalance() : async Nat64 {
         cachedLedgerBalanceE8s := (await ledger.account_balance({
             account = Blob.toArray(accountIdBlob());
         })).e8s;
+        cachedLedgerBalanceE8s
     };
 
     // Datapoints representing available liquidity at a point in time.
@@ -1006,12 +1009,21 @@ shared(init_msg) actor class Deposits(args: {
     // ===== HEARTBEAT FUNCTIONS =====
 
     system func heartbeat() : async () {
-        ignore refreshAvailableBalance();
-
-        // Execute any pending mints.
-        ignore flushAllMints();
-
         await scheduler.heartbeat(Time.now(), [
+            {
+                name = "refreshAvailableBalance";
+                interval = 1 * minute;
+                function = func(now: Time.Time): async Result.Result<Any, Any> {
+                    #ok(await refreshAvailableBalance())
+                };
+            },
+            {
+                name = "flushAllMints";
+                interval = 1 * second;
+                function = func(now: Time.Time): async Result.Result<Any, Any> {
+                    await flushAllMints()
+                };
+            },
             {
                 name = "dailyHeartbeat";
                 interval = 1 * day;
