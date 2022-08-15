@@ -22,6 +22,7 @@ import Time "mo:base/Time";
 import TrieMap "mo:base/TrieMap";
 
 import Account      "./Account";
+import Daily        "./Daily";
 import Scheduler    "./Scheduler";
 import Hex          "./Hex";
 import Neurons      "./Neurons";
@@ -71,6 +72,17 @@ shared(init_msg) actor class Deposits(args: {
     // Background job processing subsystem
     private let scheduler = Scheduler.Scheduler();
     private stable var stableSchedulerData : ?Scheduler.UpgradeData = null;
+
+    // State machine to track interest/maturity/neurons etc
+    private let daily = Daily.Job({
+        ledger = actor(Principal.toText(args.ledger));
+        neurons = neurons;
+        referralTracker = referralTracker;
+        staking = staking;
+        token = actor(Principal.toText(args.token));
+        withdrawals = withdrawals;
+    });
+    private stable var stableDailyData : ?Daily.UpgradeData = null;
 
     // Cost to transfer ICP on the ledger
     let icpFee: Nat = 10_000;
@@ -179,15 +191,6 @@ shared(init_msg) actor class Deposits(args: {
         sum
     };
 
-    private func stakingNeuronMaturityE8s() : async Nat64 {
-        let maturities = await neurons.maturities(staking.ids());
-        var sum : Nat64 = 0;
-        for ((id, maturities) in maturities.vals()) {
-            sum += maturities;
-        };
-        sum
-    };
-
     // Idempotently add a neuron to the tracked staking neurons. The neurons
     // added here must be manageable by the proposal neuron. The starting
     // balance will be minted as stICP to the canister's token account.
@@ -287,21 +290,7 @@ shared(init_msg) actor class Deposits(args: {
         };
     };
 
-    // ===== INTEREST FUNCTIONS =====
-
-    // helper to short ApplyInterestResults
-    private func sortInterestByTime(a: ApplyInterestResult, b: ApplyInterestResult): Order.Order {
-      Int.compare(a.timestamp, b.timestamp)
-    };
-
-    // Buffers don't have sort, implement it ourselves.
-    private func sortBuffer<A>(buf: Buffer.Buffer<A>, cmp: (A, A) -> Order.Order): Buffer.Buffer<A> {
-        let result = Buffer.Buffer<A>(buf.size());
-        for (x in Array.sort(buf.toArray(), cmp).vals()) {
-            result.add(x);
-        };
-        result
-    };
+    // ===== NEURON DISBURSAL FUNCTIONS =====
 
     // List all neurons ready for disbursal. We will disburse them into the
     // deposit canister's default account, like it is a new deposit.
@@ -316,341 +305,6 @@ shared(init_msg) actor class Deposits(args: {
         owners.require(msg.caller);
         withdrawals.removeDisbursedNeurons(ids)
     };
-
-    // In case there was an issue with the automatic daily heartbeat, the
-    // canister owner can call it manually. Repeated calling should be
-    // effectively idempotent.
-    public shared(msg) func manualHeartbeat(when: ?Time.Time): async Result.Result<Any, Any> {
-        owners.require(msg.caller);
-        await dailyHeartbeat(Option.get(when, Time.now()))
-    };
-
-    // called every day by the heartbeat function.
-    private func dailyHeartbeat(when: Time.Time) : async Result.Result<Any, Any> {
-        // Merge the interest
-        ignore await applyInterest(when);
-
-        // Flush pending deposits
-        ignore await flushPendingDeposits();
-
-        // merge the maturity for our dissolving withdrawal neurons
-        ignore await mergeWithdrawalMaturity();
-
-        // Split off as many staking neurons as we need to ensure withdrawals
-        // will be satisfied.
-        //
-        // Note: This needs to happen *after* everything above, hence the awaits.
-        ignore splitNewWithdrawalNeurons();
-
-        #ok();
-    };
-
-    private func mergeMaturities(ids: [Nat64], percentage: Nat32): async [Neurons.Neuron] {
-        Array.mapFilter<Result.Result<Neurons.Neuron, Neurons.NeuronsError>, Neurons.Neuron>(
-            await neurons.mergeMaturities(withdrawals.ids(), percentage),
-            func(r) { Result.toOption(r) },
-        )
-    };
-
-    // Distribute newly earned interest to token holders.
-    private func applyInterest(now: Time.Time) : async Result.Result<ApplyInterestResult, Neurons.NeuronsError> {
-        // take a snapshot of the holders for tomorrow's interest.
-        let nextHolders = await getAllHolders();
-
-        // See how much maturity we have pending
-        let interest = await stakingNeuronMaturityE8s();
-        if (interest <= 10_000) {
-            return #err(#InsufficientMaturity);
-        };
-
-        // Note: We might "leak" a tiny bit of interest here because maturity
-        // could increase before we merge. It would be ideal if the NNS allowed
-        // specify maturity to merge as an e8s, but alas.
-        let merges = await mergeMaturities(staking.ids(), 100);
-        for (n in merges.vals()) {
-            ignore staking.addOrRefresh(n);
-        };
-
-        // Apply the interest to the holders
-        let apply = applyInterestToToken(
-            now,
-            Nat64.toNat(interest),
-            Option.get(snapshot, nextHolders)
-        );
-
-        // Update the snapshot for next time.
-        snapshot := ?nextHolders;
-
-        // Update the APY calculation
-        appliedInterest.add(apply);
-        appliedInterest := sortBuffer(appliedInterest, sortInterestByTime);
-        updateMeanAprMicrobips();
-
-        #ok(apply)
-    };
-
-    // Use new incoming deposits to attempt to rebalance the buckets, where
-    // "the buckets" are:
-    // - pending withdrawals
-    // - ICP in the canister
-    // - staking neurons
-    private func flushPendingDeposits(): async Result.Result<[Ledger.TransferArgs], Neurons.NeuronsError> {
-        let tokenE8s = Nat64.fromNat((await token.getMetadata()).totalSupply);
-        let totalBalance = _availableBalance();
-
-        if (totalBalance == 0) {
-            return #ok([]);
-        };
-
-        let applied = withdrawals.applyIcp(totalBalance);
-        let balance = totalBalance - Nat64.min(totalBalance, applied);
-        if (balance == 0) {
-            return #ok([]);
-        };
-
-        let transfers = staking.depositIcp(tokenE8s, balance, null);
-        for (transfer in transfers.vals()) {
-            // Start the transfer. Best effort here. If the transfer fails,
-            // it'll be retried next time. But not awaiting means this function
-            // is atomic.
-            ignore ledger.transfer(transfer);
-        };
-        if (transfers.size() > 0) {
-            // If we did outbound transfers, refresh the ledger balance afterwards.
-            ignore refreshAvailableBalance();
-        };
-
-        // Update the staked neuron balances after they've been topped up
-        ignore await refreshAllStakingNeurons();
-
-        #ok(transfers)
-    };
-
-    private func getAllHolders(): async [(Principal, Nat)] {
-        let info = await token.getTokenInfo();
-        // *2 here is because this is not atomic, so if anyone joins in the
-        // meantime.
-        return await token.getHolders(0, info.holderNumber*2);
-    };
-
-    // Calculate shares owed and distribute interest to token holders.
-    private func applyInterestToToken(now: Time.Time, interest: Nat, holders: [(Principal, Nat)]): ApplyInterestResult {
-        // Calculate everything
-        var beforeSupply : Nat = 0;
-        for (i in Iter.range(0, holders.size() - 1)) {
-            let (_, balance) = holders[i];
-            beforeSupply += balance;
-        };
-
-        if (interest == 0) {
-            return {
-                timestamp = now;
-                supply = {
-                    before = { e8s = Nat64.fromNat(beforeSupply) };
-                    after = { e8s = Nat64.fromNat(beforeSupply) };
-                };
-                applied = { e8s = 0 : Nat64 };
-                remainder = { e8s = 0 : Nat64 };
-                totalHolders = holders.size();
-                affiliatePayouts = 0;
-            };
-        };
-
-        var holdersPortion = (interest * 9) / 10;
-        var remainder = interest;
-
-        // Calculate the holders portions
-        var mints = Buffer.Buffer<(Principal, Nat)>(holders.size());
-        var applied : Nat = 0;
-        for (i in Iter.range(0, holders.size() - 1)) {
-            let (to, balance) = holders[i];
-            let share = (holdersPortion * balance) / beforeSupply;
-            if (share > 0) {
-                mints.add((to, share));
-            };
-            assert(share <= remainder);
-            remainder -= share;
-            applied += share;
-        };
-        assert(applied + remainder == interest);
-        assert(holdersPortion >= remainder);
-
-        // Queue the mints & affiliate payouts
-        var affiliatePayouts : Nat = 0;
-        for ((to, share) in mints.vals()) {
-            Debug.print("interest: " # debug_show(share) # " to " # debug_show(to));
-            ignore queueMint(to, Nat64.fromNat(share));
-            switch (referralTracker.payout(to, share)) {
-                case (null) {};
-                case (?(affiliate, payout)) {
-                    Debug.print("affiliate: " # debug_show(payout) # " to " # debug_show(affiliate));
-                    ignore queueMint(affiliate, Nat64.fromNat(payout));
-                    affiliatePayouts := affiliatePayouts + payout;
-                    assert(payout <= remainder);
-                    remainder -= payout;
-                };
-            }
-        };
-
-        // Deal with our share. For now, just mint it to this canister.
-        if (remainder > 0) {
-            let root = Principal.fromActor(this);
-            Debug.print("remainder: " # debug_show(remainder) # " to " # debug_show(root));
-            ignore queueMint(root, Nat64.fromNat(remainder));
-            applied += remainder;
-            remainder := 0;
-        };
-
-        // Check everything matches up
-        assert(applied+affiliatePayouts+remainder == interest);
-
-        return {
-            timestamp = now;
-            supply = {
-                before = { e8s = Nat64.fromNat(beforeSupply) };
-                after = { e8s = Nat64.fromNat(beforeSupply+applied+affiliatePayouts) };
-            };
-            applied = { e8s = Nat64.fromNat(applied) };
-            remainder = { e8s = Nat64.fromNat(remainder) };
-            totalHolders = holders.size();
-            affiliatePayouts = affiliatePayouts;
-        };
-    };
-
-    // Recalculate and update the cached mean interest for the last 7 days.
-    //
-    // 1 microbip is 0.000000001%
-    // convert the result to apy % with:
-    // (((1+(aprMicrobips / 100_000_000))^365.25) - 1)*100
-    // e.g. 53900 microbips = 21.75% APY
-    private func updateMeanAprMicrobips() {
-        meanAprMicrobips := 0;
-
-        if (appliedInterest.size() == 0) {
-            return;
-        };
-
-        let last = appliedInterest.get(appliedInterest.size() - 1);
-
-        // supply.before should always be > 0, because initial supply is 1, but...
-        assert(last.supply.before.e8s > 0);
-
-        // 7 days from the last time we applied interest, truncated to the utc Day start.
-        let start = ((last.timestamp - (day * 6)) / day) * day;
-
-        // sum all interest applications that are in that period.
-        var i : Nat = appliedInterest.size();
-        var sum : Nat64 = 0;
-        var earliest : Time.Time  = last.timestamp;
-        label range while (i > 0) {
-            i := i - 1;
-            let interest = appliedInterest.get(i);
-            if (interest.timestamp < start) {
-                break range;
-            };
-            let after = interest.applied.e8s + Nat64.fromNat(interest.affiliatePayouts) + interest.remainder.e8s + interest.supply.before.e8s;
-            sum := sum + ((microbips * after) / interest.supply.before.e8s) - microbips;
-            earliest := interest.timestamp;
-        };
-        // truncate to start of first day where we found an application.
-        // (in case we didn't have 7 days of applications)
-        earliest := (earliest / day) * day;
-        // end of last day
-        let latest = ((last.timestamp / day) * day) + day;
-        // Find the number of days we've spanned
-        let span = Nat64.fromNat(Int.abs((latest - earliest) / day));
-
-        // Find the mean
-        meanAprMicrobips := sum / span;
-
-        Debug.print("meanAprMicrobips: " # debug_show(meanAprMicrobips));
-    };
-
-    // Refresh all neurons, fetching current data from the NNS. This is
-    // needed e.g. if we have transferred more ICP into a staking neuron,
-    // to update the cached balances.
-    private func refreshAllStakingNeurons(): async ?Neurons.NeuronsError {
-        for (id in staking.ids().vals()) {
-            switch (await neurons.refresh(id)) {
-                case (#err(err)) { return ?err };
-                case (#ok(neuron)) {
-                    ignore staking.addOrRefresh(neuron);
-                };
-            };
-        };
-        return null;
-    };
-
-    private func mergeWithdrawalMaturity() : async [Neurons.Neuron] {
-        // Merge maturity on dissolving neurons. Merged maturity here will be
-        // disbursed when the neuron is dissolved, and will be a "bonus" put
-        // towards filling pending withdrawals early.
-        let merge = await mergeMaturities(withdrawals.ids(), 100);
-        ignore withdrawals.addNeurons(merge);
-        merge
-    };
-
-    // Split off as many staking neurons as we need to satisfy pending withdrawals.
-    private func splitNewWithdrawalNeurons() : async Result.Result<[Neurons.Neuron], Neurons.NeuronsError> {
-        // figure out how much we have dissolving for withdrawals
-        let dissolving = withdrawals.totalDissolving();
-        let pending = withdrawals.totalPending();
-
-        // Split and dissolve enough new neurons to satisfy pending withdrawals
-        if (pending <= dissolving) {
-            return #ok([]);
-        };
-        // figure out how much we need dissolving for withdrawals
-        let needed = pending - dissolving;
-        // Split the difference off from staking neurons
-        switch (staking.splitNeurons(needed)) {
-            case (#err(err)) {
-                #err(err)
-            };
-            case (#ok(toSplit)) {
-                // Do the splits on the nns and find the new neurons.
-                let newNeurons = Buffer.Buffer<Neurons.Neuron>(toSplit.size());
-                for ((id, amount) in toSplit.vals()) {
-                    switch (await neurons.split(id, amount)) {
-                        case (#err(err)) {
-                            // TODO: Error handling
-                        };
-                        case (#ok(n)) {
-                            newNeurons.add(n);
-                        };
-                    };
-                };
-                // Pass the new neurons into the withdrawals manager.
-                switch (await dissolveNeurons(newNeurons.toArray())) {
-                    case (#err(err)) { #err(err) };
-                    case (#ok(newNeurons)) { #ok(withdrawals.addNeurons(newNeurons)) };
-                }
-            };
-        }
-    };
-
-    private func dissolveNeurons(ns: [Neurons.Neuron]): async Neurons.NeuronsResult {
-        let newNeurons = Buffer.Buffer<Neurons.Neuron>(ns.size());
-        for (n in ns.vals()) {
-            let neuron = switch (n.dissolveState) {
-                case (?#DissolveDelaySeconds(delay)) {
-                    // Make sure the neuron is dissolving
-                    switch (await neurons.dissolve(n.id)) {
-                        case (#err(err)) {
-                            return #err(err);
-                        };
-                        case (#ok(n)) {
-                            n
-                        };
-                    }
-                };
-                case (_) { n };
-            };
-            newNeurons.add(neuron);
-        };
-        #ok(newNeurons.toArray())
-    };
-
 
     // ===== REFERRAL FUNCTIONS =====
 
@@ -979,16 +633,7 @@ shared(init_msg) actor class Deposits(args: {
 
     public shared(msg) func setInitialSnapshot(): async (Text, [(Principal, Nat)]) {
         owners.require(msg.caller);
-        switch (snapshot) {
-            case (null) {
-                let holders = await getAllHolders();
-                snapshot := ?holders;
-                return ("new", holders);
-            };
-            case (?holders) {
-                return ("existing", holders);
-            };
-        };
+        await daily.setInitialSnapshot()
     };
 
     public shared(msg) func getAppliedInterestResults(): async [ApplyInterestResult] {
@@ -1028,7 +673,15 @@ shared(init_msg) actor class Deposits(args: {
                 name = "dailyHeartbeat";
                 interval = 1 * day;
                 function = func(now: Time.Time): async Result.Result<Any, Any> {
-                    await dailyHeartbeat(now)
+                    let root = Principal.fromActor(this);
+                    await daily.start(
+                        now,
+                        root,
+                        queueMint,
+                        _availableBalance,
+                        refreshAvailableBalance
+                    );
+                    #ok();
                 };
             }
         ]);
@@ -1064,6 +717,8 @@ shared(init_msg) actor class Deposits(args: {
 
         stableSchedulerData := scheduler.preupgrade();
 
+        stableDailyData := daily.preupgrade();
+
         stableOwners := owners.preupgrade();
     };
 
@@ -1096,6 +751,9 @@ shared(init_msg) actor class Deposits(args: {
 
         scheduler.postupgrade(stableSchedulerData);
         stableSchedulerData := null;
+
+        daily.postupgrade(stableDailyData);
+        stableDailyData := null;
 
         owners.postupgrade(stableOwners);
         stableOwners := null;
