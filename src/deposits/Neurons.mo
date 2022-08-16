@@ -181,7 +181,6 @@ module {
             return b.toArray();
         };
 
-
         public func split(id: Nat64, amount_e8s: Nat64): async NeuronResult {
             if (amount_e8s < minimumStake + icpFee) {
                 return #err(#InsufficientStake)
