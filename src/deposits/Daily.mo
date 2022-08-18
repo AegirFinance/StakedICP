@@ -20,9 +20,10 @@ module {
     public type UpgradeData = {
         #v1: {
             applyInterestJob: ?ApplyInterest.UpgradeData;
-            flushPendingDepositsJob: ?FlushPendingDeposits.UpgradeData;
-            mergeWithdrawalMaturityJob: ?MergeWithdrawalMaturity.UpgradeData;
-            splitNewWithdrawalNeuronsJob: ?SplitNewWithdrawalNeurons.UpgradeData;
+            applyInterestResult: ?ApplyInterest.ApplyInterestResult;
+            flushPendingDepositsResult: ?FlushPendingDeposits.FlushPendingDepositsResult;
+            mergeWithdrawalMaturityResult: ?MergeWithdrawalMaturity.MergeWithdrawalMaturityResult;
+            splitNewWithdrawalNeuronsResult: ?SplitNewWithdrawalNeurons.SplitNewWithdrawalNeuronsResult;
         };
     };
 
@@ -63,6 +64,12 @@ module {
             withdrawals = args.withdrawals;
         });
 
+        private var applyInterestResult: ?ApplyInterest.ApplyInterestResult = null;
+        private var flushPendingDepositsResult: ?FlushPendingDeposits.FlushPendingDepositsResult = null;
+        private var mergeWithdrawalMaturityResult: ?MergeWithdrawalMaturity.MergeWithdrawalMaturityResult = null;
+        private var splitNewWithdrawalNeuronsResult: ?SplitNewWithdrawalNeurons.SplitNewWithdrawalNeuronsResult = null;
+
+
         // ===== GETTER/SETTER FUNCTIONS =====
 
         public func setInitialSnapshot(): async (Text, [(Principal, Nat)]) {
@@ -78,6 +85,11 @@ module {
             availableBalance: FlushPendingDeposits.AvailableBalanceFn,
             refreshAvailableBalance: FlushPendingDeposits.RefreshAvailableBalanceFn
         ) : async () {
+            applyInterestResult := null;
+            flushPendingDepositsResult := null;
+            mergeWithdrawalMaturityResult := null;
+            splitNewWithdrawalNeuronsResult := null;
+
             // Can run these three in "parallel"
             ignore applyInterest(now, root, queueMint);
             ignore flushPendingDeposits(availableBalance, refreshAvailableBalance);
@@ -86,16 +98,16 @@ module {
 
         // If we're done with the apply/flush/merge, move onto the split
         private func splitIfReady(): async () {
-            if (applyInterestJob.getResult() == null) { return; };
-            if (flushPendingDepositsJob.getResult() == null) { return; };
-            if (mergeWithdrawalMaturityJob.getResult() == null) { return; };
+            if (applyInterestResult == null) { return; };
+            if (flushPendingDepositsResult == null) { return; };
+            if (mergeWithdrawalMaturityResult == null) { return; };
 
             ignore splitNewWithdrawalNeurons();
         };
 
         // Merge the interest
         private func applyInterest(now: Time.Time, root: Principal, queueMint: ApplyInterest.QueueMintFn) : async () {
-            ignore await applyInterestJob.start(now, root, queueMint);
+            applyInterestResult := ?(await applyInterestJob.start(now, root, queueMint));
             ignore splitIfReady();
         };
 
@@ -104,13 +116,13 @@ module {
             availableBalance: FlushPendingDeposits.AvailableBalanceFn,
             refreshAvailableBalance: FlushPendingDeposits.RefreshAvailableBalanceFn
         ) : async () {
-            ignore await flushPendingDepositsJob.start(availableBalance, refreshAvailableBalance);
+            flushPendingDepositsResult := ?(await flushPendingDepositsJob.start(availableBalance, refreshAvailableBalance));
             ignore splitIfReady();
         };
 
         // merge the maturity for our dissolving withdrawal neurons
         private func mergeWithdrawalMaturity() : async () {
-            ignore await mergeWithdrawalMaturityJob.start();
+            mergeWithdrawalMaturityResult := ?(await mergeWithdrawalMaturityJob.start());
             ignore splitIfReady();
         };
 
@@ -119,7 +131,7 @@ module {
         //
         // Note: This needs to happen *after* everything above, hence the awaits.
         private func splitNewWithdrawalNeurons() : async () {
-            ignore await splitNewWithdrawalNeuronsJob.start();
+            splitNewWithdrawalNeuronsResult := ?(await splitNewWithdrawalNeuronsJob.start());
         };
 
         // ===== UPGRADE FUNCTIONS =====
@@ -127,9 +139,10 @@ module {
         public func preupgrade() : ?UpgradeData {
             return ?#v1({
                 applyInterestJob = applyInterestJob.preupgrade();
-                flushPendingDepositsJob = flushPendingDepositsJob.preupgrade();
-                mergeWithdrawalMaturityJob = mergeWithdrawalMaturityJob.preupgrade();
-                splitNewWithdrawalNeuronsJob = splitNewWithdrawalNeuronsJob.preupgrade();
+                applyInterestResult = applyInterestResult;
+                flushPendingDepositsResult = flushPendingDepositsResult;
+                mergeWithdrawalMaturityResult = mergeWithdrawalMaturityResult;
+                splitNewWithdrawalNeuronsResult = splitNewWithdrawalNeuronsResult;
             });
         };
 
@@ -137,9 +150,10 @@ module {
             switch (upgradeData) {
                 case (?#v1(data)) {
                     applyInterestJob.postupgrade(data.applyInterestJob);
-                    flushPendingDepositsJob.postupgrade(data.flushPendingDepositsJob);
-                    mergeWithdrawalMaturityJob.postupgrade(data.mergeWithdrawalMaturityJob);
-                    splitNewWithdrawalNeuronsJob.postupgrade(data.splitNewWithdrawalNeuronsJob);
+                    applyInterestResult := data.applyInterestResult;
+                    flushPendingDepositsResult := data.flushPendingDepositsResult;
+                    mergeWithdrawalMaturityResult := data.mergeWithdrawalMaturityResult;
+                    splitNewWithdrawalNeuronsResult := data.splitNewWithdrawalNeuronsResult;
                 };
                 case (_) { return; }
             };

@@ -1,4 +1,6 @@
+import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
+import Error "mo:base/Error";
 import Result "mo:base/Result";
 
 import Neurons "../Neurons";
@@ -6,13 +8,7 @@ import Staking "../Staking";
 import Withdrawals "../Withdrawals";
 
 module {
-    public type UpgradeData = {
-        #v1: {
-            result: ?SplitNewWithdrawalNeuronsResult;
-        };
-    };
-
-    public type SplitNewWithdrawalNeuronsResult = Result.Result<[Neurons.Neuron], Neurons.NeuronsError>;
+    public type SplitNewWithdrawalNeuronsResult = Result.Result<[Neurons.NeuronResult], Neurons.NeuronsError>;
 
     // Job is the step of the daily job which splits of new withdrawal neurons
     // to ensure we have enough dissolving to satisfy pending withdrawals.
@@ -21,16 +17,6 @@ module {
         staking: Staking.Manager;
         withdrawals: Withdrawals.Manager;
     }) {
-        private var result: ?SplitNewWithdrawalNeuronsResult = null;
-
-        // ===== GETTER/SETTER FUNCTIONS =====
-
-        public func getResult(): ?SplitNewWithdrawalNeuronsResult {
-            result
-        };
-
-        // ===== JOB START FUNCTION =====
-
         // Split off as many staking neurons as we need to satisfy pending
         // withdrawals.
         public func start(): async SplitNewWithdrawalNeuronsResult {
@@ -51,63 +37,46 @@ module {
                 };
                 case (#ok(toSplit)) {
                     // Do the splits on the nns and find the new neurons.
-                    let newNeurons = Buffer.Buffer<Neurons.Neuron>(toSplit.size());
+                    let newNeurons = Buffer.Buffer<Neurons.NeuronResult>(toSplit.size());
                     for ((id, amount) in toSplit.vals()) {
-                        switch (await args.neurons.split(id, amount)) {
-                            case (#err(err)) {
-                                // TODO: Error handling
-                            };
-                            case (#ok(n)) {
-                                newNeurons.add(n);
-                            };
-                        };
+                        newNeurons.add(await splitAndDissolve(id, amount));
                     };
-                    // Pass the new neurons into the withdrawals manager.
-                    switch (await dissolveNeurons(newNeurons.toArray())) {
-                        case (#err(err)) { #err(err) };
-                        case (#ok(newNeurons)) { #ok(args.withdrawals.addNeurons(newNeurons)) };
-                    }
+                    #ok(newNeurons.toArray())
                 };
             }
         };
 
-        private func dissolveNeurons(ns: [Neurons.Neuron]): async Neurons.NeuronsResult {
-            let newNeurons = Buffer.Buffer<Neurons.Neuron>(ns.size());
-            for (n in ns.vals()) {
-                let neuron = switch (n.dissolveState) {
-                    case (?#DissolveDelaySeconds(delay)) {
-                        // Make sure the neuron is dissolving
-                        switch (await args.neurons.dissolve(n.id)) {
-                            case (#err(err)) {
-                                return #err(err);
-                            };
-                            case (#ok(n)) {
-                                n
-                            };
-                        }
-                    };
-                    case (_) { n };
+        private func splitAndDissolve(id: Nat64, amount: Nat64): async Neurons.NeuronResult {
+            try {
+                // Split off a new neuron
+                let n = switch (await args.neurons.split(id, amount)) {
+                    case (#err(err)) { return #err(err) };
+                    case (#ok(neuron)) { neuron };
                 };
-                newNeurons.add(neuron);
-            };
-            #ok(newNeurons.toArray())
+                // Start it dissolving
+                let d = switch (await dissolveNeuron(n)) {
+                    case (#err(err)) { return #err(err) };
+                    case (#ok(neuron)) { neuron };
+                };
+                ignore args.withdrawals.addNeurons([d]);
+                #ok(d)
+            } catch (error) {
+                #err(#Other(Error.message(error)));
+            }
         };
 
-        // ===== UPGRADE FUNCTIONS =====
-
-        public func preupgrade(): ?UpgradeData {
-            return ?#v1({
-                result = result;
-            });
-        };
-
-        public func postupgrade(upgradeData : ?UpgradeData) {
-            switch (upgradeData) {
-                case (?#v1(data)) {
-                    result := data.result;
+        private func dissolveNeuron(n: Neurons.Neuron): async Neurons.NeuronResult {
+            switch (n.dissolveState) {
+                case (?#DissolveDelaySeconds(delay)) {
+                    // Make sure the neuron is dissolving
+                    try {
+                        await args.neurons.dissolve(n.id)
+                    } catch (error) {
+                        #err(#Other(Error.message(error)))
+                    }
                 };
-                case (_) { return; }
-            };
+                case (_) { #ok(n) };
+            }
         };
     };
 };

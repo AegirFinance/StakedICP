@@ -21,7 +21,6 @@ import Token "../../DIP20/motoko/src/token";
 module {
     public type UpgradeData = {
         #v1: {
-            result: ?ApplyInterestResult;
             snapshot: ?[(Principal, Nat)];
             appliedInterest: [ApplyInterestSummary];
             meanAprMicrobips: Nat64;
@@ -61,9 +60,6 @@ module {
         // For apr calcs
         let microbips : Nat64 = 100_000_000;
 
-        // State for an individual job run
-        private var result: ?ApplyInterestResult = null;
-
         // State used across job runs
         private var snapshot : ?[(Principal, Nat)] = null;
         private var appliedInterest : Buffer.Buffer<ApplyInterestSummary> = Buffer.Buffer(0);
@@ -84,17 +80,10 @@ module {
             };
         };
 
-        public func getResult(): ?ApplyInterestResult {
-            result
-        };
-
         // ===== JOB START FUNCTION =====
 
         // Distribute newly earned interest to token holders.
         public func start(now: Time.Time, root: Principal, queueMint: QueueMintFn): async ApplyInterestResult {
-            // Reset the result.
-            result := null;
-
             // take a snapshot of the holders for tomorrow's interest.
             let nextHolders = await getAllHolders();
 
@@ -106,7 +95,10 @@ module {
 
             // Note: We might "leak" a tiny bit of interest here because maturity
             // could increase before we merge. It would be ideal if the NNS allowed
-            // specify maturity to merge as an e8s, but alas.
+            // specify maturity to merge as an e8s, but alas. We could look at
+            // the neuron balances before/after, but that would introduce a
+            // race condition with 'FlushPendingDeposits', which transfers more
+            // ICP into the neurons.
             let merges = await args.neurons.mergeMaturities(args.staking.ids(), 100);
             for (n in merges.vals()) {
                 switch (n) {
@@ -304,7 +296,6 @@ module {
 
         public func preupgrade(): ?UpgradeData {
             return ?#v1({
-                result = result;
                 snapshot = snapshot;
                 appliedInterest = appliedInterest.toArray();
                 meanAprMicrobips = meanAprMicrobips;
@@ -314,7 +305,6 @@ module {
         public func postupgrade(upgradeData : ?UpgradeData) {
             switch (upgradeData) {
                 case (?#v1(data)) {
-                    result := data.result;
                     snapshot := data.snapshot;
                     appliedInterest := Buffer.Buffer<ApplyInterestSummary>(data.appliedInterest.size());
                     for (x in data.appliedInterest.vals()) {

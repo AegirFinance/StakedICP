@@ -22,6 +22,7 @@ import Ledger "../ledger/Ledger";
 
 module {
     public let minimumStake: Nat64 = 100_000_000;
+    public let minimumTransfer: Nat64 = 100_000_000;
     let icpFee: Nat64 = 10_000;
     let yearSeconds: Int = 31_557_600;
 
@@ -118,7 +119,7 @@ module {
         };
 
         // Calculate how much we should aim to have in each neuron, and in
-        // cash. (The same for now).
+        // cash. Each will be the same for now.
         public func rebalancingTarget(totalE8s: Nat64): Nat64 {
             // Assume there is one neuron per 6 months.. no duplicates.
             // All the same share for now. +1 is for first 6 months in cash
@@ -127,48 +128,51 @@ module {
 
         // depositIcp takes an amount of e8s to deposit, and returns a list of
         // transfers to make, routing the deposit ICP to the staking neurons.
-        public func depositIcp(totalE8s: Nat64, newE8s: Nat64, fromSubaccount: ?Account.Subaccount): [Ledger.TransferArgs] {
-            if (newE8s <= minimumStake) {
+        public func depositIcp(totalE8s: Nat64, canisterE8s: Nat64, fromSubaccount: ?Account.Subaccount): [Ledger.TransferArgs] {
+            if (canisterE8s <= minimumTransfer) {
                 return [];
             };
 
             // Find the target balance for each neuron + cash
             let target = rebalancingTarget(totalE8s);
 
-            // Neurons from lowest to highest balance
-            let neurons = Array.sort(Iter.toArray(stakingNeurons.vals()), compareBalance);
+            // Sort neurons (which are at least minimumTransfer under-target)
+            // from lowest to highest balance
+            let neurons = Array.sort(
+                Array.filter<Neurons.Neuron>(
+                    Iter.toArray(stakingNeurons.vals()),
+                    func(n) { (n.cachedNeuronStakeE8s + minimumTransfer) <= target }
+                ),
+                compareBalance
+            );
 
-            var remaining = newE8s;
+            var remaining = canisterE8s;
             let b = Buffer.Buffer<Ledger.TransferArgs>(neurons.size());
             for (n in neurons.vals()) {
-                if (remaining < minimumStake or remaining <= target) {
+                let amount = Nat64.min(remaining, target - n.cachedNeuronStakeE8s);
+
+                // If we're close to the target, stop here. Avoid small
+                // transfers, to save on fees. At this point either neurons are
+                // almost full, or remainder is too small.
+                if (amount < minimumTransfer) {
                     return b.toArray();
                 };
 
-                // TODO: Account for transfer fees here
-                if (n.cachedNeuronStakeE8s < target) {
-                    var amount = Nat64.min(
-                        remaining,
-                        Nat64.max(
-                            minimumStake,
-                            target - n.cachedNeuronStakeE8s
-                        )
-                    );
-                    // If we're close to the target, stop here. Don't do
-                    // frivolous small transfers.
-                    if (amount < minimumStake) {
-                        return b.toArray();
-                    };
-                    remaining -= amount;
-                    b.add({
-                        memo : Nat64    = 0;
-                        from_subaccount = Option.map(fromSubaccount, Blob.toArray);
-                        to              = Blob.toArray(n.accountId);
-                        amount          = { e8s = amount - icpFee };
-                        fee             = { e8s = icpFee };
-                        created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
-                    })
-                }
+                remaining -= amount;
+
+                if (remaining < icpFee) {
+                    return b.toArray();
+                };
+                remaining -= icpFee;
+
+                b.add({
+                    memo : Nat64    = 0;
+                    from_subaccount = Option.map(fromSubaccount, Blob.toArray);
+                    to              = Blob.toArray(n.accountId);
+                    amount          = { e8s = amount };
+                    fee             = { e8s = icpFee };
+                    created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
+                })
             };
             b.toArray()
         };

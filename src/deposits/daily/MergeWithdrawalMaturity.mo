@@ -5,12 +5,6 @@ import Neurons "../Neurons";
 import Withdrawals "../Withdrawals";
 
 module {
-    public type UpgradeData = {
-        #v1: {
-            result: ?MergeWithdrawalMaturityResult;
-        };
-    };
-
     public type MergeWithdrawalMaturityResult = [Neurons.NeuronResult];
 
     // Job is the step of the daily job which merges the maturity for out
@@ -19,23 +13,10 @@ module {
         neurons: Neurons.Manager;
         withdrawals: Withdrawals.Manager;
     }) {
-        private var result: ?MergeWithdrawalMaturityResult = null;
-
-        // ===== GETTER/SETTER FUNCTIONS =====
-
-        public func getResult(): ?MergeWithdrawalMaturityResult {
-            result
-        };
-
-        // ===== JOB START FUNCTION =====
-
         // Merge maturity on dissolving neurons. Merged maturity here will be
         // disbursed when the neuron is dissolved, and will be a "bonus" put
         // towards filling pending withdrawals early.
         public func start(): async MergeWithdrawalMaturityResult {
-            // Reset the result.
-            result := null;
-
             let merges = await args.neurons.mergeMaturities(args.withdrawals.ids(), 100);
             ignore args.withdrawals.addNeurons(
                 Array.mapFilter<Neurons.NeuronResult, Neurons.Neuron>(
@@ -44,23 +25,6 @@ module {
                 )
             );
             merges
-        };
-
-        // ===== UPGRADE FUNCTIONS =====
-
-        public func preupgrade(): ?UpgradeData {
-            return ?#v1({
-                result = result;
-            });
-        };
-
-        public func postupgrade(upgradeData : ?UpgradeData) {
-            switch (upgradeData) {
-                case (?#v1(data)) {
-                    result := data.result;
-                };
-                case (_) { return; }
-            };
         };
     };
 };

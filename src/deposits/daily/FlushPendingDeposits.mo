@@ -9,13 +9,7 @@ import Ledger "../../ledger/Ledger";
 import Token "../../DIP20/motoko/src/token";
 
 module {
-    public type UpgradeData = {
-        #v1: {
-            result: ?FlushPendingDepositsResult;
-        };
-    };
-
-    public type FlushPendingDepositsResult = [Ledger.TransferResult];
+    public type FlushPendingDepositsResult = [Ledger.TransferArgs];
 
     public type AvailableBalanceFn = () -> Nat64;
     public type RefreshAvailableBalanceFn = () -> async Nat64;
@@ -30,16 +24,6 @@ module {
         token: Token.Token;
         withdrawals: Withdrawals.Manager;
     }) {
-        private var result: ?FlushPendingDepositsResult = null;
-
-        // ===== GETTER/SETTER FUNCTIONS =====
-
-        public func getResult(): ?FlushPendingDepositsResult {
-            result
-        };
-
-        // ===== JOB START FUNCTION =====
-
         // Use new incoming deposits to attempt to rebalance the buckets, where
         // "the buckets" are:
         // - pending withdrawals
@@ -49,29 +33,33 @@ module {
             availableBalance: AvailableBalanceFn,
             refreshAvailableBalance: RefreshAvailableBalanceFn
         ): async FlushPendingDepositsResult {
-            // Reset the result.
-            result := null;
-
+            // Note, this races with the queued mints in ApplyInterest. Once
+            // ApplyInterest's flushes are finished, the total supply might be
+            // higher than what we see here.
             let tokenE8s = Nat64.fromNat((await args.token.getMetadata()).totalSupply);
-            let totalBalance = availableBalance();
+            var canisterE8s = availableBalance();
 
-            if (totalBalance == 0) {
+            if (canisterE8s == 0) {
                 return [];
             };
 
-            let applied = args.withdrawals.applyIcp(totalBalance);
-            let balance = totalBalance - Nat64.min(totalBalance, applied);
-            if (balance == 0) {
+            // First try to use it fulfill pending deposits
+            canisterE8s -= args.withdrawals.depositIcp(canisterE8s);
+            if (canisterE8s == 0) {
                 return [];
             };
 
-            let transfers = args.staking.depositIcp(tokenE8s, balance, null);
-            let results = Buffer.Buffer<Ledger.TransferResult>(transfers.size());
+            // Spread the remainder between staking neurons (retaining some in the canister).
+            let transfers = args.staking.depositIcp(tokenE8s, canisterE8s, null);
             for (transfer in transfers.vals()) {
                 // Start the transfer. Best effort here. If the transfer fails,
-                // it'll be retried next time. But not awaiting means this function
-                // is atomic.
-                results.add(await args.ledger.transfer(transfer));
+                // it'll be retried next time. But awaiting, means we can
+                // refresh the balance and staking neurons afterwards
+                try {
+                    ignore await args.ledger.transfer(transfer)
+                } catch (error) {
+                    // No-op. Transfer will be retried next time.
+                }
             };
             if (transfers.size() > 0) {
                 // If we did outbound transfers, refresh the ledger balance afterwards.
@@ -80,7 +68,7 @@ module {
                 ignore await refreshAllStakingNeurons();
             };
 
-            results.toArray()
+            transfers
         };
 
         // Refresh all neurons, fetching current data from the NNS. This is
@@ -96,23 +84,6 @@ module {
                 };
             };
             return null;
-        };
-
-        // ===== UPGRADE FUNCTIONS =====
-
-        public func preupgrade(): ?UpgradeData {
-            return ?#v1({
-                result = result;
-            });
-        };
-
-        public func postupgrade(upgradeData : ?UpgradeData) {
-            switch (upgradeData) {
-                case (?#v1(data)) {
-                    result := data.result;
-                };
-                case (_) { return; }
-            };
         };
     };
 };

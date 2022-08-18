@@ -244,7 +244,7 @@ module {
         // Apply some "incoming" ICP towards paying off our pending
         // withdrawals. ICP should be incoming either from new deposits, or
         // newly disbursed neurons. Returns the amount consumed.
-        public func applyIcp(amount: Nat64): Nat64 {
+        public func depositIcp(amount: Nat64): Nat64 {
             let now = Time.now();
             var remaining = amount;
             while (remaining > 0) {
