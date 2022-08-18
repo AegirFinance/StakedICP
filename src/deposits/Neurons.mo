@@ -179,6 +179,8 @@ module {
             // TODO: Parallelize these calls
             let b = Buffer.Buffer<NeuronResult>(ids.size());
 
+            // TODO: Do we need to re-fetch maturities here? Can we just
+            // attempt to merge and handle the failure if it's too small?
             for ((id, maturity) in (await maturities(ids)).vals()) {
                 if (maturity > icpFee) {
                     b.add(await mergeMaturity(id, percentage));
