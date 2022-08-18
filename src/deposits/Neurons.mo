@@ -1,5 +1,6 @@
 import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
+import Error "mo:base/Error";
 import Int64 "mo:base/Int64";
 import Int "mo:base/Int";
 import Iter "mo:base/Iter";
@@ -98,6 +99,7 @@ module {
         // ===== NEURON INFO FUNCTIONS =====
 
         // Fetch maturity info for a list of neuron ids, as an array of [(id, e8s)].
+        // TODO: try/catch error handling on await here?
         public func maturities(ids: [Nat64]): async [(Nat64, Nat64)] {
             let response = await governance.list_neurons({
                 neuron_ids = ids;
@@ -117,6 +119,7 @@ module {
 
         // Refresh a neuron's balance and info
         public func refresh(id: Nat64): async NeuronResult {
+            try {
                 // Update the cached balance in governance canister
                 switch ((await governance.manage_neuron({
                     id = null;
@@ -142,6 +145,9 @@ module {
                         });
                     };
                 };
+            } catch (error) {
+                return #err(#Other(Error.message(error)));
+            }
         };
 
         // ===== PROPOSAL COMMAND FUNCTIONS =====
@@ -242,41 +248,45 @@ module {
 
         // Lower-level proposal submission helper
         private func propose(proposal: Governance.Proposal): async Result.Result<Governance.ProposalInfo, NeuronsError> {
-            let proposalNeuronId: Nat64 = switch (proposalNeuron) {
-                case (null) { return #err(#ProposalNeuronMissing); };
-                case (?n) { n.id };
-            };
-
-            let manageNeuronResult = await governance.manage_neuron({
-                id = null;
-                command = ?#MakeProposal(proposal);
-                neuron_id_or_subaccount = ?#NeuronId({ id = proposalNeuronId });
-            });
-
-            let proposalId = switch (manageNeuronResult.command) {
-                case (?#MakeProposal { proposal_id = ?id }) {
-                    id.id
+            try {
+                let proposalNeuronId: Nat64 = switch (proposalNeuron) {
+                    case (null) { return #err(#ProposalNeuronMissing); };
+                    case (?n) { n.id };
                 };
-                case (_) {
-                    return #err(#Other("Unexpected command response: " # debug_show(manageNeuronResult)));
-                };
-            };
 
-            let proposalInfo = switch (await governance.get_proposal_info(proposalId)) {
-                case (?p) { p };
-                case (null) {
-                    return #err(#Other("Proposal not found: " # debug_show(proposalId)));
-                };
-            };
+                let manageNeuronResult = await governance.manage_neuron({
+                    id = null;
+                    command = ?#MakeProposal(proposal);
+                    neuron_id_or_subaccount = ?#NeuronId({ id = proposalNeuronId });
+                });
 
-            switch (proposalInfo.failure_reason) {
-                case (null) { };
-                case (?err) {
-                    return #err(#GovernanceError(err));
+                let proposalId = switch (manageNeuronResult.command) {
+                    case (?#MakeProposal { proposal_id = ?id }) {
+                        id.id
+                    };
+                    case (_) {
+                        return #err(#Other("Unexpected command response: " # debug_show(manageNeuronResult)));
+                    };
                 };
-            };
 
-            return #ok(proposalInfo);
+                let proposalInfo = switch (await governance.get_proposal_info(proposalId)) {
+                    case (?p) { p };
+                    case (null) {
+                        return #err(#Other("Proposal not found: " # debug_show(proposalId)));
+                    };
+                };
+
+                switch (proposalInfo.failure_reason) {
+                    case (null) { };
+                    case (?err) {
+                        return #err(#GovernanceError(err));
+                    };
+                };
+
+                return #ok(proposalInfo);
+            } catch (error) {
+                return #err(#Other(Error.message(error)));
+            };
         };
 
         private func findNewNeuron(createdTimestampSeconds: Nat64, stakeE8s: Nat64): async ?Neuron {
