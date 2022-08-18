@@ -39,6 +39,11 @@ module {
                     // Do the splits on the nns and find the new neurons.
                     let newNeurons = Buffer.Buffer<Neurons.NeuronResult>(toSplit.size());
                     for ((id, amount) in toSplit.vals()) {
+                        // TODO: If we didn't care about the results here we
+                        // could use `ignore` instead of `await`. Maybe we
+                        // could store errors somewhere in a stable var? We
+                        // could write to that from within splitAndDissolve, so
+                        // this func could be atomic.
                         newNeurons.add(await splitAndDissolve(id, amount));
                     };
                     #ok(newNeurons.toArray())
