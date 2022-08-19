@@ -174,6 +174,10 @@ module {
                 summary = title;
             });
             switch (proposal) {
+                case (#err(#GovernanceError({error_type = 11}))) {
+                    // Insufficient maturity
+                    return #err(#InsufficientMaturity);
+                };
                 case (#err(err)) {
                     return #err(err);
                 };
