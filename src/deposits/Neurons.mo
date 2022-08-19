@@ -153,9 +153,10 @@ module {
         // ===== PROPOSAL COMMAND FUNCTIONS =====
 
         public func mergeMaturity(id: Nat64, percentage: Nat32): async NeuronResult {
+            let title = "Merge " # percentage # "% of maturity for neuron " # Nat64.toText(id);
             let proposal = await propose({
                 url = "https://stakedicp.com";
-                title = ?"Merge Maturity";
+                title = ?title;
                 action = ?#ManageNeuron({
                     id = null;
                     command = ?#MergeMaturity({
@@ -163,7 +164,7 @@ module {
                     });
                     neuron_id_or_subaccount = ?#NeuronId({ id = id });
                 });
-                summary = "Merge Maturity";
+                summary = title;
             });
             switch (proposal) {
                 case (#err(err)) {
@@ -194,7 +195,7 @@ module {
                 return #err(#InsufficientStake)
             };
 
-            let title = "Split Neuron" # Nat64.toText(id);
+            let title = "Split Neuron " # Nat64.toText(id);
             let proposal = await propose({
                 url = "https://stakedicp.com";
                 title = ?title;
@@ -223,7 +224,7 @@ module {
 
         // Start a neuron dissolving
         public func dissolve(id: Nat64): async NeuronResult {
-            let title = "Start Dissolving Neuron" # Nat64.toText(id);
+            let title = "Start Dissolving Neuron " # Nat64.toText(id);
             let proposal = await propose({
                 url = "https://stakedicp.com";
                 title = ?title;
