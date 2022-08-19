@@ -11,21 +11,18 @@ if [ -z "$NETWORK" ]; then
   exit 1
 fi
 
-ID_FIELD="null"
-LIMIT="100"
 if [ -n "$PROPOSAL_ID" ]; then
-    ID_FIELD="opt record { id = $(($PROPOSAL_ID + 1)) : nat64 }"
-    LIMIT="1"
-fi
-
-read -r -d '' MSG << EOM
-(record {
-    include_reward_status = vec {};
-    before_proposal = ${ID_FIELD};
-    limit = ${LIMIT};
-    exclude_topic = vec {};
-    include_status = vec {};
-})
+    dfx canister --network "$NETWORK" call governance get_proposal_info "($PROPOSAL_ID)"
+else
+    read -r -d '' MSG << EOM
+    (record {
+        include_reward_status = vec {};
+        before_proposal = null;
+        limit = 100;
+        exclude_topic = vec {};
+        include_status = vec {};
+    })
 EOM
 
-dfx canister --network "$NETWORK" call governance list_proposals "$MSG"
+    dfx canister --network "$NETWORK" call governance list_proposals "$MSG"
+fi
