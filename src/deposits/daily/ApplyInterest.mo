@@ -93,12 +93,14 @@ module {
                 return #err(#InsufficientMaturity);
             };
 
-            // Note: We might "leak" a tiny bit of interest here because maturity
-            // could increase before we merge. It would be ideal if the NNS allowed
-            // specify maturity to merge as an e8s, but alas. We could look at
-            // the neuron balances before/after, but that would introduce a
-            // race condition with 'FlushPendingDeposits', which transfers more
-            // ICP into the neurons.
+            // Note: We might "leak" a tiny bit of interest here because
+            // maturity could increase before we merge. If you merge the
+            // maturity directly, the NNS tells us how much maturity it merged,
+            // but that is not available because we are operating through a
+            // propsal. We could look at the neuron balances before/after, but
+            // that would introduce a race condition with
+            // 'FlushPendingDeposits', which transfers more ICP into the
+            // neurons.
             let merges = await args.neurons.mergeMaturities(args.staking.ids(), 100);
             for (n in merges.vals()) {
                 switch (n) {

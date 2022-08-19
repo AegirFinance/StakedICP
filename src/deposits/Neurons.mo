@@ -153,7 +153,14 @@ module {
         // ===== PROPOSAL COMMAND FUNCTIONS =====
 
         public func mergeMaturity(id: Nat64, percentage: Nat32): async NeuronResult {
-            let title = "Merge " # percentage # "% of maturity for neuron " # Nat64.toText(id);
+            // We need re-fetch maturity here to ensure that this proposal
+            // passes. Otherwise we'll be charged for a failed proposal.
+            let maturity = Option.get((await maturities([id])).vals().next(), (id, 0 : Nat64)).1;
+            if (maturity <= icpFee) {
+                return #err(#InsufficientMaturity);
+            };
+
+            let title = "Merge " # Nat32.toText(percentage) # "% of maturity for neuron " # Nat64.toText(id);
             let proposal = await propose({
                 url = "https://stakedicp.com";
                 title = ?title;
@@ -177,15 +184,16 @@ module {
         };
 
         public func mergeMaturities(ids: [Nat64], percentage: Nat32): async [NeuronResult] {
-            // TODO: Parallelize these calls
             let b = Buffer.Buffer<NeuronResult>(ids.size());
 
-            // TODO: Do we need to re-fetch maturities here? Can we just
-            // attempt to merge and handle the failure if it's too small?
+            // We need re-fetch maturities here to ensure that this
+            // proposal passes. Otherwise we'll be charged for a failed proposal.
             for ((id, maturity) in (await maturities(ids)).vals()) {
-                if (maturity > icpFee) {
-                    b.add(await mergeMaturity(id, percentage));
-                };
+                b.add(if (maturity <= icpFee) {
+                    #err(#InsufficientMaturity)
+                } else {
+                   await mergeMaturity(id, percentage)
+                });
             };
             return b.toArray();
         };
