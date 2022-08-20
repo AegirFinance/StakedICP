@@ -36,7 +36,7 @@ module {
         ): async FlushPendingDepositsResult {
             // Note, this races with the queued mints in ApplyInterest. Once
             // ApplyInterest's flushes are finished, the total supply might be
-            // higher than what we see here.
+            // higher than what we see here. So we run this after the ApplyInterest.
             let tokenE8s = Nat64.fromNat((await args.token.getMetadata()).totalSupply);
             var canisterE8s = availableBalance();
 

@@ -100,7 +100,7 @@ module {
             // propsal. We could look at the neuron balances before/after, but
             // that would introduce a race condition with
             // 'FlushPendingDeposits', which transfers more ICP into the
-            // neurons.
+            // neurons. So, we run this before FlushPendingDeposits.
             let merges = await args.neurons.mergeMaturities(args.staking.ids(), 100);
             for (n in merges.vals()) {
                 switch (n) {
