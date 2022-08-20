@@ -381,6 +381,9 @@ shared(init_msg) actor class Deposits(args: {
             case _ {};
         };
 
+        // Use this to fulfill any pending withdrawals.
+        ignore withdrawals.depositIcp(amount.e8s);
+
         // Mint the new tokens
         Debug.print("[Referrals.convert] user: " # debug_show(user));
         referralTracker.convert(user);
@@ -532,7 +535,11 @@ shared(init_msg) actor class Deposits(args: {
         };
 
         // Check we have enough cash+neurons
-        let availableCash = _availableBalance();
+        var availableCash = _availableBalance();
+        if (availableCash > 0) {
+            // See if there are other withdrawals pending we should fulfill first.
+            availableCash -= withdrawals.depositIcp(availableCash);
+        };
         var delay: Int = 0;
         var availableNeurons: Nat64 = 0;
         if (total > availableCash) {
