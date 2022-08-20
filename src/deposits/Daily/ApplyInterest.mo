@@ -7,10 +7,12 @@ import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
 import Option "mo:base/Option";
 import Order "mo:base/Order";
+import P "mo:base/Prelude";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
+import TrieMap "mo:base/TrieMap";
 
 import Neurons "../Neurons";
 import Referrals "../Referrals";
@@ -87,29 +89,45 @@ module {
             // take a snapshot of the holders for tomorrow's interest.
             let nextHolders = await getAllHolders();
 
-            // See how much maturity we have pending
-            let interest = await stakingNeuronMaturityE8s();
-            if (interest <= 10_000) {
-                return #err(#InsufficientMaturity);
+            // TODO: Should we refetch these from the NNS here? They shouldn't
+            // have changed, and it adds another async/await.
+            let neuronIds = args.staking.ids();
+            let before = TrieMap.TrieMap<Text, Nat64>(Text.equal, Text.hash);
+            for ((k, v) in args.staking.balances().vals()) {
+                before.put(Nat64.toText(k), v);
             };
 
-            // Note: We might "leak" a tiny bit of interest here because
-            // maturity could increase before we merge. If you merge the
-            // maturity directly, the NNS tells us how much maturity it merged,
-            // but that is not available because we are operating through a
-            // propsal. We could look at the neuron balances before/after, but
-            // that would introduce a race condition with
-            // 'FlushPendingDeposits', which transfers more ICP into the
-            // neurons. So, we run this before FlushPendingDeposits.
-            let merges = await args.neurons.mergeMaturities(args.staking.ids(), 100);
+            // Note: We compare before/after balances here because we are
+            // forced to merge a "percentage", so the amount we merge might be
+            // different than expected. However, this introduces a race
+            // condition with 'FlushPendingDeposits', which transfers more ICP
+            // into the neurons. So this must run before
+            // 'FlushPendingDeposits'.
+            var interest: Nat64 = 0;
+            let merges = await args.neurons.mergeMaturities(neuronIds, 100);
             for (n in merges.vals()) {
                 switch (n) {
                     case (#ok(neuron)) {
                         ignore args.staking.addOrRefresh(neuron);
+
+                        // Add up the interest we successfully merged.
+                        switch (before.get(Nat64.toText(neuron.id))) {
+                            case (null) { P.unreachable() };
+                            case (?beforeE8s) {
+                                assert(neuron.cachedNeuronStakeE8s >= beforeE8s);
+                                interest += neuron.cachedNeuronStakeE8s - beforeE8s
+                            };
+                        };
                     };
                     case (_) { };
                 };
             };
+
+            // See how much maturity we have pending
+            if (interest <= 10_000) {
+                return #err(#InsufficientMaturity);
+            };
+
 
             // Apply the interest to the holders
             let apply = applyInterestToToken(
@@ -283,15 +301,6 @@ module {
             // *2 here is because this is not atomic, so if anyone joins in the
             // meantime.
             return await args.token.getHolders(0, info.holderNumber*2);
-        };
-
-        private func stakingNeuronMaturityE8s(): async Nat64 {
-            let maturities = await args.neurons.maturities(args.staking.ids());
-            var sum : Nat64 = 0;
-            for ((id, maturities) in maturities.vals()) {
-                sum += maturities;
-            };
-            sum
         };
 
         // ===== UPGRADE FUNCTIONS =====
