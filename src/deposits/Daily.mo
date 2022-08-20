@@ -13,7 +13,6 @@ import Token "../DIP20/motoko/src/token";
 
 import ApplyInterest "./daily/ApplyInterest";
 import FlushPendingDeposits "./daily/FlushPendingDeposits";
-import MergeWithdrawalMaturity "./daily/MergeWithdrawalMaturity";
 import SplitNewWithdrawalNeurons "./daily/SplitNewWithdrawalNeurons";
 
 module {
@@ -22,7 +21,6 @@ module {
             applyInterestJob: ?ApplyInterest.UpgradeData;
             applyInterestResult: ?ApplyInterest.ApplyInterestResult;
             flushPendingDepositsResult: ?FlushPendingDeposits.FlushPendingDepositsResult;
-            mergeWithdrawalMaturityResult: ?MergeWithdrawalMaturity.MergeWithdrawalMaturityResult;
             splitNewWithdrawalNeuronsResult: ?SplitNewWithdrawalNeurons.SplitNewWithdrawalNeuronsResult;
         };
     };
@@ -53,11 +51,6 @@ module {
             withdrawals = args.withdrawals;
         });
 
-        private var mergeWithdrawalMaturityJob = MergeWithdrawalMaturity.Job({
-            neurons = args.neurons;
-            withdrawals = args.withdrawals;
-        });
-
         private var splitNewWithdrawalNeuronsJob = SplitNewWithdrawalNeurons.Job({
             neurons = args.neurons;
             staking = args.staking;
@@ -66,7 +59,6 @@ module {
 
         private var applyInterestResult: ?ApplyInterest.ApplyInterestResult = null;
         private var flushPendingDepositsResult: ?FlushPendingDeposits.FlushPendingDepositsResult = null;
-        private var mergeWithdrawalMaturityResult: ?MergeWithdrawalMaturity.MergeWithdrawalMaturityResult = null;
         private var splitNewWithdrawalNeuronsResult: ?SplitNewWithdrawalNeurons.SplitNewWithdrawalNeuronsResult = null;
 
 
@@ -87,20 +79,17 @@ module {
         ) : async () {
             applyInterestResult := null;
             flushPendingDepositsResult := null;
-            mergeWithdrawalMaturityResult := null;
             splitNewWithdrawalNeuronsResult := null;
 
-            // Can run these three in "parallel"
+            // Can run these in "parallel"
             ignore applyInterest(now, root, queueMint);
             ignore flushPendingDeposits(availableBalance, refreshAvailableBalance);
-            ignore mergeWithdrawalMaturity();
         };
 
         // If we're done with the apply/flush/merge, move onto the split
         private func splitIfReady(): async () {
             if (applyInterestResult == null) { return; };
             if (flushPendingDepositsResult == null) { return; };
-            if (mergeWithdrawalMaturityResult == null) { return; };
 
             ignore splitNewWithdrawalNeurons();
         };
@@ -120,12 +109,6 @@ module {
             ignore splitIfReady();
         };
 
-        // merge the maturity for our dissolving withdrawal neurons
-        private func mergeWithdrawalMaturity() : async () {
-            mergeWithdrawalMaturityResult := ?(await mergeWithdrawalMaturityJob.start());
-            ignore splitIfReady();
-        };
-
         // Split off as many staking neurons as we need to ensure withdrawals
         // will be satisfied.
         //
@@ -141,7 +124,6 @@ module {
                 applyInterestJob = applyInterestJob.preupgrade();
                 applyInterestResult = applyInterestResult;
                 flushPendingDepositsResult = flushPendingDepositsResult;
-                mergeWithdrawalMaturityResult = mergeWithdrawalMaturityResult;
                 splitNewWithdrawalNeuronsResult = splitNewWithdrawalNeuronsResult;
             });
         };
@@ -152,7 +134,6 @@ module {
                     applyInterestJob.postupgrade(data.applyInterestJob);
                     applyInterestResult := data.applyInterestResult;
                     flushPendingDepositsResult := data.flushPendingDepositsResult;
-                    mergeWithdrawalMaturityResult := data.mergeWithdrawalMaturityResult;
                     splitNewWithdrawalNeuronsResult := data.splitNewWithdrawalNeuronsResult;
                 };
                 case (_) { return; }
