@@ -33,12 +33,15 @@ module {
     };
 
     public type Metrics = {
-        count: Nat64;
+        totalCount: Nat64;
+        pendingCount: Nat64;
+        readyCount: Nat64;
+        disbursedCount: Nat64;
+        usersCount: Nat64;
         totalE8s: Nat64;
         pendingE8s: Nat64;
         availableE8s: Nat64;
         disbursedE8s: Nat64;
-        usersCount: Nat64;
     };
 
     public type Withdrawal = {
@@ -135,11 +138,22 @@ module {
         };
 
         public func metrics(): Metrics {
+            var totalCount: Nat64 = 0;
+            var pendingCount: Nat64 = 0;
+            var readyCount: Nat64 = 0;
+            var disbursedCount: Nat64 = 0;
             var totalE8s: Nat64 = 0;
             var pendingE8s: Nat64 = 0;
             var availableE8s: Nat64 = 0;
             var disbursedE8s: Nat64 = 0;
             for (w in withdrawals.vals()) {
+                totalCount += 1;
+                switch (w.readyAt, w.disbursedAt) {
+                    case (null, null) { pendingCount += 1 };
+                    case (  ?_, null) { readyCount += 1 };
+                    case (   _,   ?_) { disbursedCount += 1 };
+                };
+
                 totalE8s += w.total;
                 pendingE8s += w.pending;
                 availableE8s += w.available;
@@ -147,12 +161,15 @@ module {
             };
 
             return {
-                count = Nat64.fromNat(withdrawals.size());
+                totalCount = totalCount;
+                pendingCount = pendingCount;
+                readyCount = readyCount;
+                disbursedCount = disbursedCount;
+                usersCount = Nat64.fromNat(withdrawalsByUser.size());
                 totalE8s = totalE8s;
                 pendingE8s = pendingE8s;
                 availableE8s = availableE8s;
                 disbursedE8s = disbursedE8s;
-                usersCount = Nat64.fromNat(withdrawalsByUser.size());
             };
         };
 
