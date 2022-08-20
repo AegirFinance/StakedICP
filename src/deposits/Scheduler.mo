@@ -37,7 +37,10 @@ module {
         result : ?Result.Result<Any, Any>;
     };
 
-    // Scheduler manages regularly performed background jobs
+    // Scheduler manages regularly performed background jobs at a regular
+    // interval. Jobs are scheduled to run "concurrently" (using "ignore"), but
+    // if a job is already running, the scheduler will wait for it to finish
+    // before starting it again.
     public class Scheduler() {
         // Makes date math simpler
         let second : Int = 1_000_000_000;
@@ -121,6 +124,11 @@ module {
         // Try to run all scheduled jobs. This should be called in the
         // heartbeat function of the importing canister. Most of the time it
         // will be a no-op.
+        //
+        // NOTE: This must be atomic, so it is safe to run concurrently.
+        // Heartbeat system functions can be called in very quick succession.
+        // Hence, all actual jobs are started with "ignore" instead of "await",
+        // so they do not yield.
         public func heartbeat(now: Time.Time, jobs: [Job]) : async () {
             let jobsToRun = Array.filter(jobs, func({name; interval}: Job): Bool {
                 switch (lastJobResults.get(name)) {
