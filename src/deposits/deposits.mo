@@ -650,7 +650,7 @@ shared(init_msg) actor class Deposits(args: {
             },
             {
                 name = "flushAllMints";
-                interval = 1 * second;
+                interval = 5 * second;
                 function = func(now: Time.Time): async Result.Result<Any, Any> {
                     await flushAllMints()
                 };
