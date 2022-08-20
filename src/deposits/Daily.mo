@@ -81,39 +81,8 @@ module {
             flushPendingDepositsResult := null;
             splitNewWithdrawalNeuronsResult := null;
 
-            // Can run these in "parallel"
-            ignore applyInterest(now, root, queueMint);
-            ignore flushPendingDeposits(availableBalance, refreshAvailableBalance);
-        };
-
-        // If we're done with the apply/flush/merge, move onto the split
-        private func splitIfReady(): async () {
-            if (applyInterestResult == null) { return; };
-            if (flushPendingDepositsResult == null) { return; };
-
-            ignore splitNewWithdrawalNeurons();
-        };
-
-        // Merge the interest
-        private func applyInterest(now: Time.Time, root: Principal, queueMint: ApplyInterest.QueueMintFn) : async () {
             applyInterestResult := ?(await applyInterestJob.start(now, root, queueMint));
-            ignore splitIfReady();
-        };
-
-        // Flush pending deposits
-        private func flushPendingDeposits(
-            availableBalance: FlushPendingDeposits.AvailableBalanceFn,
-            refreshAvailableBalance: FlushPendingDeposits.RefreshAvailableBalanceFn
-        ) : async () {
             flushPendingDepositsResult := ?(await flushPendingDepositsJob.start(availableBalance, refreshAvailableBalance));
-            ignore splitIfReady();
-        };
-
-        // Split off as many staking neurons as we need to ensure withdrawals
-        // will be satisfied.
-        //
-        // Note: This needs to happen *after* everything above, hence the awaits.
-        private func splitNewWithdrawalNeurons() : async () {
             splitNewWithdrawalNeuronsResult := ?(await splitNewWithdrawalNeuronsJob.start());
         };
 
