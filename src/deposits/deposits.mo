@@ -257,14 +257,14 @@ shared(init_msg) actor class Deposits(args: {
                 ("ICP", cachedLedgerBalanceE8s),
                 ("cycles", Nat64.fromNat(ExperimentalCycles.balance()))
             ];
-            pendingMintsE8s = pendingMintsSum();
-            pendingMintsCount = pendingMints.size();
+            daily = daily.metrics();
             neurons = neuronsMetrics;
+            pendingMintsCount = pendingMints.size();
+            pendingMintsE8s = pendingMintsSum();
             referrals = referralTracker.metrics();
             scheduler = scheduler.metrics();
             staking = staking.metrics();
             withdrawals = withdrawals.metrics();
-            // TODO: Add back last heartbeat interest applied and ok stuff here
         };
     };
 

@@ -25,6 +25,11 @@ module {
         };
     };
 
+    public type Metrics = {
+        lastHeartbeatOk: Bool;
+        lastHeartbeatInterestApplied: Nat64;
+    };
+
     // Job is the state machine that manages the daily
     // merging/splitting/interest.
     public class Job(args: {
@@ -61,11 +66,33 @@ module {
         private var flushPendingDepositsResult: ?FlushPendingDeposits.FlushPendingDepositsResult = null;
         private var splitNewWithdrawalNeuronsResult: ?SplitNewWithdrawalNeurons.SplitNewWithdrawalNeuronsResult = null;
 
-
         // ===== GETTER/SETTER FUNCTIONS =====
 
         public func setInitialSnapshot(): async (Text, [(Principal, Nat)]) {
             await applyInterestJob.setInitialSnapshot()
+        };
+
+        // ===== METRICS FUNCTIONS =====
+
+        public func metrics(): Metrics {
+            let lastHeartbeatOk = switch (applyInterestResult, flushPendingDepositsResult, splitNewWithdrawalNeuronsResult) {
+                // Something failed
+                case (?#err(_),        _,        _) { false };
+                // flush cannot fail, so no need to check it.
+                case (       _,        _, ?#err(_)) { false };
+                // Still running, or all good
+                case (       _,        _,        _) { true };
+            };
+            let lastHeartbeatInterestApplied: Nat64 = switch (applyInterestResult) {
+                case (?#ok(a)) {
+                    a.applied.e8s + a.remainder.e8s + Nat64.fromNat(a.affiliatePayouts)
+                };
+                case (_) { 0 };
+            };
+            return {
+                lastHeartbeatOk = lastHeartbeatOk;
+                lastHeartbeatInterestApplied = lastHeartbeatInterestApplied;
+            };
         };
 
         // ===== JOB START FUNCTION =====

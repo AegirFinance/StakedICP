@@ -1,4 +1,5 @@
 import Buffer "mo:base/Buffer";
+import Error "mo:base/Error";
 import Nat64 "mo:base/Nat64";
 import Result "mo:base/Result";
 
@@ -9,7 +10,7 @@ import Ledger "../../ledger/Ledger";
 import Token "../../DIP20/motoko/src/token";
 
 module {
-    public type FlushPendingDepositsResult = [Ledger.TransferArgs];
+    public type FlushPendingDepositsResult = [Ledger.TransferResult];
 
     public type AvailableBalanceFn = () -> Nat64;
     public type RefreshAvailableBalanceFn = () -> async Nat64;
@@ -51,14 +52,15 @@ module {
 
             // Spread the remainder between staking neurons (retaining some in the canister).
             let transfers = args.staking.depositIcp(tokenE8s, canisterE8s, null);
+            let results = Buffer.Buffer<Ledger.TransferResult>(transfers.size());
             for (transfer in transfers.vals()) {
                 // Start the transfer. Best effort here. If the transfer fails,
                 // it'll be retried next time. But awaiting, means we can
                 // refresh the balance and staking neurons afterwards
                 try {
-                    ignore await args.ledger.transfer(transfer)
+                    results.add(await args.ledger.transfer(transfer));
                 } catch (error) {
-                    // No-op. Transfer will be retried next time.
+                    // This is fine. Transfer will be retried next time.
                 }
             };
             if (transfers.size() > 0) {
@@ -68,7 +70,7 @@ module {
                 ignore await refreshAllStakingNeurons();
             };
 
-            transfers
+            results.toArray();
         };
 
         // Refresh all neurons, fetching current data from the NNS. This is
