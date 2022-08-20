@@ -64,10 +64,15 @@ module {
                 }
             };
             if (transfers.size() > 0) {
-                // If we did outbound transfers, refresh the ledger balance.
-                ignore await refreshAvailableBalance();
-                // Update the staked neuron balances after they've been topped up
-                ignore await refreshAllStakingNeurons();
+                try {
+                    // If we did outbound transfers, refresh the ledger balance.
+                    ignore await refreshAvailableBalance();
+                } catch (error) { /* No-op */ };
+
+                try {
+                    // Update the staked neuron balances after they've been topped up
+                    ignore await refreshAllStakingNeurons();
+                } catch (error) { /* No-op */ };
             };
 
             results.toArray();

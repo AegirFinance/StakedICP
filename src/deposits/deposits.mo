@@ -482,6 +482,10 @@ shared(init_msg) actor class Deposits(args: {
         cachedLedgerBalanceE8s := (await ledger.account_balance({
             account = Blob.toArray(accountIdBlob());
         })).e8s;
+
+        // See if we can fulfill any pending withdrawals.
+        ignore withdrawals.depositIcp(_availableBalance());
+
         cachedLedgerBalanceE8s
     };
 
@@ -536,11 +540,8 @@ shared(init_msg) actor class Deposits(args: {
 
         // Check we have enough cash+neurons
         var availableCash = _availableBalance();
-        if (availableCash > 0) {
-            // See if there are other withdrawals pending we should fulfill first.
-            availableCash -= withdrawals.depositIcp(availableCash);
-        };
-        var delay: Int = 0;
+        // Minimum, 1 minute until withdrawals.depositIcp runs again.
+        var delay: Int = 60;
         var availableNeurons: Nat64 = 0;
         if (total > availableCash) {
             let (d, a) = availableLiquidity(total - availableCash);
@@ -555,7 +556,7 @@ shared(init_msg) actor class Deposits(args: {
             return #err(#InsufficientLiquidity);
         };
 
-        return #ok(withdrawals.createWithdrawal(user, total, availableCash, delay));
+        return #ok(withdrawals.createWithdrawal(user, total, delay));
     };
 
     // Complete withdrawal(s), transferring the ready amount to the

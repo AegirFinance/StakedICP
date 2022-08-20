@@ -170,40 +170,27 @@ module {
             ns
         };
 
-        // Attempt to create a new withdrawal for the user. If there is enough
-        // available cash, the withdrawal is filled immediately. Otherwise the
-        // remainder is "pending" until enough new deposits or dissolving ICP
-        // are available.
-        public func createWithdrawal(user: Principal, amount: Nat64, availableCash: Nat64, delay: Int): Withdrawal {
+        // Attempt to create a new withdrawal for the user. The full amount
+        // starts as `pending`, and the `depositIcp` method applies new
+        // deposits, cash, and dissolving ICP towards fulfilling pending
+        // deposits.
+        public func createWithdrawal(user: Principal, amount: Nat64, delay: Int): Withdrawal {
             let now = Time.now();
-
-            // Mark cash as available for instant withdrawal
-            let available: Nat64 = Nat64.min(availableCash, amount);
-
-            // Store the withdrawal
-            let readyAt = if (delay == 0) {
-                ?now
-            } else {
-                null
-            };
-
             let id = nextWithdrawalId(user);
             let withdrawal: Withdrawal = {
                 id = id;
                 user = user;
                 createdAt = now;
                 expectedAt = now + (delay * second);
-                readyAt = readyAt;
+                readyAt = null;
                 disbursedAt = null;
                 total = amount;
-                pending = amount - available;
-                available = available;
+                pending = amount;
+                available = 0;
                 disbursed = 0;
             };
             withdrawals.put(id, withdrawal);
-            if (available < amount) {
-                pendingWithdrawals := Deque.pushBack(pendingWithdrawals, {id = id; createdAt = now});
-            };
+            pendingWithdrawals := Deque.pushBack(pendingWithdrawals, {id = id; createdAt = now});
             withdrawalsByUserAdd(withdrawal.user, id);
 
             return withdrawal;

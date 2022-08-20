@@ -75,7 +75,7 @@ export function UnstakePanel() {
           maxDelay = d > maxDelay ? d : maxDelay;
           remaining -= available;
       };
-      return maxDelay;
+      return Math.min(60, maxDelay);
   }, [liquidityGraph, parsedAmount]);
 
     const depositsCanister = useCanister<Deposits>({
