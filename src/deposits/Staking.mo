@@ -33,6 +33,8 @@ module {
     };
 
     public type Metrics = {
+        neuronsBalanceSum: Nat64;
+        neuronsCount: Nat;
     };
 
     // The StakingManager manages our staking. Specifically, the staking
@@ -52,7 +54,14 @@ module {
         private var stakingNeurons = TrieMap.TrieMap<Text, Neurons.Neuron>(Text.equal, Text.hash);
 
         public func metrics(): Metrics {
-            return {};
+            var sum : Nat64 = 0;
+            for ((id, balance) in balances().vals()) {
+                sum += balance;
+            };
+            {
+                neuronsBalanceSum = sum;
+                neuronsCount = stakingNeurons.size();
+            }
         };
 
         // Lists the staking neurons

@@ -13,7 +13,7 @@ import Text "mo:base/Text";
 import Time "mo:base/Time";
 
 import Deposits "../deposits/deposits";
-import Referrals "../deposits/Referrals";
+import DepositsMetrics "../deposits/Metrics";
 import Token "../DIP20/motoko/src/token";
 
 shared(init_msg) actor class Metrics(args: {
@@ -25,7 +25,7 @@ shared(init_msg) actor class Metrics(args: {
     private stable var deposits : Deposits.Deposits = actor(Principal.toText(args.deposits));
     private stable var token : Token.Token = actor(Principal.toText(args.token));
 
-    private stable var depositsMetrics : ?DepositsMetrics = null;
+    private stable var depositsMetrics : ?DepositsMetrics.Metrics = null;
     private stable var tokenInfo : ?TokenInfo = null;
     private stable var lastUpdatedAt : ?Time.Time = null;
 
@@ -67,18 +67,6 @@ shared(init_msg) actor class Metrics(args: {
         historySize: Nat;
         holderNumber: Nat;
         cycles: Nat;
-    };
-
-    public type DepositsMetrics = {
-        aprMicrobips: Nat64;
-        balances: [(Text, Nat64)];
-        stakingNeuronBalance: ?Nat64;
-        referralAffiliatesCount: Nat;
-        referralLeads: [Referrals.LeadMetrics];
-        referralPayoutsSum: Nat;
-        lastHeartbeatAt: Time.Time;
-        lastHeartbeatOk: Bool;
-        lastHeartbeatInterestApplied: Nat64;
     };
 
     public query func http_request(request: HttpRequest) : async HttpResponse {

@@ -20,6 +20,12 @@ module {
         };
     };
 
+    public type Metrics = {
+        affiliatesCount: Nat;
+        leads: [LeadMetrics];
+        payoutsSum: Nat;
+    };
+
     public type LeadMetrics = {
         converted: Bool;
         hasAffiliate: Bool;
@@ -62,11 +68,15 @@ module {
         private var payouts          = TrieMap.TrieMap<Principal, Buffer.Buffer<Payout>>(Principal.equal, Principal.hash);
         private var totals           = TrieMap.TrieMap<Principal, Nat>(Principal.equal, Principal.hash);
 
-        public func affiliatesCount(): Nat {
-            conversions.size()
+        public func metrics(): Metrics {
+            {
+                affiliatesCount = conversions.size();
+                leads = leadMetrics();
+                payoutsSum = payoutsSum();
+            }
         };
 
-        public func leadMetrics(): [LeadMetrics] {
+        private func leadMetrics(): [LeadMetrics] {
             var unconvertedNoAffiliate: Nat = 0;
             var convertedNoAffiliate: Nat = 0;
             var unconvertedAffiliate: Nat = 0;
@@ -95,7 +105,7 @@ module {
             ];
         };
 
-        public func payoutsSum(): Nat {
+        private func payoutsSum(): Nat {
             var sum : Nat = 0;
             for (amount in totals.vals()) {
                 sum += amount;

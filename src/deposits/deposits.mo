@@ -25,6 +25,7 @@ import Account      "./Account";
 import Daily        "./Daily";
 import Scheduler    "./Scheduler";
 import Hex          "./Hex";
+import Metrics      "./Metrics";
 import Neurons      "./Neurons";
 import Owners       "./Owners";
 import Referrals    "./Referrals";
@@ -183,14 +184,6 @@ shared(init_msg) actor class Deposits(args: {
         staking.balances()
     };
 
-    private func stakingNeuronBalance(): Nat64 {
-        var sum : Nat64 = 0;
-        for ((id, balance) in staking.balances().vals()) {
-            sum += balance;
-        };
-        sum
-    };
-
     // Idempotently add a neuron to the tracked staking neurons. The neurons
     // added here must be manageable by the proposal neuron. The starting
     // balance will be minted as stICP to the canister's token account.
@@ -242,23 +235,9 @@ shared(init_msg) actor class Deposits(args: {
         metricsCanister := m;
     };
 
-    public type Metrics = {
-        aprMicrobips: Nat64;
-        balances: [(Text, Nat64)];
-        stakingNeuronBalance: ?Nat64;
-        proposalNeuronBalance: ?Nat64;
-        proposalNeuronFees: ?Nat64;
-        referralAffiliatesCount: Nat;
-        referralLeads: [Referrals.LeadMetrics];
-        referralPayoutsSum: Nat;
-        pendingMints: Nat64;
-        jobs: [Scheduler.JobMetrics];
-        // TODO: Add neurons metrics
-    };
-
     // Expose metrics to track canister performance, and behaviour. These are
     // ingested and served by the "metrics" canister.
-    public shared(msg) func metrics() : async Metrics {
+    public shared(msg) func metrics() : async Metrics.Metrics {
         if (not owners.is(msg.caller)) {
             switch (metricsCanister) {
                 case (null) {
@@ -271,25 +250,30 @@ shared(init_msg) actor class Deposits(args: {
         };
 
         let neuronsMetrics = await neurons.metrics();
-        var pendingMintAmount : Nat64 = 0;
-        for (amount in pendingMints.vals()) {
-            pendingMintAmount += amount;
-        };
+
         return {
             aprMicrobips = meanAprMicrobips;
             balances = [
                 ("ICP", cachedLedgerBalanceE8s),
                 ("cycles", Nat64.fromNat(ExperimentalCycles.balance()))
             ];
-            stakingNeuronBalance = ?stakingNeuronBalance();
-            proposalNeuronBalance = ?neuronsMetrics.proposalNeuronBalance;
-            proposalNeuronFees = ?neuronsMetrics.proposalNeuronFees;
-            referralAffiliatesCount = referralTracker.affiliatesCount();
-            referralLeads = referralTracker.leadMetrics();
-            referralPayoutsSum = referralTracker.payoutsSum();
-            pendingMints = pendingMintAmount;
-            jobs = scheduler.metrics().jobs;
+            pendingMintsE8s = pendingMintsSum();
+            pendingMintsCount = pendingMints.size();
+            neurons = neuronsMetrics;
+            referrals = referralTracker.metrics();
+            scheduler = scheduler.metrics();
+            staking = staking.metrics();
+            withdrawals = withdrawals.metrics();
+            // TODO: Add back last heartbeat interest applied and ok stuff here
         };
+    };
+
+    private func pendingMintsSum(): Nat64 {
+        var pendingMintE8s : Nat64 = 0;
+        for (amount in pendingMints.vals()) {
+            pendingMintE8s += amount;
+        };
+        pendingMintE8s
     };
 
     // ===== NEURON DISBURSAL FUNCTIONS =====

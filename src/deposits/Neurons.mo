@@ -30,7 +30,6 @@ module {
         };
     };
 
-    // TODO: Add some metrics here.
     public type Metrics = {
         proposalNeuronBalance: Nat64;
         proposalNeuronFees: Nat64;
