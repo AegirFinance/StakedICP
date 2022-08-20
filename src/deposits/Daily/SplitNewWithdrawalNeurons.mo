@@ -10,7 +10,7 @@ import Withdrawals "../Withdrawals";
 module {
     public type SplitNewWithdrawalNeuronsResult = Result.Result<[Neurons.NeuronResult], Neurons.NeuronsError>;
 
-    // Job is the step of the daily job which splits of new withdrawal neurons
+    // Job is the step of the daily job which splits off new withdrawal neurons
     // to ensure we have enough dissolving to satisfy pending withdrawals.
     public class Job(args: {
         neurons: Neurons.Manager;
@@ -19,7 +19,7 @@ module {
     }) {
         // Split off as many staking neurons as we need to satisfy pending
         // withdrawals.
-        public func start(): async SplitNewWithdrawalNeuronsResult {
+        public func run(): async SplitNewWithdrawalNeuronsResult {
             // figure out how much we have dissolving for withdrawals
             let dissolving = args.withdrawals.totalDissolving();
             let pending = args.withdrawals.totalPending();

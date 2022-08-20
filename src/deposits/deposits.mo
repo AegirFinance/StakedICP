@@ -716,7 +716,7 @@ shared(init_msg) actor class Deposits(args: {
                 interval = 1 * day;
                 function = func(now: Time.Time): async Result.Result<Any, Any> {
                     let root = Principal.fromActor(this);
-                    #ok(await daily.start(
+                    #ok(await daily.run(
                         now,
                         root,
                         queueMint,

@@ -38,13 +38,13 @@ module {
         withdrawals: Withdrawals.Manager;
     }) {
 
+        // Sub-steps
         private var applyInterestJob = ApplyInterest.Job({
             neurons = args.neurons;
             referralTracker = args.referralTracker;
             staking = args.staking;
             token = args.token;
         });
-
         private var flushPendingDepositsJob = FlushPendingDeposits.Job({
             ledger = args.ledger;
             neurons = args.neurons;
@@ -52,13 +52,13 @@ module {
             token = args.token;
             withdrawals = args.withdrawals;
         });
-
         private var splitNewWithdrawalNeuronsJob = SplitNewWithdrawalNeurons.Job({
             neurons = args.neurons;
             staking = args.staking;
             withdrawals = args.withdrawals;
         });
 
+        // Sub-step results
         private var applyInterestResult: ?ApplyInterest.ApplyInterestResult = null;
         private var flushPendingDepositsResult: ?FlushPendingDeposits.FlushPendingDepositsResult = null;
         private var splitNewWithdrawalNeuronsResult: ?SplitNewWithdrawalNeurons.SplitNewWithdrawalNeuronsResult = null;
@@ -107,7 +107,7 @@ module {
 
         // ===== JOB START FUNCTION =====
 
-        public func start(
+        public func run(
             now: Time.Time,
             root: Principal,
             queueMint: ApplyInterest.QueueMintFn,
@@ -118,13 +118,13 @@ module {
             flushPendingDepositsResult := null;
             splitNewWithdrawalNeuronsResult := null;
 
-            let apply = await applyInterestJob.start(now, root, queueMint);
+            let apply = await applyInterestJob.run(now, root, queueMint);
             applyInterestResult := ?apply;
 
-            let flush = await flushPendingDepositsJob.start(availableBalance, refreshAvailableBalance);
+            let flush = await flushPendingDepositsJob.run(availableBalance, refreshAvailableBalance);
             flushPendingDepositsResult := ?flush;
 
-            let split = await splitNewWithdrawalNeuronsJob.start();
+            let split = await splitNewWithdrawalNeuronsJob.run();
             splitNewWithdrawalNeuronsResult := ?split;
 
             (apply, flush, split)
@@ -134,6 +134,7 @@ module {
 
         public func preupgrade() : ?UpgradeData {
             return ?#v1({
+                // Only ApplyInterestJob has any upgrade state
                 applyInterestJob = applyInterestJob.preupgrade();
                 applyInterestResult = applyInterestResult;
                 flushPendingDepositsResult = flushPendingDepositsResult;

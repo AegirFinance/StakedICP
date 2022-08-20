@@ -83,7 +83,7 @@ module {
         // ===== JOB START FUNCTION =====
 
         // Distribute newly earned interest to token holders.
-        public func start(now: Time.Time, root: Principal, queueMint: QueueMintFn): async ApplyInterestResult {
+        public func run(now: Time.Time, root: Principal, queueMint: QueueMintFn): async ApplyInterestResult {
             // take a snapshot of the holders for tomorrow's interest.
             let nextHolders = await getAllHolders();
 

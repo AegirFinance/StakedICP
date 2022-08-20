@@ -15,9 +15,9 @@ module {
     public type AvailableBalanceFn = () -> Nat64;
     public type RefreshAvailableBalanceFn = () -> async Nat64;
 
-    // Job is step of the daily process which transfers pending deposits (ICP
-    // in the canister) through to pay off pending withdrawals, and top up the
-    // neurons.
+    // Job is the step of the daily process which transfers pending deposits
+    // (ICP in the canister) through to pay off pending withdrawals, and top up
+    // the neurons.
     public class Job(args: {
         ledger: Ledger.Self;
         neurons: Neurons.Manager;
@@ -30,7 +30,7 @@ module {
         // - pending withdrawals
         // - ICP in the canister
         // - staking neurons
-        public func start(
+        public func run(
             availableBalance: AvailableBalanceFn,
             refreshAvailableBalance: RefreshAvailableBalanceFn
         ): async FlushPendingDepositsResult {
