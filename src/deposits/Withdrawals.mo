@@ -405,9 +405,6 @@ module {
                 return #err(#InsufficientBalance);
             };
 
-            // TODO: Make sure you can't spam this to trigger race condition
-            // for infinite withdrawal.
-
             // Update these withdrawal balances.
             for ((w, applied) in b.vals()) {
                 let disbursedAt = if (w.disbursed + applied == w.total) {
