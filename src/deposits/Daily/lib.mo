@@ -1,3 +1,4 @@
+import Buffer "mo:base/Buffer";
 import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
 import Principal "mo:base/Principal";
@@ -9,6 +10,7 @@ import Referrals "../Referrals";
 import Staking "../Staking";
 import Withdrawals "../Withdrawals";
 import Ledger "../../ledger/Ledger";
+import Metrics "../../metrics/types";
 import Token "../../DIP20/motoko/src/token";
 
 import ApplyInterest "./ApplyInterest";
@@ -23,11 +25,6 @@ module {
             flushPendingDepositsResult: ?FlushPendingDeposits.FlushPendingDepositsResult;
             splitNewWithdrawalNeuronsResult: ?SplitNewWithdrawalNeurons.SplitNewWithdrawalNeuronsResult;
         };
-    };
-
-    public type Metrics = {
-        lastHeartbeatOk: Bool;
-        lastHeartbeatInterestApplied: Nat64;
     };
 
     // Job is the state machine that manages the daily
@@ -74,7 +71,7 @@ module {
 
         // ===== METRICS FUNCTIONS =====
 
-        public func metrics(): Metrics {
+        public func metrics(): [Metrics.Metric] {
             let lastHeartbeatOk = switch (applyInterestResult, flushPendingDepositsResult, splitNewWithdrawalNeuronsResult) {
                 // Something failed
                 case (?#err(_),        _,        _) { false };
@@ -89,10 +86,23 @@ module {
                 };
                 case (_) { 0 };
             };
-            return {
-                lastHeartbeatOk = lastHeartbeatOk;
-                lastHeartbeatInterestApplied = lastHeartbeatInterestApplied;
-            };
+
+            let ms = Buffer.Buffer<Metrics.Metric>(2);
+            ms.add({
+                name = "last_heartbeat_ok";
+                t = "gauge";
+                help = ?"0 if the last heartbeat run was successful";
+                labels = [];
+                value = if lastHeartbeatOk { "0" } else { "1" };
+            });
+            ms.add({
+                name = "last_heartbeat_interest_applied";
+                t = "gauge";
+                help = ?"e8s of interest applied at the last heartbeat";
+                labels = [];
+                value = Nat64.toText(lastHeartbeatInterestApplied);
+            });
+            ms.toArray()
         };
 
         // ===== JOB START FUNCTION =====

@@ -10,6 +10,8 @@ import Text "mo:base/Text";
 import Time "mo:base/Time";
 import TrieMap "mo:base/TrieMap";
 
+import Metrics "../metrics/types";
+
 module {
     public type UpgradeData = {
         #v1: {
@@ -21,10 +23,6 @@ module {
         startedAt: Time.Time;
         completedAt: ?Time.Time;
         ok: Bool;
-    };
-
-    public type Metrics = {
-        jobs: [JobMetrics];
     };
 
     public type Job = {
@@ -59,19 +57,51 @@ module {
 
         // Expose metrics to track canister performance, and behaviour. These are
         // ingested and served by the "metrics" canister.
-        public func metrics() : Metrics {
-            let ms = Buffer.Buffer<JobMetrics>(lastJobResults.size());
+        public func metrics() : [Metrics.Metric] {
+            let ms = Buffer.Buffer<Metrics.Metric>(lastJobResults.size());
             for ((name, {startedAt; completedAt; result}) in lastJobResults.entries()) {
                 ms.add({
-                    startedAt = startedAt;
-                    completedAt = completedAt;
-                    ok = switch (result) {
-                        case (?#ok(_)) { true };
-                        case (_) { false };
-                    };
+                    name = "scheduler_job_started_at";
+                    t = "gauge";
+                    help = ?"nanosecond timestamp of the last time the job started";
+                    labels = [("job", name)];
+                    value = Int.toText(startedAt);
                 });
+                switch (completedAt) {
+                    case (null) {};
+                    case (?completedAt) {
+                        ms.add({
+                            name = "scheduler_job_completed_at";
+                            t = "gauge";
+                            help = ?"nanosecond timestamp of the last time the job completed";
+                            labels = [("job", name)];
+                            value = Int.toText(completedAt);
+                        });
+                    };
+                };
+                switch (result) {
+                    case (null) {};
+                    case (?#ok(_)) {
+                        ms.add({
+                            name = "scheduler_job_ok";
+                            t = "gauge";
+                            help = ?"0 if the job was successful";
+                            labels = [("job", name)];
+                            value = "0";
+                        });
+                    };
+                    case (?#err(_)) {
+                        ms.add({
+                            name = "scheduler_job_ok";
+                            t = "gauge";
+                            help = ?"0 if the job was successful";
+                            labels = [("job", name)];
+                            value = "1";
+                        });
+                    };
+                };
             };
-            return { jobs = ms.toArray() };
+            ms.toArray()
         };
 
         // ===== GETTER/SETTER FUNCTIONS =====

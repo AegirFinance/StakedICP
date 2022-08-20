@@ -19,6 +19,7 @@ import Account "./Account";
 import Neurons "./Neurons";
 import Governance "../governance/Governance";
 import Ledger "../ledger/Ledger";
+import Metrics "../metrics/types";
 
 module {
     public let minimumStake: Nat64 = 100_000_000;
@@ -30,11 +31,6 @@ module {
         #v1: {
             stakingNeurons: [(Text, Neurons.Neuron)];
         };
-    };
-
-    public type Metrics = {
-        neuronsBalanceSum: Nat64;
-        neuronsCount: Nat;
     };
 
     // The StakingManager manages our staking. Specifically, the staking
@@ -53,15 +49,28 @@ module {
         private let governance: Governance.Interface = actor(Principal.toText(args.governance));
         private var stakingNeurons = TrieMap.TrieMap<Text, Neurons.Neuron>(Text.equal, Text.hash);
 
-        public func metrics(): Metrics {
+        public func metrics(): Buffer.Buffer<Metrics.Metric> {
             var sum : Nat64 = 0;
             for ((id, balance) in balances().vals()) {
                 sum += balance;
             };
-            {
-                neuronsBalanceSum = sum;
-                neuronsCount = stakingNeurons.size();
-            }
+
+            let ms = Buffer.Buffer<Metrics.Metric>(2);
+            ms.add({
+                name = "neuron_count";
+                t = "gauge";
+                help = ?"count of the neuron(s) by type";
+                labels = [("type", "staking")];
+                value = Nat.toText(stakingNeurons.size());
+            });
+            ms.add({
+                name = "neuron_balance_e8s";
+                t = "gauge";
+                help = ?"e8s balance of the neuron(s)";
+                labels = [("type", "staking")];
+                value = Nat64.toText(sum);
+            });
+            ms
         };
 
         // Lists the staking neurons

@@ -12,8 +12,8 @@ import Principal "mo:base/Principal";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
 
+import Types "./types";
 import Deposits "../deposits/deposits";
-import DepositsMetrics "../deposits/Metrics";
 import Token "../DIP20/motoko/src/token";
 
 shared(init_msg) actor class Metrics(args: {
@@ -25,7 +25,7 @@ shared(init_msg) actor class Metrics(args: {
     private stable var deposits : Deposits.Deposits = actor(Principal.toText(args.deposits));
     private stable var token : Token.Token = actor(Principal.toText(args.token));
 
-    private stable var depositsMetrics : ?DepositsMetrics.Metrics = null;
+    private stable var depositsMetrics : ?[Types.Metric] = null;
     private stable var tokenInfo : ?TokenInfo = null;
     private stable var lastUpdatedAt : ?Time.Time = null;
 
@@ -120,99 +120,76 @@ shared(init_msg) actor class Metrics(args: {
     };
 
     private func metrics(upgrade: Bool) : HttpResponse {
-        let metrics: Buffer.Buffer<Text> = Buffer.Buffer(0);
+        let lines: Buffer.Buffer<Text> = Buffer.Buffer(0);
 
         switch (depositsMetrics) {
             case (null) { };
-            case (?depositsMetrics) {
-                metrics.add("# TYPE apr_microbips gauge");
-                metrics.add("# HELP apr_microbips latest apr in microbips");
-                metrics.add("apr_microbips " # Nat64.toText(depositsMetrics.aprMicrobips));
-
-                metrics.add("# TYPE canister_balance_e8s gauge");
-                metrics.add("# HELP canister_balance_e8s canister balance for a token in e8s");
-                for ((token, balance) in Iter.fromArray(depositsMetrics.balances)) {
-                    metrics.add("canister_balance_e8s{token=\"" # token # "\",canister=\"deposits\"} " # Nat64.toText(balance));
+            case (?ms) {
+                for (m in ms.vals()) {
+                    lines.add(renderMetric(m));
                 };
-
-
-                switch (depositsMetrics.stakingNeuronBalance) {
-                    case (null) {};
-                    case (?b) {
-                        metrics.add("# TYPE neuron_balance_e8s gauge");
-                        metrics.add("# HELP neuron_balance_e8s e8s balance of the staking neuron");
-                        metrics.add("neuron_balance_e8s " # Nat64.toText(b));
-                    };
-                };
-
-
-                metrics.add("# TYPE referral_leads_count gauge");
-                metrics.add("# HELP referral_leads_count number of referral leads by state");
-                for ({converted; hasAffiliate; count} in Iter.fromArray(depositsMetrics.referralLeads)) {
-                    metrics.add("referral_leads_count{converted=\"" #  Bool.toText(converted) #  "\", hasAffiliate=\"" # Bool.toText(hasAffiliate) # "\"} " # Nat.toText(count));
-                };
-
-                metrics.add("# TYPE referral_affiliates_count gauge");
-                metrics.add("# HELP referral_affiliates_count number of affiliates who have 1+ referred users");
-                metrics.add("referral_affiliates_count " # Nat.toText(depositsMetrics.referralAffiliatesCount));
-
-                metrics.add("# TYPE referral_payouts_sum gauge");
-                metrics.add("# HELP referral_payouts_sum number of referral leads by state");
-                metrics.add("referral_payouts_sum " # Nat.toText(depositsMetrics.referralPayoutsSum));
-
-                metrics.add("# TYPE last_heartbeat_at gauge");
-                metrics.add("# HELP last_heartbeat_at nanosecond timestamp of the last time heartbeat ran");
-                metrics.add("last_heartbeat_at " # Int.toText(depositsMetrics.lastHeartbeatAt));
-
-                metrics.add("# TYPE last_heartbeat_ok gauge");
-                metrics.add("# HELP last_heartbeat_ok 0 if the last heartbeat run was successful");
-                metrics.add("last_heartbeat_ok " # (if (depositsMetrics.lastHeartbeatOk) {
-                    "0"
-                } else {
-                    "1"
-                }));
-
-                metrics.add("# TYPE last_heartbeat_interest_applied gauge");
-                metrics.add("# HELP last_heartbeat_interest_applied e8s of interest applied at the last heartbeat");
-                metrics.add("last_heartbeat_interest_applied " # Nat64.toText(depositsMetrics.lastHeartbeatInterestApplied));
             };
         };
 
         switch (tokenInfo) {
             case (null) { };
             case (?info) {
-                metrics.add("# TYPE token_supply_e8s gauge");
-                metrics.add("# HELP token_supply_e8s e8s sum of the current token supply");
-                metrics.add("token_supply_e8s " # Nat.toText(info.metadata.totalSupply));
+                lines.add(renderMetric({
+                    name = "token_supply_e8s";
+                    t = "gauge";
+                    help = ?"e8s sum of the current token supply";
+                    labels = [];
+                    value = Nat.toText(info.metadata.totalSupply);
+                }));
 
-                metrics.add("# TYPE token_transactions gauge");
-                metrics.add("# HELP token_transactions total number of token transactions");
-                metrics.add("token_transactions " # Nat.toText(info.historySize));
+                lines.add(renderMetric({
+                    name = "token_transactions";
+                    t = "gauge";
+                    help = ?"total number of token transactions";
+                    labels = [];
+                    value = Nat.toText(info.historySize);
+                }));
 
-                metrics.add("# TYPE token_holders gauge");
-                metrics.add("# HELP token_holders current number of token holders");
-                metrics.add("token_holders " # Nat.toText(info.holderNumber));
+                lines.add(renderMetric({
+                    name = "token_holders";
+                    t = "gauge";
+                    help = ?"current number of token holders";
+                    labels = [];
+                    value = Nat.toText(info.holderNumber);
+                }));
 
-                metrics.add("# TYPE canister_balance_e8s gauge");
-                metrics.add("# HELP canister_balance_e8s canister balance for a token in e8s");
-                metrics.add("canister_balance_e8s{token=\"cycles\",canister=\"token\"} " # Nat.toText(info.cycles));
+                lines.add(renderMetric({
+                    name = "canister_balance_e8s";
+                    t = "gauge";
+                    help = ?"canister balance for a token in e8s";
+                    labels = [("token", "cycles"), ("canister", "token")];
+                    value = Nat.toText(info.cycles);
+                }));
             };
         };
 
-        metrics.add("# TYPE canister_balance_e8s gauge");
-        metrics.add("# HELP canister_balance_e8s canister balance for a token in e8s");
-        metrics.add("canister_balance_e8s{token=\"cycles\",canister=\"metrics\"} " # Nat.toText(ExperimentalCycles.balance()));
+        lines.add(renderMetric({
+            name = "canister_balance_e8s";
+            t = "gauge";
+            help = ?"canister balance for a token in e8s";
+            labels = [("token", "cycles"), ("canister", "metrics")];
+            value = Nat.toText(ExperimentalCycles.balance());
+        }));
 
         switch (lastUpdatedAt) {
             case (null) { };
             case (?lastUpdatedAt) {
-                metrics.add("# TYPE last_updated_at gauge");
-                metrics.add("# HELP last_updated_at timestamp in ns, of last time the metrics were updated");
-                metrics.add("last_updated_at " # Int.toText(lastUpdatedAt));
+                lines.add(renderMetric({
+                    name = "last_updated_at";
+                    t = "gauge";
+                    help = ?"timestamp in ns, of last time the metrics were updated";
+                    labels = [];
+                    value = Int.toText(lastUpdatedAt);
+                }));
             };
         };
 
-        let body = Text.join("\n", metrics.vals());
+        let body = Text.join("\n", lines.vals());
         return {
             status_code = 200;
             headers = [("Content-Type", "text/plain")];
@@ -220,6 +197,23 @@ shared(init_msg) actor class Metrics(args: {
             streaming_strategy = null;
             upgrade = upgrade;
         };
+    };
+
+    private func renderMetric({name; t; help; value; labels}: Types.Metric): Text {
+        let lines = Buffer.Buffer<Text>(3);
+        lines.add("# TYPE " # name # " " # t);
+        switch (help) {
+            case (null) {};
+            case (?h) {
+                lines.add("# HELP " # name # " " # h);
+            };
+        };
+        let labelsText = "{" # Text.join(",", Iter.map<(Text, Text), Text>(
+                    labels.vals(),
+                    func((k, v)) { k # "=\"" # v # "\"" }
+                    )) # "}";
+        lines.add(name # labelsText # " " # value);
+        return Text.join("\n", lines.vals());
     };
 
     private func showErrors() : HttpResponse {

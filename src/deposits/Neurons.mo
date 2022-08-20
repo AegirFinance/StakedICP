@@ -17,6 +17,7 @@ import TrieMap "mo:base/TrieMap";
 import Account      "./Account";
 import Governance "../governance/Governance";
 import Ledger "../ledger/Ledger";
+import Metrics "../metrics/types";
 
 module {
     // NNS constants
@@ -28,11 +29,6 @@ module {
             governance: Principal;
             proposalNeuron: ?Neuron;
         };
-    };
-
-    public type Metrics = {
-        proposalNeuronBalance: Nat64;
-        proposalNeuronFees: Nat64;
     };
 
     // Neuron is the local state we store about a neuron.
@@ -83,7 +79,7 @@ module {
         private var governance: Governance.Interface = actor(Principal.toText(args.governance));
         private var proposalNeuron: ?Neuron = null;
 
-        public func metrics(): async Metrics {
+        public func metrics(): async [Metrics.Metric] {
             let (proposalNeuronBalance, proposalNeuronFees): (Nat64, Nat64) = switch (proposalNeuron) {
                 case (null) { (0, 0) };
                 case (?{id}) {
@@ -93,10 +89,30 @@ module {
                     }
                 };
             };
-            return {
-                proposalNeuronBalance = proposalNeuronBalance;
-                proposalNeuronFees = proposalNeuronFees;
-            };
+
+            let ms = Buffer.Buffer<Metrics.Metric>(3);
+            ms.add({
+                name = "neuron_count";
+                t = "gauge";
+                help = ?"count of the neuron(s) by type";
+                labels = [("type", "proposal")];
+                value = if (proposalNeuron == null) { "0" } else { "1" };
+            });
+            ms.add({
+                name = "neuron_balance_e8s";
+                t = "gauge";
+                help = ?"e8s balance of the neuron(s)";
+                labels = [("type", "proposal")];
+                value = Nat64.toText(proposalNeuronBalance);
+            });
+            ms.add({
+                name = "neuron_fees_e8s";
+                t = "gauge";
+                help = ?"e8s fees paid by the neuron(s)";
+                labels = [("type", "proposal")];
+                value = Nat64.toText(proposalNeuronFees);
+            });
+            ms.toArray()
         };
 
         // ===== PROPOSAL NEURON MANAGEMENT FUNCTIONS =====

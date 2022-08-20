@@ -25,7 +25,6 @@ import Account      "./Account";
 import Daily        "./Daily";
 import Scheduler    "./Scheduler";
 import Hex          "./Hex";
-import Metrics      "./Metrics";
 import Neurons      "./Neurons";
 import Owners       "./Owners";
 import Referrals    "./Referrals";
@@ -34,6 +33,7 @@ import Util         "./Util";
 import Withdrawals  "./Withdrawals";
 import Governance "../governance/Governance";
 import Ledger "../ledger/Ledger";
+import Metrics      "../metrics/types";
 import Token "../DIP20/motoko/src/token";
 
 // The deposits canister is the main backend canister for StakedICP. It
@@ -237,7 +237,7 @@ shared(init_msg) actor class Deposits(args: {
 
     // Expose metrics to track canister performance, and behaviour. These are
     // ingested and served by the "metrics" canister.
-    public shared(msg) func metrics() : async Metrics.Metrics {
+    public shared(msg) func metrics() : async [Metrics.Metric] {
         if (not owners.is(msg.caller)) {
             switch (metricsCanister) {
                 case (null) {
@@ -251,24 +251,72 @@ shared(init_msg) actor class Deposits(args: {
 
         let neuronsMetrics = await neurons.metrics();
 
-        return {
-            aprMicrobips = meanAprMicrobips;
-            balances = [
-                ("ICP", cachedLedgerBalanceE8s),
-                ("cycles", Nat64.fromNat(ExperimentalCycles.balance()))
-            ];
-            daily = daily.metrics();
-            neurons = neuronsMetrics;
-            pendingMintsCount = pendingMints.size();
-            pendingMintsE8s = pendingMintsSum();
-            referrals = referralTracker.metrics();
-            scheduler = scheduler.metrics();
-            staking = staking.metrics();
-            withdrawals = withdrawals.metrics();
+        let ms = Buffer.Buffer<Metrics.Metric>(0);
+        ms.add({
+            name = "apr_microbips";
+            t = "gauge";
+            help = ?"latest apr in microbips";
+            labels = [];
+            value = Nat64.toText(meanAprMicrobips);
+        });
+        ms.add({
+            name = "canister_balance_e8s";
+            t = "gauge";
+            help = ?"canister balance for a token in e8s";
+            labels = [("token", "ICP"), ("canister", "deposits")];
+            value = Nat64.toText(cachedLedgerBalanceE8s);
+        });
+        ms.add({
+            name = "canister_balance_e8s";
+            t = "gauge";
+            help = ?"canister balance for a token in e8s";
+            labels = [("token", "cycles"), ("canister", "deposits")];
+            value = Nat.toText(ExperimentalCycles.balance());
+        });
+        ms.add({
+            name = "pending_mint_count";
+            t = "gauge";
+            help = ?"number of mints currently pending";
+            labels = [];
+            value = Nat.toText(pendingMints.size());
+        });
+        ms.add({
+            name = "pending_mint_e8s";
+            t = "gauge";
+            help = ?"e8s value of mints currently pending";
+            labels = [];
+            value = Nat64.toText(pendingMintsE8s());
+        });
+        appendIter(ms, daily.metrics().vals());
+        appendIter(ms, neuronsMetrics.vals());
+        appendIter(ms, referralTracker.metrics().vals());
+        appendIter(ms, scheduler.metrics().vals());
+        appendIter(ms, staking.metrics().vals());
+        appendIter(ms, withdrawals.metrics().vals());
+
+        // For backwards compatibility in the metrics dashboard.
+
+        switch (scheduler.getLastJobResult("dailyHeartbeat")) {
+            case (null) {};
+            case (?last) {
+                ms.add({
+                    name = "last_heartbeat_at";
+                    t = "gauge";
+                    help = ?"nanosecond timestamp of the last time heartbeat ran";
+                    labels = [];
+                    value = Int.toText(last.startedAt);
+                });
+            };
         };
+
+        ms.toArray()
     };
 
-    private func pendingMintsSum(): Nat64 {
+    private func appendIter<X>(b: Buffer.Buffer<X>, iter: { next : () -> ?X }) {
+        for (x in iter) { b.add(x) };
+    };
+
+    private func pendingMintsE8s(): Nat64 {
         var pendingMintE8s : Nat64 = 0;
         for (amount in pendingMints.vals()) {
             pendingMintE8s += amount;

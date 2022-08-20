@@ -19,6 +19,7 @@ import Account "./Account";
 import Neurons "./Neurons";
 import Governance "../governance/Governance";
 import Ledger "../ledger/Ledger";
+import Metrics "../metrics/types";
 import Token "../DIP20/motoko/src/token";
 
 module {
@@ -30,18 +31,6 @@ module {
             dissolving: [(Text, Neurons.Neuron)];
             withdrawals: [(Text, Withdrawal)];
         };
-    };
-
-    public type Metrics = {
-        totalCount: Nat64;
-        pendingCount: Nat64;
-        readyCount: Nat64;
-        disbursedCount: Nat64;
-        usersCount: Nat64;
-        totalE8s: Nat64;
-        pendingE8s: Nat64;
-        availableE8s: Nat64;
-        disbursedE8s: Nat64;
     };
 
     public type Withdrawal = {
@@ -137,11 +126,11 @@ module {
             withdrawals.size()
         };
 
-        public func metrics(): Metrics {
-            var totalCount: Nat64 = 0;
-            var pendingCount: Nat64 = 0;
-            var readyCount: Nat64 = 0;
-            var disbursedCount: Nat64 = 0;
+        public func metrics(): [Metrics.Metric] {
+            var totalCount: Nat = 0;
+            var pendingCount: Nat = 0;
+            var readyCount: Nat = 0;
+            var disbursedCount: Nat = 0;
             var totalE8s: Nat64 = 0;
             var pendingE8s: Nat64 = 0;
             var availableE8s: Nat64 = 0;
@@ -160,17 +149,71 @@ module {
                 disbursedE8s += w.disbursed;
             };
 
-            return {
-                totalCount = totalCount;
-                pendingCount = pendingCount;
-                readyCount = readyCount;
-                disbursedCount = disbursedCount;
-                usersCount = Nat64.fromNat(withdrawalsByUser.size());
-                totalE8s = totalE8s;
-                pendingE8s = pendingE8s;
-                availableE8s = availableE8s;
-                disbursedE8s = disbursedE8s;
-            };
+            let ms = Buffer.Buffer<Metrics.Metric>(9);
+            ms.add({
+                name = "withdrawals_count";
+                t = "gauge";
+                help = ?"number of withdrawals";
+                labels = [("state", "total")];
+                value = Nat.toText(totalCount);
+            });
+            ms.add({
+                name = "withdrawals_count";
+                t = "gauge";
+                help = ?"number of withdrawals";
+                labels = [("state", "pending")];
+                value = Nat.toText(pendingCount);
+            });
+            ms.add({
+                name = "withdrawals_count";
+                t = "gauge";
+                help = ?"number of withdrawals";
+                labels = [("state", "ready")];
+                value = Nat.toText(readyCount);
+            });
+            ms.add({
+                name = "withdrawals_count";
+                t = "gauge";
+                help = ?"number of withdrawals";
+                labels = [("state", "disbursed")];
+                value = Nat.toText(disbursedCount);
+            });
+            ms.add({
+                name = "withdrawals_users_count";
+                t = "gauge";
+                help = ?"number of users who have initiated a withdrawal";
+                labels = [];
+                value = Nat.toText(withdrawalsByUser.size());
+            });
+            ms.add({
+                name = "withdrawals_e8s";
+                t = "gauge";
+                help = ?"e8s value in withdrawals by state";
+                labels = [("state", "total")];
+                value = Nat64.toText(totalE8s);
+            });
+            ms.add({
+                name = "withdrawals_e8s";
+                t = "gauge";
+                help = ?"e8s value in withdrawals by state";
+                labels = [("state", "pending")];
+                value = Nat64.toText(pendingE8s);
+            });
+            ms.add({
+                name = "withdrawals_e8s";
+                t = "gauge";
+                help = ?"e8s value in withdrawals by state";
+                labels = [("state", "available")];
+                value = Nat64.toText(availableE8s);
+            });
+            ms.add({
+                name = "withdrawals_e8s";
+                t = "gauge";
+                help = ?"e8s value in withdrawals by state";
+                labels = [("state", "disbursed")];
+                value = Nat64.toText(disbursedE8s);
+            });
+            ms.toArray()
         };
 
         // List all dissolving withdrawal neurons.

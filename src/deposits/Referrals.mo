@@ -1,4 +1,5 @@
 import Buffer "mo:base/Buffer";
+import Bool "mo:base/Bool";
 import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Option "mo:base/Option";
@@ -8,6 +9,7 @@ import Time "mo:base/Time";
 import TrieMap "mo:base/TrieMap";
 
 import Nanoid "./Nanoid";
+import Metrics "../metrics/types";
 
 module {
     public type UpgradeData = {
@@ -20,13 +22,7 @@ module {
         };
     };
 
-    public type Metrics = {
-        affiliatesCount: Nat;
-        leads: [LeadMetrics];
-        payoutsSum: Nat;
-    };
-
-    public type LeadMetrics = {
+    type LeadMetrics = {
         converted: Bool;
         hasAffiliate: Bool;
         count: Nat;
@@ -68,12 +64,37 @@ module {
         private var payouts          = TrieMap.TrieMap<Principal, Buffer.Buffer<Payout>>(Principal.equal, Principal.hash);
         private var totals           = TrieMap.TrieMap<Principal, Nat>(Principal.equal, Principal.hash);
 
-        public func metrics(): Metrics {
-            {
-                affiliatesCount = conversions.size();
-                leads = leadMetrics();
-                payoutsSum = payoutsSum();
-            }
+        public func metrics(): [Metrics.Metric] {
+            let ms = Buffer.Buffer<Metrics.Metric>(2);
+
+            for ({converted; hasAffiliate; count} in Iter.fromArray(leadMetrics())) {
+                ms.add({
+                    name = "referral_leads_count";
+                    t = "gauge";
+                    help = ?"number of referral leads by state";
+                    labels = [
+                        ("converted", Bool.toText(converted)),
+                        ("hasAffiliate", Bool.toText(hasAffiliate)),
+                    ];
+                    value = Nat.toText(count);
+                });
+            };
+
+            ms.add({
+                name = "referral_affiliates_count";
+                t = "gauge";
+                help = ?"number of affiliates who have 1+ referred users";
+                labels = [];
+                value = Nat.toText(conversions.size());
+            });
+            ms.add({
+                name = "referral_payouts_sum";
+                t = "gauge";
+                help = ?"total e8s paid out to affiliates";
+                labels = [];
+                value = Nat.toText(payoutsE8s());
+            });
+            ms.toArray()
         };
 
         private func leadMetrics(): [LeadMetrics] {
@@ -105,7 +126,7 @@ module {
             ];
         };
 
-        private func payoutsSum(): Nat {
+        private func payoutsE8s(): Nat {
             var sum : Nat = 0;
             for (amount in totals.vals()) {
                 sum += amount;
