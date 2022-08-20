@@ -698,17 +698,17 @@ shared(init_msg) actor class Deposits(args: {
     system func heartbeat() : async () {
         await scheduler.heartbeat(Time.now(), [
             {
-                name = "refreshAvailableBalance";
-                interval = 1 * minute;
-                function = func(now: Time.Time): async Result.Result<Any, Any> {
-                    #ok(await refreshAvailableBalance())
-                };
-            },
-            {
                 name = "flushAllMints";
                 interval = 5 * second;
                 function = func(now: Time.Time): async Result.Result<Any, Any> {
                     await flushAllMints()
+                };
+            },
+            {
+                name = "refreshAvailableBalance";
+                interval = 1 * minute;
+                function = func(now: Time.Time): async Result.Result<Any, Any> {
+                    #ok(await refreshAvailableBalance())
                 };
             },
             {
