@@ -4,16 +4,16 @@ import Principal "mo:base/Principal";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
 
-import Neurons "./Neurons";
-import Referrals "./Referrals";
-import Staking "./Staking";
-import Withdrawals "./Withdrawals";
-import Ledger "../ledger/Ledger";
-import Token "../DIP20/motoko/src/token";
+import Neurons "../Neurons";
+import Referrals "../Referrals";
+import Staking "../Staking";
+import Withdrawals "../Withdrawals";
+import Ledger "../../ledger/Ledger";
+import Token "../../DIP20/motoko/src/token";
 
-import ApplyInterest "./daily/ApplyInterest";
-import FlushPendingDeposits "./daily/FlushPendingDeposits";
-import SplitNewWithdrawalNeurons "./daily/SplitNewWithdrawalNeurons";
+import ApplyInterest "./ApplyInterest";
+import FlushPendingDeposits "./FlushPendingDeposits";
+import SplitNewWithdrawalNeurons "./SplitNewWithdrawalNeurons";
 
 module {
     public type UpgradeData = {
