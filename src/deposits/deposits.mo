@@ -246,6 +246,8 @@ shared(init_msg) actor class Deposits(args: {
         aprMicrobips: Nat64;
         balances: [(Text, Nat64)];
         stakingNeuronBalance: ?Nat64;
+        proposalNeuronBalance: ?Nat64;
+        proposalNeuronFees: ?Nat64;
         referralAffiliatesCount: Nat;
         referralLeads: [Referrals.LeadMetrics];
         referralPayoutsSum: Nat;
@@ -268,9 +270,7 @@ shared(init_msg) actor class Deposits(args: {
             };
         };
 
-        var balance = (await ledger.account_balance({
-            account = Blob.toArray(accountIdBlob());
-        })).e8s;
+        let neuronsMetrics = await neurons.metrics();
         var pendingMintAmount : Nat64 = 0;
         for (amount in pendingMints.vals()) {
             pendingMintAmount += amount;
@@ -278,10 +278,12 @@ shared(init_msg) actor class Deposits(args: {
         return {
             aprMicrobips = meanAprMicrobips;
             balances = [
-                ("ICP", balance),
+                ("ICP", cachedLedgerBalanceE8s),
                 ("cycles", Nat64.fromNat(ExperimentalCycles.balance()))
             ];
             stakingNeuronBalance = ?stakingNeuronBalance();
+            proposalNeuronBalance = ?neuronsMetrics.proposalNeuronBalance;
+            proposalNeuronFees = ?neuronsMetrics.proposalNeuronFees;
             referralAffiliatesCount = referralTracker.affiliatesCount();
             referralLeads = referralTracker.leadMetrics();
             referralPayoutsSum = referralTracker.payoutsSum();

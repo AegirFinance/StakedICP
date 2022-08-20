@@ -32,6 +32,8 @@ module {
 
     // TODO: Add some metrics here.
     public type Metrics = {
+        proposalNeuronBalance: Nat64;
+        proposalNeuronFees: Nat64;
     };
 
     // Neuron is the local state we store about a neuron.
@@ -82,8 +84,20 @@ module {
         private var governance: Governance.Interface = actor(Principal.toText(args.governance));
         private var proposalNeuron: ?Neuron = null;
 
-        public func metrics(): Metrics {
-            return {};
+        public func metrics(): async Metrics {
+            let (proposalNeuronBalance, proposalNeuronFees): (Nat64, Nat64) = switch (proposalNeuron) {
+                case (null) { (0, 0) };
+                case (?{id}) {
+                    switch (await governance.get_full_neuron(id)) {
+                        case (#Err(err)) { (0, 0) };
+                        case (#Ok(n)) { (n.cached_neuron_stake_e8s, n.neuron_fees_e8s) };
+                    }
+                };
+            };
+            return {
+                proposalNeuronBalance = proposalNeuronBalance;
+                proposalNeuronFees = proposalNeuronFees;
+            };
         };
 
         // ===== PROPOSAL NEURON MANAGEMENT FUNCTIONS =====
