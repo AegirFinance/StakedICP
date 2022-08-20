@@ -103,14 +103,21 @@ module {
             queueMint: ApplyInterest.QueueMintFn,
             availableBalance: FlushPendingDeposits.AvailableBalanceFn,
             refreshAvailableBalance: FlushPendingDeposits.RefreshAvailableBalanceFn
-        ) : async () {
+        ) : async (ApplyInterest.ApplyInterestResult, FlushPendingDeposits.FlushPendingDepositsResult, SplitNewWithdrawalNeurons.SplitNewWithdrawalNeuronsResult) {
             applyInterestResult := null;
             flushPendingDepositsResult := null;
             splitNewWithdrawalNeuronsResult := null;
 
-            applyInterestResult := ?(await applyInterestJob.start(now, root, queueMint));
-            flushPendingDepositsResult := ?(await flushPendingDepositsJob.start(availableBalance, refreshAvailableBalance));
-            splitNewWithdrawalNeuronsResult := ?(await splitNewWithdrawalNeuronsJob.start());
+            let apply = await applyInterestJob.start(now, root, queueMint);
+            applyInterestResult := ?apply;
+
+            let flush = await flushPendingDepositsJob.start(availableBalance, refreshAvailableBalance);
+            flushPendingDepositsResult := ?flush;
+
+            let split = await splitNewWithdrawalNeuronsJob.start();
+            splitNewWithdrawalNeuronsResult := ?split;
+
+            (apply, flush, split)
         };
 
         // ===== UPGRADE FUNCTIONS =====

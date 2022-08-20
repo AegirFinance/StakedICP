@@ -660,14 +660,13 @@ shared(init_msg) actor class Deposits(args: {
                 interval = 1 * day;
                 function = func(now: Time.Time): async Result.Result<Any, Any> {
                     let root = Principal.fromActor(this);
-                    await daily.start(
+                    #ok(await daily.start(
                         now,
                         root,
                         queueMint,
                         _availableBalance,
                         refreshAvailableBalance
-                    );
-                    #ok();
+                    ))
                 };
             }
         ]);
