@@ -525,7 +525,18 @@ shared(init_msg) actor class Deposits(args: {
         }
     };
 
-    // Update the canister's cached local balance
+    // Update the canister's cached local balance.
+    //
+    // cachedLedgerBalanceE8s must always be <= actual icp balance. This ensures
+    // outbound transfers cannot fail.
+    //
+    // We can never get a fully accurate view of the account_balance due to the
+    // IC's asynchronous nature, but this is the closest we get. This is caused
+    // by
+    // https://internetcomputer.org/docs/current/references/ic-interface-spec#ordering_guarantees,
+    // stating that message replies may be returned out of order. So you could
+    // have a race condition where this balance is returned out of order with a
+    // ledger.transfer.
     private func refreshAvailableBalance() : async Nat64 {
         cachedLedgerBalanceE8s := (await ledger.account_balance({
             account = Blob.toArray(accountIdBlob());
@@ -636,10 +647,18 @@ shared(init_msg) actor class Deposits(args: {
             };
         };
 
+        // Check we think we have enough cash available.
+        if (_availableBalance() < amount) {
+            return #err(#InsufficientLiquidity);
+        };
+
+        // Mark withdrawals as complete, and the balances as "disbursed"
         let (transferArgs, revert) = switch (withdrawals.completeWithdrawal(user, amount, toAddress)) {
             case (#err(err)) { return #err(err); };
             case (#ok(a)) { a };
         };
+
+        // Attempt the transfer, reverting if it fails.
         try {
             let transfer = await ledger.transfer(transferArgs);
             ignore refreshAvailableBalance();
