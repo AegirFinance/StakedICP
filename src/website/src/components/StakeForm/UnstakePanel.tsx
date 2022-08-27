@@ -69,13 +69,13 @@ export function UnstakePanel() {
       if (!liquidityGraph) return undefined;
       if (parsedAmount === NaN || parsedAmount === -NaN || parsedAmount === +Infinity || parsedAmount === -Infinity || parsedAmount < 0) return undefined;
       let remaining: bigint = BigInt(Math.floor(parsedAmount*100_000_000));
-      let maxDelay: bigint = BigInt(0);
+      let maxDelay: bigint = BigInt(60); // At least 1 minute
       for (let [d, available] of liquidityGraph) {
           if (remaining <= 0) return maxDelay;
           maxDelay = d > maxDelay ? d : maxDelay;
           remaining -= available;
       };
-      return Math.min(60, maxDelay);
+      return maxDelay;
   }, [liquidityGraph, parsedAmount]);
 
     const depositsCanister = useCanister<Deposits>({
@@ -254,7 +254,6 @@ const StyledThumb = styled(SliderPrimitive.Thumb, {
 });
 
 function DelayStat({amount, delay}: {amount: number; delay: bigint | undefined}) {
-
     if (amount === 0 || delay === undefined) {
         return <ActivityIndicator />;
     }
