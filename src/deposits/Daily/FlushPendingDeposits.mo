@@ -4,6 +4,7 @@ import Nat64 "mo:base/Nat64";
 import Result "mo:base/Result";
 
 import Neurons "../Neurons";
+import PendingTransfers "../PendingTransfers";
 import Staking "../Staking";
 import Withdrawals "../Withdrawals";
 import Ledger "../../ledger/Ledger";
@@ -23,6 +24,7 @@ module {
         neurons: Neurons.Manager;
         staking: Staking.Manager;
         token: Token.Token;
+        pendingTransfers: PendingTransfers.Tracker;
         withdrawals: Withdrawals.Manager;
     }) {
         // Use new incoming deposits to attempt to rebalance the buckets, where
@@ -57,10 +59,17 @@ module {
                 // Start the transfer. Best effort here. If the transfer fails,
                 // it'll be retried next time. But awaiting, means we can
                 // refresh the balance and staking neurons afterwards
+                let transferId = args.pendingTransfers.add(transfer.amount.e8s + transfer.fee.e8s);
                 try {
-                    results.add(await args.ledger.transfer(transfer));
+                    let result = await args.ledger.transfer(transfer);
+                    switch (result) {
+                        case (#Ok(_)) { args.pendingTransfers.success(transferId) };
+                        case (#Err(_)) { args.pendingTransfers.failure(transferId) };
+                    };
+                    results.add(result);
                 } catch (error) {
                     // This is fine. Transfer will be retried next time.
+                    args.pendingTransfers.failure(transferId);
                 }
             };
             if (transfers.size() > 0) {

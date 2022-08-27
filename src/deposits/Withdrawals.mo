@@ -92,10 +92,11 @@ module {
         private var pendingWithdrawals = Deque.empty<WithdrawalQueueEntry>();
         private var withdrawalsByUser = TrieMap.TrieMap<Principal, Buffer.Buffer<Text>>(Principal.equal, Principal.hash);
 
-        // Tell the main contract how much icp to keep on-hand for pending deposits.
-        // TODO: Maybe precompute and cache this
+        // Tell the main contract how much icp to keep on-hand for pending
+        // withdrawals.
         public func reservedIcp(): Nat64 {
             var sum: Nat64 = 0;
+            // Withhold enough to satisfy all available withdrawals.
             for (w in withdrawals.vals()) {
                 sum += w.available;
             };
@@ -385,9 +386,14 @@ module {
             ns.toArray()
         };
 
+        type WithdrawalCompletion = {
+            transferArgs: Ledger.TransferArgs;
+            failure: () -> ();
+        };
+
         // Users call this to transfer their unlocked ICP in completed
         // withdrawals to an address of their choosing.
-        public func completeWithdrawal(user: Principal, amount: Nat64, to: Account.AccountIdentifier): Result.Result<(Ledger.TransferArgs, () -> ()), WithdrawalsError> {
+        public func completeWithdrawal(user: Principal, amount: Nat64, to: Account.AccountIdentifier): Result.Result<WithdrawalCompletion, WithdrawalsError> {
             let now = Time.now();
 
             // Figure out which available withdrawals we're disbursing
@@ -426,17 +432,20 @@ module {
                         });
             };
 
-            #ok((
-                {
+            #ok({
+                transferArgs = {
                     memo : Nat64    = 0;
                     from_subaccount = null;
                     to              = Blob.toArray(to);
                     amount          = { e8s = amount - icpFee };
                     fee             = { e8s = icpFee };
                     created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(now)) };
-                },
-                // Prepare a reversion in case the transfer fails
-                func() {
+                };
+                failure = func() {
+                    // To be called if the transfer has failed.
+
+                    // Revert our changes, returning the withdrawal balance to
+                    // the user.
                     for (({id}, applied) in b.vals()) {
                         let w = switch (withdrawals.get(id)) {
                             case (null) { P.unreachable() };
@@ -455,8 +464,8 @@ module {
                             disbursed = w.disbursed - applied;
                         });
                     };
-                }
-            ))
+                };
+            })
         };
 
         public func ids(): [Nat64] {

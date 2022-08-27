@@ -27,6 +27,7 @@ import Scheduler    "./Scheduler";
 import Hex          "./Hex";
 import Neurons      "./Neurons";
 import Owners       "./Owners";
+import PendingTransfers "./PendingTransfers";
 import Referrals    "./Referrals";
 import Staking      "./Staking";
 import Util         "./Util";
@@ -74,6 +75,10 @@ shared(init_msg) actor class Deposits(args: {
     private let scheduler = Scheduler.Scheduler();
     private stable var stableSchedulerData : ?Scheduler.UpgradeData = null;
 
+    // Track any in-flight ledger.transfers so we can subtract it from our
+    // available balance.
+    private let pendingTransfers = PendingTransfers.Tracker();
+
     // State machine to track interest/maturity/neurons etc
     private let daily = Daily.Job({
         ledger = actor(Principal.toText(args.ledger));
@@ -81,6 +86,7 @@ shared(init_msg) actor class Deposits(args: {
         referralTracker = referralTracker;
         staking = staking;
         token = actor(Principal.toText(args.token));
+        pendingTransfers = pendingTransfers;
         withdrawals = withdrawals;
     });
     private stable var stableDailyData : ?Daily.UpgradeData = null;
@@ -509,15 +515,16 @@ shared(init_msg) actor class Deposits(args: {
 
     // ===== WITHDRAWAL FUNCTIONS =====
 
-    // Show currently available ICP in this canister. This ICP retained for
-    // withdrawals.
+    // Show currently available ICP in this canister. Minus ICP retained for
+    // pending withdrawals, and any ongoing outbound transfers.
     public shared(msg) func availableBalance() : async Nat64 {
         _availableBalance()
     };
 
     private func _availableBalance() : Nat64 {
         let balance = cachedLedgerBalanceE8s;
-        let reserved = withdrawals.reservedIcp();
+        // Withhold enough ICP for pending withdrawals and outbound transfers
+        let reserved = withdrawals.reservedIcp() + pendingTransfers.reservedIcp();
         if (reserved >= balance) {
             0
         } else {
@@ -538,11 +545,28 @@ shared(init_msg) actor class Deposits(args: {
     // have a race condition where this balance is returned out of order with a
     // ledger.transfer.
     private func refreshAvailableBalance() : async Nat64 {
+        // Take a snapshot of the completed transfers. We know that any
+        // transfers present here will have been completed before we fetched
+        // the ledger balance, therefore they will be reflected in the balance
+        // we see from the ledger.
+        let completedTransferIds = pendingTransfers.completedIds();
+
+        // Go fetch the new balance.
         cachedLedgerBalanceE8s := (await ledger.account_balance({
             account = Blob.toArray(accountIdBlob());
         })).e8s;
 
-        // See if we can fulfill any pending withdrawals.
+        // Now that we have an up-to-date balance we can clear the record of
+        // our known-completed transfers.
+        //
+        // Other transfers may have completed since we took the snapshot above,
+        // but we don't know if they were included in the balance we fetched,
+        // so we will be conservative, and leave them alone, to continue
+        // withholding those funds until the next refresh.
+        pendingTransfers.delete(completedTransferIds);
+
+        // See if we can fulfill any pending withdrawals. We do this atomically
+        // immediately so that the availableBalance doesn't fluctuate.
         ignore withdrawals.depositIcp(_availableBalance());
 
         cachedLedgerBalanceE8s
@@ -653,33 +677,44 @@ shared(init_msg) actor class Deposits(args: {
         };
 
         // Mark withdrawals as complete, and the balances as "disbursed"
-        let (transferArgs, revert) = switch (withdrawals.completeWithdrawal(user, amount, toAddress)) {
+        let {transferArgs; failure} = switch (withdrawals.completeWithdrawal(user, amount, toAddress)) {
             case (#err(err)) { return #err(err); };
             case (#ok(a)) { a };
         };
 
+        // Mark the funds as unavailable while the transfer is pending.
+        let transferId = pendingTransfers.add(amount);
+
         // Attempt the transfer, reverting if it fails.
-        try {
+        let result = try {
             let transfer = await ledger.transfer(transferArgs);
-            ignore refreshAvailableBalance();
             switch (transfer) {
                 case (#Ok(block)) {
+                    pendingTransfers.success(transferId);
                     #ok(block)
                 };
                 case (#Err(#InsufficientFunds{})) {
                     // Not enough ICP in the contract
-                    revert();
+                    pendingTransfers.failure(transferId);
+                    failure();
                     #err(#InsufficientLiquidity)
                 };
                 case (#Err(err)) {
-                    revert();
+                    pendingTransfers.failure(transferId);
+                    failure();
                     #err(#TransferError(err))
                 };
             }
         } catch (error) {
-            revert();
+            pendingTransfers.failure(transferId);
+            failure();
             #err(#Other(Error.message(error)))
-        }
+        };
+
+        // Queue a balance refresh.
+        ignore refreshAvailableBalance();
+
+        result
     };
 
     // List all withdrawals for a user.

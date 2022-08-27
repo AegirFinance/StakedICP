@@ -6,6 +6,7 @@ import Text "mo:base/Text";
 import Time "mo:base/Time";
 
 import Neurons "../Neurons";
+import PendingTransfers "../PendingTransfers";
 import Referrals "../Referrals";
 import Staking "../Staking";
 import Withdrawals "../Withdrawals";
@@ -35,6 +36,7 @@ module {
         referralTracker: Referrals.Tracker;
         staking: Staking.Manager;
         token: Token.Token;
+        pendingTransfers: PendingTransfers.Tracker;
         withdrawals: Withdrawals.Manager;
     }) {
 
@@ -50,6 +52,7 @@ module {
             neurons = args.neurons;
             staking = args.staking;
             token = args.token;
+            pendingTransfers = args.pendingTransfers;
             withdrawals = args.withdrawals;
         });
         private var splitNewWithdrawalNeuronsJob = SplitNewWithdrawalNeurons.Job({
