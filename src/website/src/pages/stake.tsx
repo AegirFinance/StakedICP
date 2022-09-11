@@ -54,7 +54,7 @@ function Features() {
         <p>ICP is staked for 8 years, and interest accrues daily to maximize your returns. No more manual merge-maturity.</p>
       </Feature>
       <Feature>
-        <h2>No Lock-in (Soon)</h2>
+        <h2>No Lock-in</h2>
         <p>Sell your stICP for ICP at any time.</p>
       </Feature>
       <Feature>
