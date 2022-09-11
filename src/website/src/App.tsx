@@ -32,7 +32,7 @@ export default function App() {
 
   return (
     <div>
-      <WalletProvider autoConnect whitelist={[deposits.canisterId, token.canisterId].filter(x => !!x) as string[]} host={process.env.NETWORK}>
+      <WalletProvider whitelist={[deposits.canisterId, token.canisterId].filter(x => !!x) as string[]} host={process.env.NETWORK}>
         <BrowserRouter>
           <GeoipModal />
           <Routes>
