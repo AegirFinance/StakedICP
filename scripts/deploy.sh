@@ -169,13 +169,3 @@ if [[ "$NETWORK" != "local" ]]; then
 fi
 
 fi
-
-if [[ "$NETWORK" == "local" ]]; then
-  echo
-  echo == Set staking neurons to follow proposal neuron.
-  echo
-
-  for NEURON_ID in $STAKING_NEURONS; do
-    $DIR/followNeuron.sh local "$NEURON_ID" "$PROPOSAL_NEURON_ID"
-  done
-fi
