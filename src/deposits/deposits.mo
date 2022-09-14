@@ -74,6 +74,8 @@ shared(init_msg) actor class Deposits(args: {
     // Background job processing subsystem
     private let scheduler = Scheduler.Scheduler();
     private stable var stableSchedulerData : ?Scheduler.UpgradeData = null;
+    // Start paused when we first deploy
+    private stable var schedulerPaused : Bool = true;
 
     // Track any in-flight ledger.transfers so we can subtract it from our
     // available balance.
@@ -750,6 +752,10 @@ shared(init_msg) actor class Deposits(args: {
     // ===== HEARTBEAT FUNCTIONS =====
 
     system func heartbeat() : async () {
+        if schedulerPaused {
+            return;
+        };
+
         await scheduler.heartbeat(Time.now(), [
             {
                 name = "flushAllMints";
@@ -792,6 +798,12 @@ shared(init_msg) actor class Deposits(args: {
     public shared(msg) func setLastJobResult(name: Text, r: Scheduler.JobResult): async () {
         owners.require(msg.caller);
         scheduler.setLastJobResult(name, r)
+    };
+
+    // So we can deploy and setup before the scheduler starts
+    public shared(msg) func setSchedulerPaused(value: Bool): async () {
+        owners.require(msg.caller);
+        schedulerPaused := value;
     };
 
     // ===== UPGRADE FUNCTIONS =====
