@@ -1,6 +1,11 @@
 import * as Accordion from '@radix-ui/react-accordion';
 import { ChevronDownIcon, GitHubLogoIcon, TwitterLogoIcon } from '@radix-ui/react-icons';
+import React from 'react';
+import * as deposits from '../../../declarations/deposits';
+import { Deposits } from "../../../declarations/deposits/deposits.did.d.js";
+import { getBackendActor }  from '../agent';
 import {
+  ActivityIndicator,
   Code,
   Flex,
   Header,
@@ -8,15 +13,28 @@ import {
   StakeForm,
   Statistics,
 } from '../components';
+import { useAsyncEffect } from "../hooks";
 import { keyframes, styled } from '../stitches.config';
 
 export function Stake() {
+  const [neurons, setNeurons] = React.useState<string[]|null>(null);
+
+  useAsyncEffect(async () => {
+    // TODO: Have to use dfinity agent here, as we dont need the user's plug wallet connected.
+    if (!deposits.canisterId) throw new Error("Canister not deployed");
+    const contract = await getBackendActor<Deposits>({canisterId: deposits.canisterId, interfaceFactory: deposits.idlFactory});
+
+    // TODO: Do this with bigint all the way through for more precision.
+    const neurons = await contract.stakingNeurons();
+    setNeurons(neurons.map(n => `${n.id.id}`));
+  }, []);
+
   return (
     <Wrapper>
       <Layout>
         <Header />
         <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
-          <Statistics />
+          <Statistics neurons={neurons} />
         </Flex>
         <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2", marginBottom: '$16'}}>
           <StakeForm />
@@ -27,7 +45,7 @@ export function Stake() {
         <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
           <div>
             <Subtitle>FAQ</Subtitle>
-            <FAQ />
+            <FAQ neurons={neurons} />
             <Links />
           </div>
         </Flex>
@@ -71,7 +89,7 @@ const Feature = styled(Flex, {
   maxWidth: 300,
 });
 
-function FAQ() {
+function FAQ({neurons}: {neurons: string[]|null}) {
   return (
     <AccordionRoot type="multiple">
       <AccordionItem value="what-is-stakedicp">
@@ -239,7 +257,7 @@ function FAQ() {
               <li>
               StakedICP key management risk
                 <br />
-                ICP staked via StakedICP is locked securely in the StakedICP neuron to minimise custody risk. If neuron account keys are lost, or get hacked, we risk funds becoming locked.
+                ICP staked via StakedICP is locked securely in the StakedICP neurons to minimise custody risk. If neuron account keys are lost, or get hacked, we risk funds becoming locked.
               </li>
 
               <li>
@@ -275,7 +293,7 @@ function FAQ() {
         </AccordionHeader>
         <AccordionContent>
           <p>
-          To ensure maximum staking rewards, all ICP earned while staked, is automatically merged into the StakedICP neuron(s). While there's currently no way to withdraw ICP from staking, stICP holders may soon exchange their stICP to ICP on liquidity pools.
+          To ensure maximum staking rewards, all ICP earned while staked, is automatically merged into the StakedICP neurons. While there's currently no way to withdraw ICP from staking, stICP holders may soon exchange their stICP to ICP on liquidity pools.
           </p>
         </AccordionContent>
       </AccordionItem>
@@ -291,9 +309,20 @@ function FAQ() {
           <p>
           To prevent manipulation and vote-buying, stICP holders cannot directly vote on NNS proposals. All ICP held by StakedICP follows the <a href="https://www.ic.community/followee-neuron-for-icp-maximalist-network/">ICP Maximalist Network neuron</a> to maximize rewards.
           </p>
-	  <p>
-	  All held ICP is locked securely in the StakedICP neuron: <a href="https://dashboard.internetcomputer.org/neuron/16136654443876485299">16136654443876485299</a>.
-	  </p>
+          <p>
+          All held ICP is locked securely in the StakedICP neurons:
+          </p>
+          {neurons ? (
+            <ul>
+              {neurons.map(id =>
+                <li key={id}>
+                  <a href={`https://dashboard.internetcomputer.org/neuron/${id}`}>{id}</a>
+                </li>
+              )}
+            </ul>
+          ) : (
+            <ActivityIndicator />
+          )}
         </AccordionContent>
       </AccordionItem>
     </AccordionRoot>

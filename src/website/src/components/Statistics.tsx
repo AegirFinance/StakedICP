@@ -12,10 +12,9 @@ import { ActivityIndicator } from "./ActivityIndicator";
 import { Flex } from "./Flex";
 import { HelpDialog } from "./HelpDialog";
 
-export function Statistics() {
+export function Statistics({neurons}: {neurons: string[]|null}) {
   const [stats, setStats] = React.useState<TokenInfo|null>(null);
   const [apy, setAPY] = React.useState<bigint|null>(null);
-  const [neurons, setNeurons] = React.useState<number|null>(null);
 
   useAsyncEffect(async () => {
     // TODO: Have to use dfinity agent here, as we dont need the user's plug wallet connected.
@@ -37,16 +36,6 @@ export function Statistics() {
     const apy = Math.pow(1 + (microbips / 100_000_000), 365.25) - 1;
     // display it with two decimals, so 0.218 = 21.80%
     setAPY(BigNumber.from(Math.round(apy * 10_000)).toBigInt());
-  }, []);
-
-  useAsyncEffect(async () => {
-    // TODO: Have to use dfinity agent here, as we dont need the user's plug wallet connected.
-    if (!deposits.canisterId) throw new Error("Canister not deployed");
-    const contract = await getBackendActor<Deposits>({canisterId: deposits.canisterId, interfaceFactory: deposits.idlFactory});
-
-    // TODO: Do this with bigint all the way through for more precision.
-    const neurons = await contract.stakingNeurons();
-    setNeurons(neurons.length);
   }, []);
 
   return (
@@ -94,7 +83,7 @@ export function Statistics() {
       <Item>
         <h5>Neurons</h5>
         <h2>
-          {neurons || <ActivityIndicator />}
+          {neurons?.length ?? <ActivityIndicator />}
         </h2>
       </Item>
     </Wrapper>
