@@ -82,6 +82,22 @@ module {
             };
         };
 
+        public func getAppliedInterest(): [ApplyInterestSummary] {
+            return appliedInterest.toArray();
+        };
+
+        public func setAppliedInterest(elems: [ApplyInterestSummary]) {
+            let b = Buffer.Buffer<ApplyInterestSummary>(0);
+            for (e in elems.vals()) {
+                b.add(e);
+            };
+            updateMeanAprMicrobips();
+        };
+
+        public func getMeanAprMicrobips() : Nat64 {
+            return meanAprMicrobips;
+        };
+
         // ===== JOB START FUNCTION =====
 
         // Distribute newly earned interest to token holders.

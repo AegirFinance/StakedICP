@@ -72,6 +72,18 @@ module {
             await applyInterestJob.setInitialSnapshot()
         };
 
+        public func getAppliedInterest(): [ApplyInterest.ApplyInterestSummary] {
+            return applyInterestJob.getAppliedInterest();
+        };
+
+        public func setAppliedInterest(elems: [ApplyInterest.ApplyInterestSummary]) {
+            applyInterestJob.setAppliedInterest(elems);
+        };
+
+        public func getMeanAprMicrobips() : Nat64 {
+            return applyInterestJob.getMeanAprMicrobips();
+        };
+
         // ===== METRICS FUNCTIONS =====
 
         public func metrics(): [Metrics.Metric] {

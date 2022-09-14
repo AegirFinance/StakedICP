@@ -23,6 +23,7 @@ import TrieMap "mo:base/TrieMap";
 
 import Account      "./Account";
 import Daily        "./Daily";
+import ApplyInterest "./Daily/ApplyInterest";
 import Scheduler    "./Scheduler";
 import Hex          "./Hex";
 import Neurons      "./Neurons";
@@ -103,10 +104,6 @@ shared(init_msg) actor class Deposits(args: {
     let hour : Int = 60 * minute;
     let day : Int = 24 * hour;
 
-    // For apr calcs
-    let microbips : Nat64 = 100_000_000;
-
-
     type NeuronId = { id : Nat64; };
 
     // Copied from Token due to compiler weirdness
@@ -126,23 +123,6 @@ shared(init_msg) actor class Deposits(args: {
         #Err: TxReceiptError;
     };
 
-    type ApplyInterestResult = {
-        timestamp : Time.Time;
-        supply : {
-            before : Ledger.Tokens;
-            after : Ledger.Tokens;
-        };
-        applied : Ledger.Tokens;
-        remainder : Ledger.Tokens;
-        totalHolders: Nat;
-        affiliatePayouts: Nat;
-    };
-
-    type WithdrawPendingDepositsResult = {
-      args : Ledger.TransferArgs;
-      result : Ledger.TransferResult;
-    };
-
     public type Neuron = {
         id : NeuronId;
         accountId : Account.AccountIdentifier;
@@ -155,12 +135,6 @@ shared(init_msg) actor class Deposits(args: {
 
     private var pendingMints = TrieMap.TrieMap<Principal, Nat64>(Principal.equal, Principal.hash);
     private stable var stablePendingMints : ?[(Principal, Nat64)] = null;
-
-    private stable var snapshot : ?[(Principal, Nat)] = null;
-
-    private stable var appliedInterestEntries : [ApplyInterestResult] = [];
-    private var appliedInterest : Buffer.Buffer<ApplyInterestResult> = Buffer.Buffer(0);
-    private stable var meanAprMicrobips : Nat64 = 0;
 
     private stable var cachedLedgerBalanceE8s : Nat64 = 0;
 
@@ -232,7 +206,7 @@ shared(init_msg) actor class Deposits(args: {
 
     // Getter for the current APR in microbips
     public query func aprMicrobips() : async Nat64 {
-        return meanAprMicrobips;
+        return daily.getMeanAprMicrobips();
     };
 
     // ===== METRICS FUNCTIONS =====
@@ -265,7 +239,7 @@ shared(init_msg) actor class Deposits(args: {
             t = "gauge";
             help = ?"latest apr in microbips";
             labels = [];
-            value = Nat64.toText(meanAprMicrobips);
+            value = Nat64.toText(daily.getMeanAprMicrobips());
         });
         ms.add({
             name = "canister_balance_e8s";
@@ -734,10 +708,16 @@ shared(init_msg) actor class Deposits(args: {
         await daily.setInitialSnapshot()
     };
 
-    public shared(msg) func getAppliedInterestResults(): async [ApplyInterestResult] {
+    public shared(msg) func getAppliedInterest(): async [ApplyInterest.ApplyInterestSummary] {
         owners.require(msg.caller);
-        return Iter.toArray(appliedInterestEntries.vals());
+        return daily.getAppliedInterest();
     };
+
+    public shared(msg) func setAppliedInterest(elems: [ApplyInterest.ApplyInterestSummary]): async () {
+        owners.require(msg.caller);
+        daily.setAppliedInterest(elems);
+    };
+
 
     public shared(msg) func neuronAccountId(controller: Principal, nonce: Nat64): async Text {
         owners.require(msg.caller);
@@ -811,9 +791,6 @@ shared(init_msg) actor class Deposits(args: {
     system func preupgrade() {
         stablePendingMints := ?Iter.toArray(pendingMints.entries());
 
-        // convert the buffer to a stable array
-        appliedInterestEntries := appliedInterest.toArray();
-
         stableReferralData := referralTracker.preupgrade();
 
         stableNeuronsData := neurons.preupgrade();
@@ -836,12 +813,6 @@ shared(init_msg) actor class Deposits(args: {
                 pendingMints := TrieMap.fromEntries<Principal, Nat64>(entries.vals(), Principal.equal, Principal.hash);
                 stablePendingMints := null;
             };
-        };
-
-        // convert the stable array back to a buffer.
-        appliedInterest := Buffer.Buffer(appliedInterestEntries.size());
-        for (x in appliedInterestEntries.vals()) {
-            appliedInterest.add(x);
         };
 
         referralTracker.postupgrade(stableReferralData);
