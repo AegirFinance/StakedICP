@@ -768,6 +768,16 @@ shared(init_msg) actor class Deposits(args: {
         return Iter.toArray(appliedInterestEntries.vals());
     };
 
+    public shared(msg) func getReferralData(): async ?Referrals.UpgradeData {
+        owners.require(msg.caller);
+        return referralTracker.preupgrade();
+    };
+
+    public shared(msg) func setReferralData(data: ?Referrals.UpgradeData): async () {
+        owners.require(msg.caller);
+        return referralTracker.postupgrade(data);
+    };
+
     public shared(msg) func neuronAccountId(controller: Principal, nonce: Nat64): async Text {
         owners.require(msg.caller);
         return Account.toText(Util.neuronAccountId(args.governance, controller, nonce));
