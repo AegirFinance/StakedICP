@@ -74,7 +74,8 @@ export function StakePanel() {
         <TransferDialog
           open={showTransferDialog}
           rawAmount={amount}
-          amount={stake}
+          sentAmount={stake}
+          receivedAmount={stake >= MINIMUM_DEPOSIT ? stake - FEE : 0}
           onOpenChange={(open: boolean) => {
             setShowTransferDialog(!!(principal && stake && open));
           }}
@@ -122,7 +123,8 @@ const FormWrapper = styled('form', {
 
 interface TransferDialogParams {
   rawAmount: string;
-  amount: number;
+  sentAmount: number;
+  receivedAmount: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   referralCode: string | undefined;
@@ -133,7 +135,8 @@ const FEE = 0.0001;
 
 function TransferDialog({
     rawAmount,
-    amount,
+    sentAmount,
+    receivedAmount,
     open,
     referralCode,
     onOpenChange,
@@ -154,10 +157,10 @@ function TransferDialog({
   }, [!!depositsCanister]);
 
   const onConfirm = React.useCallback(async () => {
-    if (rawAmount && amount < MINIMUM_DEPOSIT) {
+    if (rawAmount && sentAmount < MINIMUM_DEPOSIT) {
       throw new Error(`Minimum deposit is ${MINIMUM_DEPOSIT} ICP`);
     }
-    if (!amount) {
+    if (!sentAmount) {
       throw new Error("Amount missing");
     }
     if (!depositsCanister) {
@@ -172,7 +175,7 @@ function TransferDialog({
       request: {
         to,
         // TODO: Better number handling here than floats.
-        amount: amount*100000000,
+        amount: sentAmount*100000000,
       },
     });
     if (error) {
@@ -185,7 +188,7 @@ function TransferDialog({
 
     // Bump the cachebuster to refresh balances
     setGlobalState(x => ({...x, cacheBuster: x.cacheBuster+1}));
-  }, [amount, !!depositsCanister, referralCode]);
+  }, [sentAmount, !!depositsCanister, referralCode]);
 
   return (
     <ConfirmationDialog
@@ -202,8 +205,8 @@ function TransferDialog({
         <>
           <DialogTitle>Are you sure?</DialogTitle>
           <DialogDescription>
-            This action cannot be undone. Your {amount} ICP will immediately be
-            converted to {amount} stICP, and cannot be converted back to ICP
+            This action cannot be undone. Your {sentAmount} ICP will immediately be
+            converted to {receivedAmount} stICP, and cannot be converted back to ICP
             without an unstaking delay.
           </DialogDescription>
         </>
@@ -211,21 +214,21 @@ function TransferDialog({
         <>
           <DialogTitle>Transfer Pending</DialogTitle>
           <DialogDescription>
-            Converting {amount} ICP to {amount} stICP...
+            Converting {sentAmount} ICP to {receivedAmount} stICP...
           </DialogDescription>
         </>
       ) : state === "complete" ? (
         <>
           <DialogTitle>Transfer Complete</DialogTitle>
           <DialogDescription>
-            Successfully converted {amount} ICP to {amount} stICP.
+            Successfully converted {sentAmount} ICP to {receivedAmount} stICP.
           </DialogDescription>
         </>
       ) : (
         <>
           <DialogTitle>Transfer Failed</DialogTitle>
           <DialogDescription>
-            Failed to convert {amount} ICP to {amount} stICP.
+            Failed to convert {sentAmount} ICP to {receivedAmount} stICP.
           </DialogDescription>
         </>
       )}
