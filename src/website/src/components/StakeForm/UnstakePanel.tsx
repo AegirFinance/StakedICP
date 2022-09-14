@@ -492,21 +492,21 @@ function CompleteUnstakeButton({
         <>
           <DialogTitle>Transfer Pending</DialogTitle>
           <DialogDescription>
-            Transferring {format.units(amount)} ICP to {to}...
+            Transferring {format.units(amount)} ICP to {to || principal}...
           </DialogDescription>
         </>
       ) : state === "complete" ? (
         <>
           <DialogTitle>Transfer Complete</DialogTitle>
           <DialogDescription>
-            Successfully transferred {format.units(amount)} ICP to {to}.
+            Successfully transferred {format.units(amount)} ICP to {to || principal}.
           </DialogDescription>
         </>
       ) : (
         <>
           <DialogTitle>Transfer Failed</DialogTitle>
           <DialogDescription>
-            Failed to transfer {format.units(amount)} to {to}.
+            Failed to transfer {format.units(amount)} to {to || principal}.
           </DialogDescription>
         </>
       )}
