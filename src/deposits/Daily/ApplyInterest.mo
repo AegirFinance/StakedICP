@@ -87,9 +87,9 @@ module {
         };
 
         public func setAppliedInterest(elems: [ApplyInterestSummary]) {
-            let b = Buffer.Buffer<ApplyInterestSummary>(0);
-            for (e in elems.vals()) {
-                b.add(e);
+            appliedInterest := Buffer.Buffer<ApplyInterestSummary>(elems.size());
+            for (x in elems.vals()) {
+                appliedInterest.add(x);
             };
             updateMeanAprMicrobips();
         };
