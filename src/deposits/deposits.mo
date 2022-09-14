@@ -718,6 +718,15 @@ shared(init_msg) actor class Deposits(args: {
         daily.setAppliedInterest(elems);
     };
 
+    public shared(msg) func getReferralData(): async ?Referrals.UpgradeData {
+        owners.require(msg.caller);
+        return referralTracker.preupgrade();
+    };
+
+    public shared(msg) func setReferralData(data: ?Referrals.UpgradeData): async () {
+        owners.require(msg.caller);
+        return referralTracker.postupgrade(data);
+    };
 
     public shared(msg) func neuronAccountId(controller: Principal, nonce: Nat64): async Text {
         owners.require(msg.caller);
