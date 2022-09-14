@@ -22,12 +22,12 @@ shared(init_msg) actor class Metrics(args: {
     auth: ?Text;
 }) = this {
 
-    private stable var deposits : Deposits.Deposits = actor(Principal.toText(args.deposits));
-    private stable var token : Token.Token = actor(Principal.toText(args.token));
+    private var deposits : Deposits.Deposits = actor(Principal.toText(args.deposits));
+    private var token : Token.Token = actor(Principal.toText(args.token));
 
-    private stable var depositsMetrics : ?[Types.Metric] = null;
-    private stable var tokenInfo : ?TokenInfo = null;
-    private stable var lastUpdatedAt : ?Time.Time = null;
+    private var depositsMetrics : ?[Types.Metric] = null;
+    private var tokenInfo : ?TokenInfo = null;
+    private var lastUpdatedAt : ?Time.Time = null;
 
     private var errors: Buffer.Buffer<(Time.Time, Text, Error)> = Buffer.Buffer(0);
 
