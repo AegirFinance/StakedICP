@@ -13,6 +13,7 @@ export * from "./HelpDialog";
 export * from "./ICPLogo";
 export * from "./Input";
 export * from "./Layout";
+export * from "./Maintenance";
 export * from "./StakeForm";
 export * from "./Statistics";
 export * from "./STICPLogo";

@@ -2,7 +2,7 @@ import * as deposits from "../../declarations/deposits";
 import * as token from "../../declarations/token";
 import React from 'react';
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { GeoipModal } from './components';
+import { GeoipModal, Maintenance } from './components';
 import { globalCss } from './stitches.config';
 import { Provider as WalletProvider } from "./wallet";
 import * as Pages from "./pages";
@@ -30,19 +30,23 @@ const globalStyles = globalCss({
 export default function App() {
   globalStyles();
 
+  const preview = React.useMemo(() => new URLSearchParams(location.search).get("preview"), [location.search]);
+
   return (
     <div>
       <WalletProvider whitelist={[deposits.canisterId, token.canisterId].filter(x => !!x) as string[]} host={process.env.NETWORK}>
-        <BrowserRouter>
-          <GeoipModal />
-          <Routes>
-            <Route path="/" element={<Pages.Stake />} />
-            <Route path="/privacy-policy" element={<Pages.PrivacyPolicy />} />
-            <Route path="/rewards" element={<Pages.Rewards />} />
-            <Route path="/terms-of-use" element={<Pages.TermsOfUse />} />
-            <Route path="*" element={<Pages.FourOhFour />} />
-          </Routes>
-        </BrowserRouter>
+        {preview ? (
+          <BrowserRouter>
+            <GeoipModal />
+            <Routes>
+              <Route path="/" element={<Pages.Stake />} />
+              <Route path="/privacy-policy" element={<Pages.PrivacyPolicy />} />
+              <Route path="/rewards" element={<Pages.Rewards />} />
+              <Route path="/terms-of-use" element={<Pages.TermsOfUse />} />
+              <Route path="*" element={<Pages.FourOhFour />} />
+            </Routes>
+          </BrowserRouter>
+        ) : <Maintenance />}
       </WalletProvider>
     </div>
   );
