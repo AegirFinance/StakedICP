@@ -1,7 +1,7 @@
 #!/bin/bash
 
 OUT="$1"
-if [ -n "$OUT" ]; then
+if [ -z "$OUT" ]; then
     echo "usage: ./snapshot.sh OUTPUT_DIR"
     exit 1
 fi
