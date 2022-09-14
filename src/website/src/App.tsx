@@ -30,12 +30,15 @@ const globalStyles = globalCss({
 export default function App() {
   globalStyles();
 
-  const preview = React.useMemo(() => new URLSearchParams(location.search).get("preview"), [location.search]);
+  // const maintenance = React.useMemo(() => !(new URLSearchParams(location.search).get("preview")), [location.search]);
+  const maintenance = false;
 
   return (
     <div>
       <WalletProvider whitelist={[deposits.canisterId, token.canisterId].filter(x => !!x) as string[]} host={process.env.NETWORK}>
-        {preview ? (
+        {maintenance ? (
+          <Maintenance />
+        ) : (
           <BrowserRouter>
             <GeoipModal />
             <Routes>
@@ -46,7 +49,7 @@ export default function App() {
               <Route path="*" element={<Pages.FourOhFour />} />
             </Routes>
           </BrowserRouter>
-        ) : <Maintenance />}
+        )}
       </WalletProvider>
     </div>
   );
