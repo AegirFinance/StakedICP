@@ -33,6 +33,7 @@ function parseFloat(str: string): number {
 }
 
 export function UnstakePanel() {
+  const { state: { cacheBuster } } = useContext();
   const [{ data: account }] = useAccount();
   const principal = account?.principal;
   const [{data: sticp}] = useBalance({ token: token.canisterId });
@@ -91,7 +92,7 @@ export function UnstakePanel() {
         }
         let ws = await depositsCanister.listWithdrawals(Principal.fromText(principal));
         setWithdrawals(ws);
-    }, [!!depositsCanister, principal]);
+    }, [!!depositsCanister, principal, cacheBuster]);
 
 
   const available = withdrawals?.map(w => w.available).reduce((s, a) => s+a, BigInt(0));
