@@ -28,6 +28,8 @@ module {
         };
     };
 
+    public type DailyResult = (?ApplyInterest.ApplyInterestResult, ?FlushPendingDeposits.FlushPendingDepositsResult, ?SplitNewWithdrawalNeurons.SplitNewWithdrawalNeuronsResult);
+
     // Job is the state machine that manages the daily
     // merging/splitting/interest.
     public class Job(args: {
@@ -84,6 +86,10 @@ module {
             return applyInterestJob.getMeanAprMicrobips();
         };
 
+        public func getResults(): DailyResult {
+            (applyInterestResult, flushPendingDepositsResult, splitNewWithdrawalNeuronsResult)
+        };
+
         // ===== METRICS FUNCTIONS =====
 
         public func metrics(): [Metrics.Metric] {
@@ -128,7 +134,7 @@ module {
             queueMint: ApplyInterest.QueueMintFn,
             availableBalance: FlushPendingDeposits.AvailableBalanceFn,
             refreshAvailableBalance: FlushPendingDeposits.RefreshAvailableBalanceFn
-        ) : async (ApplyInterest.ApplyInterestResult, FlushPendingDeposits.FlushPendingDepositsResult, SplitNewWithdrawalNeurons.SplitNewWithdrawalNeuronsResult) {
+        ) : async DailyResult {
             applyInterestResult := null;
             flushPendingDepositsResult := null;
             splitNewWithdrawalNeuronsResult := null;
@@ -142,7 +148,7 @@ module {
             let split = await splitNewWithdrawalNeuronsJob.run();
             splitNewWithdrawalNeuronsResult := ?split;
 
-            (apply, flush, split)
+            (?apply, ?flush, ?split)
         };
 
         // ===== UPGRADE FUNCTIONS =====

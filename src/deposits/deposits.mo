@@ -795,6 +795,11 @@ shared(init_msg) actor class Deposits(args: {
         schedulerPaused := value;
     };
 
+    public shared(msg) func getLastDailyJobResult(): async Daily.DailyResult {
+        owners.require(msg.caller);
+        daily.getResults()
+    };
+
     // ===== UPGRADE FUNCTIONS =====
 
     system func preupgrade() {

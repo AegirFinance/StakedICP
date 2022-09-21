@@ -176,7 +176,7 @@ module {
                 lastJobResults.put(name, {
                     startedAt = now;
                     completedAt = ?Time.now();
-                    result = ?#err(#Other(Error.message(error)));
+                    result = ?#err(error);
                 });
             };
         };
