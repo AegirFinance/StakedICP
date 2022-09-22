@@ -148,12 +148,14 @@ EOM
 
 canister start deposits
 
-echo "Setting proposal neuron: $PROPOSAL_NEURON_ID"
-canister call deposits setProposalNeuron "(${PROPOSAL_NEURON_ID} : nat64)"
-for NEURON_ID in $STAKING_NEURONS; do
-    echo "Adding staking neuron: $NEURON_ID"
-    canister call deposits addStakingNeuron "(${NEURON_ID} : nat64)"
-done
+if [ "$MODE" != "upgrade" ]; then
+    echo "Setting proposal neuron: $PROPOSAL_NEURON_ID"
+    canister call deposits setProposalNeuron "(${PROPOSAL_NEURON_ID} : nat64)"
+    for NEURON_ID in $STAKING_NEURONS; do
+        echo "Adding staking neuron: $NEURON_ID"
+        canister call deposits addStakingNeuron "(${NEURON_ID} : nat64)"
+    done
+fi
 
 fi
 
