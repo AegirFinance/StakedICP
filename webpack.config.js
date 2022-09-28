@@ -95,7 +95,7 @@ module.exports = {
     }),
     new webpack.EnvironmentPlugin({
       NETWORK: network() == "local" ? "http://localhost:8000" : "https://mainnet.dfinity.network",
-      NODE_ENV: 'development',
+      NODE_ENV: process.env.NODE_ENV,
       DEPOSITS_CANISTER_ID: canisters["deposits"],
       TOKEN_CANISTER_ID: canisters["token"],
     }),
