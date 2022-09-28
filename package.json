@@ -21,9 +21,9 @@
     "copy:types": "rsync -avr .dfx/$(echo ${DFX_NETWORK:-'local'})/canisters/** --exclude='public/' --exclude='idl/' --exclude='*.wasm' --delete src/declarations"
   },
   "dependencies": {
-    "@dfinity/agent": "",
-    "@dfinity/candid": "",
-    "@dfinity/principal": "",
+    "@dfinity/agent": "^0.13.3",
+    "@dfinity/candid": "^0.13.3",
+    "@dfinity/principal": "^0.13.3",
     "@ethersproject/bignumber": "^5.5.0",
     "@radix-ui/colors": "^0.1.8",
     "@radix-ui/react-accordion": "^0.1.5",
