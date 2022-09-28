@@ -189,31 +189,7 @@ module {
                 return #err(#InsufficientMaturity);
             };
 
-            let title = "Merge " # Nat32.toText(percentage) # "% of maturity for neuron " # Nat64.toText(id);
-            let proposal = await propose({
-                url = "https://stakedicp.com";
-                title = ?title;
-                action = ?#ManageNeuron({
-                    id = null;
-                    command = ?#MergeMaturity({
-                        percentage_to_merge = percentage
-                    });
-                    neuron_id_or_subaccount = ?#NeuronId({ id = id });
-                });
-                summary = title;
-            });
-            switch (proposal) {
-                case (#err(#GovernanceError({error_type = 11}))) {
-                    // Insufficient maturity
-                    return #err(#InsufficientMaturity);
-                };
-                case (#err(err)) {
-                    return #err(err);
-                };
-                case (#ok(_)) {
-                    return await refresh(id);
-                };
-            };
+            await doMergeMaturity(id, percentage);
         };
 
         public func mergeMaturities(ids: [Nat64], percentage: Nat32): async [NeuronResult] {
@@ -225,10 +201,42 @@ module {
                 b.add(if (maturity <= icpFee) {
                     #err(#InsufficientMaturity)
                 } else {
-                   await mergeMaturity(id, percentage)
+                   await doMergeMaturity(id, percentage)
                 });
             };
             return b.toArray();
+        };
+
+        private func doMergeMaturity(id: Nat64, percentage: Nat32): async NeuronResult {
+            let title = "Merge " # Nat32.toText(percentage) # "% of maturity for neuron " # Nat64.toText(id);
+            try {
+                let proposal = await propose({
+                    url = "https://stakedicp.com";
+                    title = ?title;
+                    action = ?#ManageNeuron({
+                        id = null;
+                        command = ?#MergeMaturity({
+                            percentage_to_merge = percentage
+                        });
+                        neuron_id_or_subaccount = ?#NeuronId({ id = id });
+                    });
+                    summary = title;
+                });
+                switch (proposal) {
+                    case (#err(#GovernanceError({error_type = 11}))) {
+                        // Insufficient maturity
+                        return #err(#InsufficientMaturity);
+                    };
+                    case (#err(err)) {
+                        return #err(err);
+                    };
+                    case (#ok(_)) {
+                        return await refresh(id);
+                    };
+                };
+            } catch (error) {
+                return #err(#Other(Error.message(error)));
+            };
         };
 
         public func split(id: Nat64, amount_e8s: Nat64): async NeuronResult {

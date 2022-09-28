@@ -28,13 +28,13 @@ module {
     public type Job = {
         name : Text;
         interval : Int;
-        function : (now: Time.Time) -> async Result.Result<Any, Any>;
+        function : (now: Time.Time) -> async Result.Result<Any, Text>;
     };
 
     public type JobResult = {
         startedAt : Time.Time;
         completedAt : ?Time.Time;
-        result : ?Result.Result<Any, Any>;
+        result : ?Result.Result<Any, Text>;
     };
 
     // Scheduler manages regularly performed background jobs at a regular
@@ -176,7 +176,7 @@ module {
                 lastJobResults.put(name, {
                     startedAt = now;
                     completedAt = ?Time.now();
-                    result = ?#err(error);
+                    result = ?#err(Error.message(error));
                 });
             };
         };

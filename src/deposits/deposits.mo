@@ -457,7 +457,7 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     // Execute all the pending mints on the token canister.
-    private func flushAllMints() : async Result.Result<Nat, TxReceiptError> {
+    private func flushAllMints() : async Result.Result<Nat, Text> {
         let mints = Iter.toArray(
             Iter.map<(Principal, Nat64), (Principal, Nat)>(pendingMints.entries(), func((to, total)) {
                 (to, Nat64.toNat(total))
@@ -474,7 +474,17 @@ shared(init_msg) actor class Deposits(args: {
                     for ((to, amount) in mints.vals()) {
                         pendingMints.put(to, Nat64.fromNat(amount) + Option.get(pendingMints.get(to), 0 : Nat64));
                     };
-                    #err(err)
+                    #err(switch (err) {
+                        case (#AmountTooSmall) { "amount too small" };
+                        case (#BlockUsed) { "block used" };
+                        case (#ErrorOperationStyle) { "error operation style" };
+                        case (#ErrorTo) { "error to" };
+                        case (#InsufficientAllowance) { "insufficient allowance" };
+                        case (#InsufficientBalance) { "insufficient balance" };
+                        case (#LedgerTrap) { "ledger trap" };
+                        case (#Other(t)) { t };
+                        case (#Unauthorized) { "unauthorized" };
+                    })
                 };
                 case (#Ok(count)) {
                     #ok(count)
@@ -485,7 +495,7 @@ shared(init_msg) actor class Deposits(args: {
             for ((to, amount) in mints.vals()) {
                 pendingMints.put(to, Nat64.fromNat(amount) + Option.get(pendingMints.get(to), 0 : Nat64));
             };
-            #err(#Other(Error.message(error)))
+            #err(Error.message(error))
         }
     };
 
@@ -749,21 +759,21 @@ shared(init_msg) actor class Deposits(args: {
             {
                 name = "flushAllMints";
                 interval = 5 * second;
-                function = func(now: Time.Time): async Result.Result<Any, Any> {
+                function = func(now: Time.Time): async Result.Result<Any, Text> {
                     await flushAllMints()
                 };
             },
             {
                 name = "refreshAvailableBalance";
                 interval = 1 * minute;
-                function = func(now: Time.Time): async Result.Result<Any, Any> {
+                function = func(now: Time.Time): async Result.Result<Any, Text> {
                     #ok(await refreshAvailableBalance())
                 };
             },
             {
                 name = "dailyHeartbeat";
                 interval = 1 * day;
-                function = func(now: Time.Time): async Result.Result<Any, Any> {
+                function = func(now: Time.Time): async Result.Result<Any, Text> {
                     let root = Principal.fromActor(this);
                     #ok(await daily.run(
                         now,

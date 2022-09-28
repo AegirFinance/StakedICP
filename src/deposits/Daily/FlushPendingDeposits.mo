@@ -11,7 +11,7 @@ import Ledger "../../ledger/Ledger";
 import Token "../../DIP20/motoko/src/token";
 
 module {
-    public type FlushPendingDepositsResult = [Ledger.TransferResult];
+    public type FlushPendingDepositsResult = Result.Result<[Ledger.TransferResult], Neurons.NeuronsError>;
 
     public type AvailableBalanceFn = () -> Nat64;
     public type RefreshAvailableBalanceFn = () -> async Nat64;
@@ -43,13 +43,13 @@ module {
             var canisterE8s = availableBalance();
 
             if (canisterE8s == 0) {
-                return [];
+                return #ok([]);
             };
 
             // First try to use it fulfill pending deposits
             canisterE8s -= args.withdrawals.depositIcp(canisterE8s);
             if (canisterE8s == 0) {
-                return [];
+                return #ok([]);
             };
 
             // Spread the remainder between staking neurons (retaining some in the canister).
@@ -84,7 +84,7 @@ module {
                 } catch (error) { /* No-op */ };
             };
 
-            results.toArray();
+            #ok(results.toArray())
         };
 
         // Refresh all neurons, fetching current data from the NNS. This is

@@ -1,4 +1,5 @@
 import Buffer "mo:base/Buffer";
+import Error "mo:base/Error";
 import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
 import Principal "mo:base/Principal";
@@ -139,13 +140,25 @@ module {
             flushPendingDepositsResult := null;
             splitNewWithdrawalNeuronsResult := null;
 
-            let apply = await applyInterestJob.run(now, root, queueMint);
+            let apply = try {
+                await applyInterestJob.run(now, root, queueMint)
+            } catch (error) {
+                #err(#Other(Error.message(error)))
+            };
             applyInterestResult := ?apply;
 
-            let flush = await flushPendingDepositsJob.run(availableBalance, refreshAvailableBalance);
+            let flush = try {
+                await flushPendingDepositsJob.run(availableBalance, refreshAvailableBalance)
+            } catch (error) {
+                #err(#Other(Error.message(error)))
+            };
             flushPendingDepositsResult := ?flush;
 
-            let split = await splitNewWithdrawalNeuronsJob.run();
+            let split = try {
+                await splitNewWithdrawalNeuronsJob.run()
+            } catch (error) {
+                #err(#Other(Error.message(error)))
+            };
             splitNewWithdrawalNeuronsResult := ?split;
 
             (?apply, ?flush, ?split)

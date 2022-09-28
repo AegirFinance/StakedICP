@@ -128,10 +128,13 @@ module {
 
                         // Add up the interest we successfully merged.
                         switch (before.get(Nat64.toText(neuron.id))) {
-                            case (null) { P.unreachable() };
+                            case (null) {
+                                return #err(#Other("Merged unexpected neuron id: " # Nat64.toText(neuron.id)));
+                            };
                             case (?beforeE8s) {
-                                assert(neuron.cachedNeuronStakeE8s >= beforeE8s);
-                                interest += neuron.cachedNeuronStakeE8s - beforeE8s
+                                if (neuron.cachedNeuronStakeE8s >= beforeE8s) {
+                                    interest += neuron.cachedNeuronStakeE8s - beforeE8s
+                                };
                             };
                         };
                     };
