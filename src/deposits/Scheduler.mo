@@ -80,6 +80,13 @@ module {
                             labels = [("job", name)];
                             value = Int.toText(completedAt);
                         });
+                        ms.add({
+                            name = "scheduler_job_runtime";
+                            t = "gauge";
+                            help = ?"nanosecond duration of the last time the job ran";
+                            labels = [("job", name)];
+                            value = Int.toText(completedAt - startedAt);
+                        });
                     };
                 };
                 switch (result) {
