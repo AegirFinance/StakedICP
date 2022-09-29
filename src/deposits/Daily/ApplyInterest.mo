@@ -26,6 +26,7 @@ module {
             snapshot: ?[(Principal, Nat)];
             appliedInterest: [ApplyInterestSummary];
             meanAprMicrobips: Nat64;
+            merges: [[(Nat64, Nat64, Neurons.NeuronResult)]];
         };
     };
 
@@ -66,6 +67,7 @@ module {
         private var snapshot : ?[(Principal, Nat)] = null;
         private var appliedInterest : Buffer.Buffer<ApplyInterestSummary> = Buffer.Buffer(0);
         private var meanAprMicrobips : Nat64 = 0;
+        private var merges : Buffer.Buffer<[(Nat64, Nat64, Neurons.NeuronResult)]> = Buffer.Buffer(10);
 
         // ===== GETTER/SETTER FUNCTIONS =====
 
@@ -98,6 +100,10 @@ module {
             return meanAprMicrobips;
         };
 
+        public func getMerges() : [[(Nat64, Nat64, Neurons.NeuronResult)]] {
+            return merges.toArray();
+        };
+
         // ===== JOB START FUNCTION =====
 
         // Distribute newly earned interest to token holders.
@@ -105,40 +111,26 @@ module {
             // take a snapshot of the holders for tomorrow's interest.
             let nextHolders = await getAllHolders();
 
-            // TODO: Should we refetch these from the NNS here? They shouldn't
-            // have changed, and it adds another async/await.
             let neuronIds = args.staking.ids();
-            let before = TrieMap.TrieMap<Text, Nat64>(Text.equal, Text.hash);
-            for ((k, v) in args.staking.balances().vals()) {
-                before.put(Nat64.toText(k), v);
-            };
 
-            // Note: We compare before/after balances here because we are
-            // forced to merge a "percentage", so the amount we merge might be
-            // different than expected. However, this introduces a race
-            // condition with 'FlushPendingDeposits', which transfers more ICP
-            // into the neurons. So this must run before
-            // 'FlushPendingDeposits'.
+            // This introduces a race condition with 'FlushPendingDeposits',
+            // which transfers more ICP into the neurons. So this must run
+            // before 'FlushPendingDeposits'.
             var interest: Nat64 = 0;
-            let merges = await args.neurons.mergeMaturities(neuronIds, 100);
-            for (n in merges.vals()) {
-                switch (n) {
+            let mergeResults = await args.neurons.mergeMaturities(neuronIds, 100);
+            logMerge(mergeResults);
+            for ((id, maturity, result) in mergeResults.vals()) {
+                switch (result) {
                     case (#ok(neuron)) {
+                        // Update our cached stake values
                         ignore args.staking.addOrRefresh(neuron);
 
                         // Add up the interest we successfully merged.
-                        switch (before.get(Nat64.toText(neuron.id))) {
-                            case (null) {
-                                return #err(#Other("Merged unexpected neuron id: " # Nat64.toText(neuron.id)));
-                            };
-                            case (?beforeE8s) {
-                                if (neuron.cachedNeuronStakeE8s >= beforeE8s) {
-                                    interest += neuron.cachedNeuronStakeE8s - beforeE8s
-                                };
-                            };
-                        };
+                        interest += maturity
                     };
-                    case (_) { };
+                    case (#err(err)) {
+                        Debug.print("Error merging maturity for neuron " # debug_show(id) # ": " # debug_show(err));
+                    };
                 };
             };
 
@@ -166,6 +158,19 @@ module {
             updateMeanAprMicrobips();
 
             #ok(apply)
+        };
+
+        // Preserve the last 10 merges to stop it growing forever
+        private func logMerge(m: [(Nat64, Nat64, Neurons.NeuronResult)]) {
+            let size = merges.size();
+            if (size > 9) {
+                let newMerges = Buffer.Buffer<[(Nat64, Nat64, Neurons.NeuronResult)]>(10);
+                for (i in Iter.range(size-10, size-1)) {
+                    newMerges.add(merges.get(i));
+                };
+                merges := newMerges;
+            };
+            merges.add(m);
         };
 
         private func applyInterestToToken(now: Time.Time, interest: Nat, holders: [(Principal, Nat)], root: Principal, queueMint: QueueMintFn): ApplyInterestSummary {
@@ -329,6 +334,7 @@ module {
                 snapshot = snapshot;
                 appliedInterest = appliedInterest.toArray();
                 meanAprMicrobips = meanAprMicrobips;
+                merges = merges.toArray()
             });
         };
 
@@ -341,6 +347,10 @@ module {
                         appliedInterest.add(x);
                     };
                     meanAprMicrobips := data.meanAprMicrobips;
+                    merges := Buffer.Buffer<[(Nat64, Nat64, Neurons.NeuronResult)]>(data.merges.size());
+                    for (x in data.merges.vals()) {
+                        merges.add(x);
+                    };
                 };
                 case (_) { return; }
             };

@@ -192,17 +192,18 @@ module {
             await doMergeMaturity(id, percentage);
         };
 
-        public func mergeMaturities(ids: [Nat64], percentage: Nat32): async [NeuronResult] {
-            let b = Buffer.Buffer<NeuronResult>(ids.size());
+        public func mergeMaturities(ids: [Nat64], percentage: Nat32): async [(Nat64, Nat64, NeuronResult)] {
+            let b = Buffer.Buffer<(Nat64, Nat64, NeuronResult)>(ids.size());
 
             // We need re-fetch maturities here to ensure that this
             // proposal passes. Otherwise we'll be charged for a failed proposal.
             for ((id, maturity) in (await maturities(ids)).vals()) {
-                b.add(if (maturity <= icpFee) {
-                    #err(#InsufficientMaturity)
+                let result = if (maturity <= icpFee) {
+                   #err(#InsufficientMaturity)
                 } else {
                    await doMergeMaturity(id, percentage)
-                });
+                };
+                b.add((id, maturity, result));
             };
             return b.toArray();
         };
