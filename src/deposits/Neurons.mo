@@ -132,7 +132,7 @@ module {
         public func maturities(ids: [Nat64]): async [(Nat64, Nat64)] {
             let response = await governance.list_neurons({
                 neuron_ids = ids;
-                include_neurons_readable_by_caller = true;
+                include_neurons_readable_by_caller = false;
             });
             let b = Buffer.Buffer<(Nat64, Nat64)>(response.full_neurons.size());
             for (neuron in response.full_neurons.vals()) {
