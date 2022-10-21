@@ -502,7 +502,7 @@ shared(init_msg) actor class Deposits(args: {
     // ===== WITHDRAWAL FUNCTIONS =====
 
     // Show currently available ICP in this canister. Minus ICP retained for
-    // pending withdrawals, and any ongoing outbound transfers.
+    // available withdrawals, and any ongoing outbound transfers.
     public shared(msg) func availableBalance() : async Nat64 {
         _availableBalance()
     };
@@ -657,10 +657,14 @@ shared(init_msg) actor class Deposits(args: {
             };
         };
 
-        // Check we think we have enough cash available.
-        if (_availableBalance() < amount) {
+        // Check we think we have enough cash available to fulfill this.
+        // We can't use _availableBalance here, because it subtracts out the
+        // withdrawals.reservedICP, which is what we actually want to use for
+        // this fulfillment.
+        if (Nat64.min(cachedLedgerBalanceE8s, withdrawals.reservedIcp()) < amount + pendingTransfers.reservedIcp()) {
             return #err(#InsufficientLiquidity);
         };
+
 
         // Mark withdrawals as complete, and the balances as "disbursed"
         let {transferArgs; failure} = switch (withdrawals.completeWithdrawal(user, amount, toAddress)) {
