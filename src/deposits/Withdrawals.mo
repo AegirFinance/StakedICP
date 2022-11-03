@@ -150,7 +150,28 @@ module {
                 disbursedE8s += w.disbursed;
             };
 
+            var neuronCount: Nat = 0;
+            var neuronBalanceE8s: Nat64 = 0;
+            for (n in dissolving.vals()) {
+                neuronCount += 1;
+                neuronBalanceE8s += n.cachedNeuronStakeE8s;
+            };
+
             let ms = Buffer.Buffer<Metrics.Metric>(9);
+            ms.add({
+                name = "neuron_count";
+                t = "gauge";
+                help = ?"count of the neuron(s) by type";
+                labels = [("type", "withdrawal")];
+                value = Nat.toText(neuronCount);
+            });
+            ms.add({
+                name = "neuron_balance_e8s";
+                t = "gauge";
+                help = ?"e8s balance of the neuron(s)";
+                labels = [("type", "withdrawal")];
+                value = Nat64.toText(neuronBalanceE8s);
+            });
             ms.add({
                 name = "withdrawals_count";
                 t = "gauge";

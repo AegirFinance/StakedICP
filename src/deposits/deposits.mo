@@ -316,6 +316,13 @@ shared(init_msg) actor class Deposits(args: {
         withdrawals.listNeuronsToDisburse()
     };
 
+    // List all neurons being dissolved to fulfill withdrawals.
+    public shared(msg) func listDissolvingNeurons(): async [Neurons.Neuron] {
+        owners.require(msg.caller);
+        withdrawals.listNeurons()
+    };
+
+
     // Once we've disbursed them, remove them from the withdrawals neuron tracking
     public shared(msg) func removeDisbursedNeurons(ids: [Nat64]): async [Neurons.Neuron] {
         owners.require(msg.caller);
