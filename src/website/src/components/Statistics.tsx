@@ -40,61 +40,70 @@ export function Statistics({neurons}: {neurons: string[]|null}) {
 
   return (
     <Wrapper>
-      <Item>
-        <h5>Total ICP Staked</h5>
-        <h2>
-          {stats !== null
-            ? `${formatSupply(stats.metadata.totalSupply)} ICP`
-            : <ActivityIndicator />}
-        </h2>
-      </Item>
-      <Item>
-        <h5>Stakers</h5>
-        <h2>
-          {stats !== null
-            ? `${stats.holderNumber || 0}`
-            : <ActivityIndicator />}
-        </h2>
-      </Item>
-      <Item>
-        <h5>
-          <span>APY</span>
-          <HelpDialog aria-label="APY Details">
-            <p>
-              The rates shown on this page are only provided for your reference: The actual rates will fluctuate according to many different factors, including token prices, trading volume, liquidity, amount staked, and more. Rates are based on NNS voting rewards, which fluctuates with the number of proposals in a given week.
-            </p>
-            <br />
-            <p>
-              Reward rates are adjusted roughly every 24 hours, based on the past 7 days’ activity.
-            </p>
+      <ItemRow>
+        <Item>
+          <h5>Total ICP Staked</h5>
+          <h2>
+            {stats !== null
+              ? `${formatSupply(stats.metadata.totalSupply)} ICP`
+              : <ActivityIndicator />}
+          </h2>
+        </Item>
+        <Item>
+          <h5>Stakers</h5>
+          <h2>
+            {stats !== null
+              ? `${stats.holderNumber || 0}`
+              : <ActivityIndicator />}
+          </h2>
+        </Item>
+      </ItemRow>
+      <ItemRow>
+        <Item>
+          <h5>
+            <span>APY</span>
+            <HelpDialog aria-label="APY Details">
+              <p>
+                The rates shown on this page are only provided for your reference: The actual rates will fluctuate according to many different factors, including token prices, trading volume, liquidity, amount staked, and more. Rates are based on NNS voting rewards, which fluctuates with the number of proposals in a given week.
+              </p>
+              <br />
+              <p>
+                Reward rates are adjusted roughly every 24 hours, based on the past 7 days’ activity.
+              </p>
 
-            <p>
-              Rewards are distributed daily. There can be up to 48 hours between
-              when you deposit, and when you receive your first rewards.
-            </p>
-          </HelpDialog>
-        </h5>
-        <h2>
-          {apy
-            ? <>{format.units(apy, 2)}%</>
-            : <ActivityIndicator />}
-        </h2>
-      </Item>
-      <Item>
-        <h5>Neurons</h5>
-        <h2>
-          {neurons?.length ?? <ActivityIndicator />}
-        </h2>
-      </Item>
+              <p>
+                Rewards are distributed daily. There can be up to 48 hours between
+                when you deposit, and when you receive your first rewards.
+              </p>
+            </HelpDialog>
+          </h5>
+          <h2>
+            {apy
+              ? <>{format.units(apy, 2)}%</>
+              : <ActivityIndicator />}
+          </h2>
+        </Item>
+        <Item>
+          <h5>Neurons</h5>
+          <h2>
+            {neurons?.length ?? <ActivityIndicator />}
+          </h2>
+        </Item>
+      </ItemRow>
     </Wrapper>
   );
 }
 
 const Wrapper = styled('div', {
-  display: 'grid',
-  gridAutoColumns: 'minmax(0, 1fr)',
-  gridAutoFlow: 'column',
-  padding: "$4",
+  display: 'flex',
+  flexDirection: 'row',
+  justifyContent: 'center',
+  flexWrap: 'wrap',
+});
+
+const ItemRow = styled('div', {
+  display: 'flex',
+  flexDirection: 'row',
 });
 
 const Item = styled(Flex, {
