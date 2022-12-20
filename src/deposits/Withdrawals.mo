@@ -60,6 +60,7 @@ module {
     };
 
     public type WithdrawalsError = {
+        #ICRC1TransferError: Token.ICRC1TransferError;
         #InsufficientBalance;
         #InsufficientLiquidity;
         #InvalidAddress;

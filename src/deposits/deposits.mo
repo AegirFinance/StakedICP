@@ -21,12 +21,12 @@ import Text "mo:base/Text";
 import Time "mo:base/Time";
 import TrieMap "mo:base/TrieMap";
 
-import Account      "./Account";
 import Daily        "./Daily";
 import ApplyInterest "./Daily/ApplyInterest";
 import Scheduler    "./Scheduler";
 import Hex          "./Hex";
 import Neurons      "./Neurons";
+import NNS          "./NNS";
 import Owners       "./Owners";
 import PendingTransfers "./PendingTransfers";
 import Referrals    "./Referrals";
@@ -37,6 +37,7 @@ import Governance "../nns-governance";
 import Ledger "../nns-ledger";
 import Metrics      "../metrics/types";
 import Token "../DIP20/motoko/src/token";
+import Account "../DIP20/motoko/src/account";
 
 // The deposits canister is the main backend canister for StakedICP. It
 // forwards calls to several submodules, and manages daily recurring jobs via
@@ -125,13 +126,18 @@ shared(init_msg) actor class Deposits(args: {
 
     public type Neuron = {
         id : NeuronId;
-        accountId : Account.AccountIdentifier;
+        accountId : NNS.AccountIdentifier;
     };
 
     private stable var governance : Governance.Interface = actor(Principal.toText(args.governance));
     private stable var ledger : Ledger.Self = actor(Principal.toText(args.ledger));
 
     private stable var token : Token.Token = actor(Principal.toText(args.token));
+    private let mintingSubaccount = Blob.fromText("minting");
+    private let mintingAccount = {
+        owner = Principal.fromActor(this);
+        subaccount = ?mintingSubaccount;
+    };
 
     private var pendingMints = TrieMap.TrieMap<Principal, Nat64>(Principal.equal, Principal.hash);
     private stable var stablePendingMints : ?[(Principal, Nat64)] = null;
@@ -176,7 +182,7 @@ shared(init_msg) actor class Deposits(args: {
             case (#ok(neuron)) {
                 let isNew = staking.addOrRefresh(neuron);
                 if isNew {
-                    let canister = Principal.fromActor(this);
+                    let canister = {owner = Principal.fromActor(this); subaccount = null};
                     ignore queueMint(canister, neuron.cachedNeuronStakeE8s);
                     ignore flushMint(canister);
                 };
@@ -196,13 +202,12 @@ shared(init_msg) actor class Deposits(args: {
         neuron
     };
 
-    public shared(msg) func accountId() : async Text {
-        return Account.toText(accountIdBlob());
-    };
+    private let account: Account.Account = Account.fromPrincipal(
+        Principal.fromActor(this),
+        null
+    );
 
-    private func accountIdBlob() : Account.AccountIdentifier {
-        return Account.fromPrincipal(Principal.fromActor(this), Account.defaultSubaccount());
-    };
+    public let accountId: Text = Account.toText(account);
 
     private var _aprOverride : ?Nat64 = null;
 
@@ -365,14 +370,14 @@ shared(init_msg) actor class Deposits(args: {
     public shared(msg) func getDepositAddress(code: ?Text): async Text {
         Debug.print("[Referrals.touch] user: " # debug_show(msg.caller) # ", code: " # debug_show(code));
         referralTracker.touch(msg.caller, code);
-        Account.toText(Account.fromPrincipal(Principal.fromActor(this), Account.principalToSubaccount(msg.caller)));
+        NNS.accountIdToText(NNS.accountIdFromPrincipal(Principal.fromActor(this), NNS.principalToSubaccount(msg.caller)));
     };
 
     // Same as getDepositAddress, but allows the canister owner to find it for
     // a specific user.
     public shared(msg) func getDepositAddressFor(user: Principal): async Text {
         owners.require(msg.caller);
-        Account.toText(Account.fromPrincipal(Principal.fromActor(this), Account.principalToSubaccount(user)));
+        NNS.accountIdToText(NNS.accountIdFromPrincipal(Principal.fromActor(this), NNS.principalToSubaccount(user)));
     };
 
     public type DepositErr = {
@@ -400,25 +405,23 @@ shared(init_msg) actor class Deposits(args: {
 
     private func doDepositIcpFor(user: Principal): async DepositReceipt {
         // Calculate target subaccount
-        let subaccount = Account.principalToSubaccount(user);
-        let source_account = Account.fromPrincipal(Principal.fromActor(this), subaccount);
+        let subaccount = NNS.principalToSubaccount(user);
+        let sourceAccount = Account.fromPrincipal(Principal.fromActor(this), subaccount);
 
         // Check ledger for value
-        let balance = await ledger.account_balance({ account = Blob.toArray(source_account) });
+        let balance = await ledger.icrc1_balance_of(sourceAccount);
 
         // Transfer to staking neuron
-        if (Nat64.toNat(balance.e8s) <= minimumDeposit) {
+        if (balance <= minimumDeposit) {
             return #Err(#BalanceLow);
         };
-        let fee = { e8s = Nat64.fromNat(icpFee) };
-        let amount = { e8s = balance.e8s - fee.e8s };
-        let icpReceipt = await ledger.transfer({
-            memo : Nat64    = 0;
+        let icpReceipt = await ledger.icrc1_transfer({
             from_subaccount = ?Blob.toArray(subaccount);
-            to              = Blob.toArray(accountIdBlob());
-            amount          = amount;
-            fee             = fee;
-            created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
+            to              = account;
+            amount          = balance - icpFee;
+            fee             = ?icpFee;
+            memo            = null;
+            created_at_time = ?Nat64.fromNat(Int.abs(Time.now()));
         });
 
         switch icpReceipt {
@@ -434,15 +437,16 @@ shared(init_msg) actor class Deposits(args: {
         // Mint the new tokens
         Debug.print("[Referrals.convert] user: " # debug_show(user));
         referralTracker.convert(user);
-        ignore queueMint(user, amount.e8s);
-        ignore flushMint(user);
+        let userAccount = {owner=user; subaccount=null};
+        ignore queueMint(userAccount, amount.e8s);
+        ignore flushMint(userAccount);
 
         return #Ok(Nat64.toNat(amount.e8s));
     };
 
     // For safety, minting tokens is a two-step process. First we queue them
     // locally, in case the async mint call fails.
-    private func queueMint(to : Principal, amount : Nat64) : Nat64 {
+    private func queueMint(to : Account.Account, amount : Nat64) : Nat64 {
         let existing = Option.get(pendingMints.get(to), 0 : Nat64);
         let total = existing + amount;
         pendingMints.put(to, total);
@@ -450,25 +454,32 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     // Execute the pending mints for a specific user on the token canister.
-    private func flushMint(to : Principal) : async TxReceipt {
-        let total = Option.get(pendingMints.remove(to), 0 : Nat64);
-        if (total == 0) {
+    private func flushMint(to : Account.Account) : async TxReceipt {
+        let amount = Option.get(pendingMints.remove(to), 0 : Nat64);
+        if (amount == 0) {
             return #Err(#AmountTooSmall);
         };
-        Debug.print("minting: " # debug_show(total) # " to " # debug_show(to));
+        Debug.print("minting: " # debug_show(amount) # " to " # debug_show(to));
         try {
-            let result = await token.mint(to, Nat64.toNat(total));
+            let result = await token.icrc1_transfer({
+                from_subaccount = ?mintingSubaccount;
+                to              = to;
+                amount          = Nat64.toNat(amount);
+                fee             = null;
+                memo            = null;
+                created_at_time = ?Nat64.fromNat(Int.abs(Time.now()));
+            });
             switch (result) {
                 case (#Err(_)) {
                     // Mint failed, revert
-                    pendingMints.put(to, total + Option.get(pendingMints.remove(to), 0 : Nat64));
+                    pendingMints.put(to, amount + Option.get(pendingMints.remove(to), 0 : Nat64));
                 };
                 case _ {};
             };
             result
         } catch (error) {
             // Mint failed, revert
-            pendingMints.put(to, total + Option.get(pendingMints.remove(to), 0 : Nat64));
+            pendingMints.put(to, amount + Option.get(pendingMints.remove(to), 0 : Nat64));
             #Err(#Other(Error.message(error)))
         }
     };
@@ -476,14 +487,14 @@ shared(init_msg) actor class Deposits(args: {
     // Execute all the pending mints on the token canister.
     private func flushAllMints() : async Result.Result<Nat, Text> {
         let mints = Iter.toArray(
-            Iter.map<(Principal, Nat64), (Principal, Nat)>(pendingMints.entries(), func((to, total)) {
-                (to, Nat64.toNat(total))
+            Iter.map<(Account.Account, Nat64), (Account.Account, Nat)>(pendingMints.entries(), func((to, amount)) {
+                (to, Nat64.toNat(amount))
             })
         );
-        for ((to, total) in mints.vals()) {
-            Debug.print("minting: " # debug_show(total) # " to " # debug_show(to));
+        for ((to, amount) in mints.vals()) {
+            Debug.print("minting: " # debug_show(amount) # " to " # debug_show(to));
         };
-        pendingMints := TrieMap.TrieMap(Principal.equal, Principal.hash);
+        pendingMints := TrieMap.TrieMap(Account.equal, Account.hash);
         try {
             switch (await token.mintAll(mints)) {
                 case (#Err(err)) {
@@ -555,9 +566,7 @@ shared(init_msg) actor class Deposits(args: {
         let completedTransferIds = pendingTransfers.completedIds();
 
         // Go fetch the new balance.
-        cachedLedgerBalanceE8s := (await ledger.account_balance({
-            account = Blob.toArray(accountIdBlob());
-        })).e8s;
+        cachedLedgerBalanceE8s := await ledger.icrc1_balance_of(account);
 
         // Now that we have an up-to-date balance we can clear the record of
         // our known-completed transfers.
@@ -609,14 +618,14 @@ shared(init_msg) actor class Deposits(args: {
 
     // Create a new withdrawal for a user. This will burn the corresponding
     // amount of tokens, locking them while the withdrawal is pending.
-    public shared(msg) func createWithdrawal(user: Principal, total: Nat64) : async Result.Result<Withdrawals.Withdrawal, Withdrawals.WithdrawalsError> {
-        if (msg.caller != user) {
-            owners.require(msg.caller);
-        };
+    public shared(msg) func createWithdrawal(user: Account.Account, amount: Nat64) : async Result.Result<Withdrawals.Withdrawal, Withdrawals.WithdrawalsError> {
+        assert(msg.caller == user.owner);
 
         // Burn the tokens from the user. This makes sure there is enough
         // balance for the user.
-        let burn = await token.burnFor(user, Nat64.toNat(total));
+        // TODO: Figure out how to do this with ICRC1. Approve &
+        // transferFrom flow
+        let burn = await token.burnForAccount(user, amount);
         switch (burn) {
             case (#Err(err)) {
                 return #err(#TokenError(err));
@@ -629,20 +638,20 @@ shared(init_msg) actor class Deposits(args: {
         // Minimum, 1 minute until withdrawals.depositIcp runs again.
         var delay: Int = 60;
         var availableNeurons: Nat64 = 0;
-        if (total > availableCash) {
-            let (d, a) = availableLiquidity(total - availableCash);
+        if (amount > availableCash) {
+            let (d, a) = availableLiquidity(amount - availableCash);
             delay := d;
             availableNeurons := a;
         };
-        if (availableCash+availableNeurons < total) {
+        if (availableCash+availableNeurons < amount) {
             // Refund the user's burnt tokens. In practice, this should never
             // happen, as cash+neurons should be >= totalTokens.
-            ignore queueMint(user, total);
+            ignore queueMint(user, amount);
             ignore flushMint(user);
             return #err(#InsufficientLiquidity);
         };
 
-        return #ok(withdrawals.createWithdrawal(user, total, delay));
+        return #ok(withdrawals.createWithdrawal(user, amount, delay));
     };
 
     // Complete withdrawal(s), transferring the ready amount to the
@@ -656,17 +665,17 @@ shared(init_msg) actor class Deposits(args: {
         //
         // Try to parse text as an address or a principal. If a principal, return
         // the default subaccount address for that principal.
-        let toAddress = switch (Account.fromText(to)) {
+        let toAddress = switch (NNS.accountIdromText(to)) {
             case (#err(_)) {
                 // Try to parse as a principal
                 try {
-                    Account.fromPrincipal(Principal.fromText(to), Account.defaultSubaccount())
+                    NNS.accountIdFromPrincipal(Principal.fromText(to), NNS.defaultSubaccount())
                 } catch (error) {
                     return #err(#InvalidAddress);
                 };
             };
             case (#ok(toAddress)) {
-                if (Account.validateAccountIdentifier(toAddress)) {
+                if (NNS.validateAccountIdentifier(toAddress)) {
                     toAddress
                 } else {
                     return #err(#InvalidAddress);
@@ -761,12 +770,12 @@ shared(init_msg) actor class Deposits(args: {
 
     public shared(msg) func neuronAccountId(controller: Principal, nonce: Nat64): async Text {
         owners.require(msg.caller);
-        return Account.toText(Util.neuronAccountId(args.governance, controller, nonce));
+        return NNS.accountIdToText(Util.neuronAccountId(args.governance, controller, nonce));
     };
 
     public shared(msg) func neuronAccountIdSub(controller: Principal, subaccount: Blob.Blob): async Text {
         owners.require(msg.caller);
-        return Account.toText(Account.fromPrincipal(args.governance, subaccount));
+        return NNS.accountIdToText(NNS.accountIdFromPrincipal(args.governance, subaccount));
     };
 
     // ===== HEARTBEAT FUNCTIONS =====
@@ -834,6 +843,11 @@ shared(init_msg) actor class Deposits(args: {
     public shared(msg) func getAppliedInterestMerges(): async [[(Nat64, Nat64, Neurons.NeuronResult)]] {
         owners.require(msg.caller);
         daily.getAppliedInterestMerges()
+    };
+
+    public shared(msg) func setTokenMintingAccount(): async () {
+        owners.require(msg.caller);
+        await token.setMintingAccount(mintingAccount)
     };
 
     // ===== UPGRADE FUNCTIONS =====

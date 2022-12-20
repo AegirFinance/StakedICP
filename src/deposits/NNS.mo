@@ -17,19 +17,19 @@ module {
   public type Subaccount = Blob;
 
   // Checks whether two account identifiers are equal.
-  public func equal(a : AccountIdentifier, b : AccountIdentifier) : Bool {
+  public func accountIdEqual(a : AccountIdentifier, b : AccountIdentifier) : Bool {
       a == b;
   };
 
   // Hex string of length 64. The first 8 characters are the CRC-32 encoded
   // hash of the following 56 characters of hex.
-  public func toText(accountId : AccountIdentifier) : Text {
+  public func accountIdToText(accountId : AccountIdentifier) : Text {
       Hex.encode(Blob.toArray(accountId));
   };
 
   // Decodes the given hex encoded account identifier.
   // NOTE: does not validate if the hash/account identifier.
-  public func fromText(accountId : Text) : Result.Result<AccountIdentifier, Text> {
+  public func accountIdFromText(accountId : Text) : Result.Result<AccountIdentifier, Text> {
       switch (Hex.decode(accountId)) {
           case (#err(e)) #err(e);
           case (#ok(bs)) #ok(Blob.fromArray(bs));
@@ -58,7 +58,7 @@ module {
     Blob.fromArrayMut(Array.init(32, 0 : Nat8))
   };
 
-  public func fromPrincipal(principal: Principal, subaccount: Subaccount) : AccountIdentifier {
+  public func accountIdFromPrincipal(principal: Principal, subaccount: Subaccount) : AccountIdentifier {
     let hash = SHA224.Digest();
     hash.write([0x0A]);
     hash.write(Blob.toArray(Text.encodeUtf8("account-id")));
