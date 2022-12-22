@@ -52,4 +52,4 @@ read -r -d '' MSG << EOM
 )
 EOM
 
-canister call governance manage_neuron "$MSG"
+canister call nns-governance manage_neuron "$MSG"

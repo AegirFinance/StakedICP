@@ -17,8 +17,8 @@ import TrieMap "mo:base/TrieMap";
 
 import Account "./Account";
 import Neurons "./Neurons";
-import Governance "../governance/Governance";
-import Ledger "../ledger/Ledger";
+import Governance "../nns-governance";
+import Ledger "../nns-ledger";
 import Metrics "../metrics/types";
 
 module {

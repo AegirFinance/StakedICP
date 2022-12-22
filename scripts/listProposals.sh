@@ -12,7 +12,7 @@ if [ -z "$NETWORK" ]; then
 fi
 
 if [ -n "$PROPOSAL_ID" ]; then
-    dfx canister --network "$NETWORK" call governance get_proposal_info "($PROPOSAL_ID)"
+    dfx canister --network "$NETWORK" call nns-governance get_proposal_info "($PROPOSAL_ID)"
 else
     read -r -d '' MSG << EOM
     (record {
@@ -24,5 +24,5 @@ else
     })
 EOM
 
-    dfx canister --network "$NETWORK" call governance list_proposals "$MSG"
+    dfx canister --network "$NETWORK" call nns-governance list_proposals "$MSG"
 fi

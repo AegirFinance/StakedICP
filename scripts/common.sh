@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-export IC_VERSION=dd3a710b03bd3ae10368a91b255571d012d1ec2f
-
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 make_neuron() {
@@ -13,7 +11,7 @@ make_neuron() {
   >&2 echo "Transfer 1 ICP to $NEURON_ACCOUNT_ID, memo: $NEURON_MEMO"
   >&2 dfx ledger transfer "$NEURON_ACCOUNT_ID" --memo "$NEURON_MEMO" --amount "1.00"
   >&2 echo "Claim neuron by memo: $NEURON_MEMO"
-  local NEURON_ID=$(dfx canister call governance claim_or_refresh_neuron_from_account "(record { controller = opt principal \"$(dfx identity get-principal)\" ; memo = $NEURON_MEMO : nat64 })" \
+  local NEURON_ID=$(dfx canister call nns-governance claim_or_refresh_neuron_from_account "(record { controller = opt principal \"$(dfx identity get-principal)\" ; memo = $NEURON_MEMO : nat64 })" \
     | grep -o "id = [0-9_]\+" \
     | grep -o "[0-9_]\+")
   >&2 echo "Created neuron: $NEURON_ID"

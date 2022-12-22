@@ -1,30 +1,120 @@
 {
   "canisters": {
-    "governance": {
-      "type": "custom",
-      "wasm": "src/governance/governance.wasm",
-      "candid": "src/governance/governance.did"
-    },
-    "ledger": {
-      "type": "custom",
-      "wasm": "src/ledger/ledger.wasm",
-      "candid": "src/ledger/ledger.did"
-    },
     "deposits": {
+      "dependencies": [
+        "nns-governance",
+        "nns-ledger",
+        "token"
+      ],
       "main": "src/deposits/deposits.mo",
-      "type": "motoko"
-    },
-    "token": {
-      "main": "src/DIP20/motoko/src/token.mo",
       "type": "motoko"
     },
     "metrics": {
       "dependencies": [
         "deposits",
-        "ledger",
+        "nns-ledger",
         "token"
       ],
       "main": "src/metrics/metrics.mo",
+      "type": "motoko"
+    },
+    "nns-cycles-minting": {
+      "build": "",
+      "candid": "candid/nns-cycles-minting.did",
+      "remote": {
+        "id": {
+          "ic": "rkp4c-7iaaa-aaaaa-aaaca-cai",
+          "local": "rkp4c-7iaaa-aaaaa-aaaca-cai"
+        }
+      },
+      "type": "custom",
+      "wasm": ""
+    },
+    "nns-genesis-token": {
+      "build": "",
+      "candid": "candid/nns-genesis-token.did",
+      "remote": {
+        "id": {
+          "ic": "renrk-eyaaa-aaaaa-aaada-cai",
+          "local": "renrk-eyaaa-aaaaa-aaada-cai"
+        }
+      },
+      "type": "custom",
+      "wasm": ""
+    },
+    "nns-governance": {
+      "build": "",
+      "candid": "candid/nns-governance.did",
+      "remote": {
+        "id": {
+          "ic": "rrkah-fqaaa-aaaaa-aaaaq-cai",
+          "local": "rrkah-fqaaa-aaaaa-aaaaq-cai"
+        }
+      },
+      "type": "custom",
+      "wasm": ""
+    },
+    "nns-ledger": {
+      "build": "",
+      "candid": "candid/nns-ledger.did",
+      "remote": {
+        "id": {
+          "ic": "ryjl3-tyaaa-aaaaa-aaaba-cai",
+          "local": "ryjl3-tyaaa-aaaaa-aaaba-cai"
+        }
+      },
+      "type": "custom",
+      "wasm": ""
+    },
+    "nns-lifeline": {
+      "build": "",
+      "candid": "candid/nns-lifeline.did",
+      "remote": {
+        "id": {
+          "ic": "rno2w-sqaaa-aaaaa-aaacq-cai",
+          "local": "rno2w-sqaaa-aaaaa-aaacq-cai"
+        }
+      },
+      "type": "custom",
+      "wasm": ""
+    },
+    "nns-registry": {
+      "build": "",
+      "candid": "candid/nns-registry.did",
+      "remote": {
+        "id": {
+          "ic": "rwlgt-iiaaa-aaaaa-aaaaa-cai",
+          "local": "rwlgt-iiaaa-aaaaa-aaaaa-cai"
+        }
+      },
+      "type": "custom",
+      "wasm": ""
+    },
+    "nns-root": {
+      "build": "",
+      "candid": "candid/nns-root.did",
+      "remote": {
+        "id": {
+          "ic": "r7inp-6aaaa-aaaaa-aaabq-cai",
+          "local": "r7inp-6aaaa-aaaaa-aaabq-cai"
+        }
+      },
+      "type": "custom",
+      "wasm": ""
+    },
+    "nns-sns-wasm": {
+      "build": "",
+      "candid": "candid/nns-sns-wasm.did",
+      "remote": {
+        "id": {
+          "local": "qaa6y-5yaaa-aaaaa-aaafa-cai"
+        }
+      },
+      "type": "custom",
+      "wasm": ""
+    },
+    "token": {
+      "main": "src/DIP20/motoko/src/token.mo",
       "type": "motoko"
     },
     "website": {
@@ -47,20 +137,23 @@
       "packtool": "vessel sources"
     },
     "replica": {
-      "subnet_type":"system"
+      "subnet_type": "system"
     }
   },
-  "dfx": "0.9.2",
+  "dfx": "0.12.1",
   "networks": {
-    "local": {
-      "bind": "127.0.0.1:8000",
-      "type": "ephemeral"
-    },
     "ic": {
       "providers": [
         "https://mainnet.dfinity.network"
       ],
       "type": "persistent"
+    },
+    "local": {
+      "bind": "127.0.0.1:8080",
+      "replica": {
+        "subnet_type": "system"
+      },
+      "type": "ephemeral"
     }
   },
   "version": 1

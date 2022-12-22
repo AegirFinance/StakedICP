@@ -17,7 +17,7 @@ import TrieMap "mo:base/TrieMap";
 import Neurons "../Neurons";
 import Referrals "../Referrals";
 import Staking "../Staking";
-import Ledger "../../ledger/Ledger";
+import Ledger "../../nns-ledger";
 import Token "../../DIP20/motoko/src/token";
 
 module {

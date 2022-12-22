@@ -11,7 +11,7 @@ import PendingTransfers "../PendingTransfers";
 import Referrals "../Referrals";
 import Staking "../Staking";
 import Withdrawals "../Withdrawals";
-import Ledger "../../ledger/Ledger";
+import Ledger "../../nns-ledger";
 import Metrics "../../metrics/types";
 import Token "../../DIP20/motoko/src/token";
 

@@ -37,7 +37,7 @@ canister() {
 followNeuron() {
     local TOPIC="$1"
     echo "${FOLLOWER_ID} following ${FOLLOWEE_ID} on topic ${TOPIC}"
-    canister call governance manage_neuron "(
+    canister call nns-governance manage_neuron "(
       record {
         id = null;
         command = opt variant {

@@ -5,6 +5,8 @@ module {
     #ManageNeuron : ManageNeuron;
     #ExecuteNnsFunction : ExecuteNnsFunction;
     #RewardNodeProvider : RewardNodeProvider;
+    #OpenSnsTokenSwap : OpenSnsTokenSwap;
+    #SetSnsTokenSwapOpenTimeWindow : SetSnsTokenSwapOpenTimeWindow;
     #SetDefaultFollowees : SetDefaultFollowees;
     #RewardNodeProviders : RewardNodeProviders;
     #ManageNetworkEconomics : NetworkEconomics;
@@ -23,7 +25,28 @@ module {
     #MemoAndController : ClaimOrRefreshNeuronFromAccount;
     #Memo : Nat64;
   };
+  public type CanisterStatusResultV2 = {
+    status : ?Int32;
+    freezing_threshold : ?Nat64;
+    controllers : [Principal];
+    memory_size : ?Nat64;
+    cycles : ?Nat64;
+    idle_cycles_burned_per_day : ?Nat64;
+    module_hash : [Nat8];
+  };
+  public type CanisterSummary = {
+    status : ?CanisterStatusResultV2;
+    canister_id : ?Principal;
+  };
+  public type CfNeuron = { nns_neuron_id : Nat64; amount_icp_e8s : Nat64 };
+  public type CfParticipant = {
+    hotkey_principal : Text;
+    cf_neurons : [CfNeuron];
+  };
   public type Change = { #ToRemove : NodeProvider; #ToAdd : NodeProvider };
+  public type ChangeAutoStakeMaturity = {
+    requested_setting_for_auto_stake_maturity : Bool;
+  };
   public type ClaimOrRefresh = { by : ?By };
   public type ClaimOrRefreshNeuronFromAccount = {
     controller : ?Principal;
@@ -41,6 +64,7 @@ module {
     #Merge : Merge;
     #DisburseToNeuron : DisburseToNeuron;
     #MakeProposal : Proposal;
+    #StakeMaturity : StakeMaturity;
     #MergeMaturity : MergeMaturity;
     #Disburse : Disburse;
   };
@@ -55,20 +79,26 @@ module {
     #Merge : {};
     #DisburseToNeuron : SpawnResponse;
     #MakeProposal : MakeProposalResponse;
+    #StakeMaturity : StakeMaturityResponse;
     #MergeMaturity : MergeMaturityResponse;
     #Disburse : DisburseResponse;
   };
   public type Command_2 = {
-    #Spawn : Spawn;
+    #Spawn : NeuronId;
     #Split : Split;
     #Configure : Configure;
     #Merge : Merge;
     #DisburseToNeuron : DisburseToNeuron;
+    #SyncCommand : {};
     #ClaimOrRefreshNeuron : ClaimOrRefresh;
     #MergeMaturity : MergeMaturity;
     #Disburse : Disburse;
   };
+  public type Committed = { sns_governance_canister_id : ?Principal };
   public type Configure = { operation : ?Operation };
+  public type DerivedProposalInformation = {
+    swap_background_information : ?SwapBackgroundInformation;
+  };
   public type Disburse = { to_account : ?AccountIdentifier; amount : ?Amount };
   public type DisburseResponse = { transfer_block_height : Nat64 };
   public type DisburseToNeuron = {
@@ -87,10 +117,14 @@ module {
   public type Followees = { followees : [NeuronId] };
   public type Governance = {
     default_followees : [(Int32, Followees)];
+    most_recent_monthly_node_provider_rewards : ?MostRecentMonthlyNodeProviderRewards;
+    maturity_modulation_last_updated_at_timestamp_seconds : ?Nat64;
     wait_for_quiet_threshold_seconds : Nat64;
     metrics : ?GovernanceCachedMetrics;
     node_providers : [NodeProvider];
+    cached_daily_maturity_modulation_basis_points : ?Int32;
     economics : ?NetworkEconomics;
+    spawning_neurons : ?Bool;
     latest_reward_event : ?RewardEvent;
     to_claim_transfers : [NeuronStakeTransfer];
     short_voting_period_seconds : Nat64;
@@ -107,6 +141,7 @@ module {
     total_supply_icp : Nat64;
     neurons_with_less_than_6_months_dissolve_delay_count : Nat64;
     dissolved_neurons_count : Nat64;
+    community_fund_total_maturity_e8s_equivalent : Nat64;
     total_staked_e8s : Nat64;
     not_dissolving_neurons_count : Nat64;
     dissolved_neurons_e8s : Nat64;
@@ -135,6 +170,7 @@ module {
     neuron_infos : [(Nat64, NeuronInfo)];
     full_neurons : [Neuron];
   };
+  public type ListNodeProvidersResponse = { node_providers : [NodeProvider] };
   public type ListProposalInfo = {
     include_reward_status : [Int32];
     before_proposal : ?NeuronId;
@@ -156,6 +192,10 @@ module {
     merged_maturity_e8s : Nat64;
     new_stake_e8s : Nat64;
   };
+  public type MostRecentMonthlyNodeProviderRewards = {
+    timestamp : Nat64;
+    rewards : [RewardNodeProvider];
+  };
   public type Motion = { motion_text : Text };
   public type NetworkEconomics = {
     neuron_minimum_stake_e8s : Nat64;
@@ -169,6 +209,7 @@ module {
   };
   public type Neuron = {
     id : ?NeuronId;
+    staked_maturity_e8s_equivalent : ?Nat64;
     controller : ?Principal;
     recent_ballots : [BallotInfo];
     kyc_verified : Bool;
@@ -176,6 +217,7 @@ module {
     maturity_e8s_equivalent : Nat64;
     cached_neuron_stake_e8s : Nat64;
     created_timestamp_seconds : Nat64;
+    auto_stake_maturity : ?Bool;
     aging_since_timestamp_seconds : Nat64;
     hot_keys : [Principal];
     account : [Nat8];
@@ -185,6 +227,11 @@ module {
     neuron_fees_e8s : Nat64;
     transfer : ?NeuronStakeTransfer;
     known_neuron_data : ?KnownNeuronData;
+    spawn_at_timestamp_seconds : ?Nat64;
+  };
+  public type NeuronBasketConstructionParameters = {
+    dissolve_delay_interval_seconds : Nat64;
+    count : Nat64;
   };
   public type NeuronId = { id : Nat64 };
   public type NeuronIdOrSubaccount = {
@@ -220,14 +267,31 @@ module {
     id : ?Principal;
     reward_account : ?AccountIdentifier;
   };
+  public type OpenSnsTokenSwap = {
+    community_fund_investment_e8s : ?Nat64;
+    target_swap_canister_id : ?Principal;
+    params : ?Params;
+  };
   public type Operation = {
     #RemoveHotKey : RemoveHotKey;
     #AddHotKey : AddHotKey;
+    #ChangeAutoStakeMaturity : ChangeAutoStakeMaturity;
     #StopDissolving : {};
     #StartDissolving : {};
     #IncreaseDissolveDelay : IncreaseDissolveDelay;
     #JoinCommunityFund : {};
+    #LeaveCommunityFund : {};
     #SetDissolveTimestamp : SetDissolveTimestamp;
+  };
+  public type Params = {
+    min_participant_icp_e8s : Nat64;
+    neuron_basket_construction_parameters : ?NeuronBasketConstructionParameters;
+    max_icp_e8s : Nat64;
+    swap_due_timestamp_seconds : Nat64;
+    min_participants : Nat32;
+    sns_token_e8s : Nat64;
+    max_participant_icp_e8s : Nat64;
+    min_icp_e8s : Nat64;
   };
   public type Proposal = {
     url : Text;
@@ -238,17 +302,21 @@ module {
   public type ProposalData = {
     id : ?NeuronId;
     failure_reason : ?GovernanceError;
+    cf_participants : [CfParticipant];
     ballots : [(Nat64, Ballot)];
     proposal_timestamp_seconds : Nat64;
     reward_event_round : Nat64;
     failed_timestamp_seconds : Nat64;
     reject_cost_e8s : Nat64;
+    derived_proposal_information : ?DerivedProposalInformation;
     latest_tally : ?Tally;
+    sns_token_swap_lifecycle : ?Int32;
     decided_timestamp_seconds : Nat64;
     proposal : ?Proposal;
     proposer : ?NeuronId;
     wait_for_quiet_state : ?WaitForQuietState;
     executed_timestamp_seconds : Nat64;
+    original_total_community_fund_maturity_e8s_equivalent : ?Nat64;
   };
   public type ProposalInfo = {
     id : ?NeuronId;
@@ -261,6 +329,7 @@ module {
     deadline_timestamp_seconds : ?Nat64;
     failed_timestamp_seconds : Nat64;
     reject_cost_e8s : Nat64;
+    derived_proposal_information : ?DerivedProposalInformation;
     latest_tally : ?Tally;
     reward_status : Int32;
     decided_timestamp_seconds : Nat64;
@@ -275,6 +344,8 @@ module {
   public type Result_2 = { #Ok : Neuron; #Err : GovernanceError };
   public type Result_3 = { #Ok : RewardNodeProviders; #Err : GovernanceError };
   public type Result_4 = { #Ok : NeuronInfo; #Err : GovernanceError };
+  public type Result_5 = { #Ok : NodeProvider; #Err : GovernanceError };
+  public type Result_6 = { #Committed : Committed; #Aborted : {} };
   public type RewardEvent = {
     day_after_genesis : Nat64;
     actual_timestamp_seconds : Nat64;
@@ -300,19 +371,52 @@ module {
     default_followees : [(Int32, Followees)];
   };
   public type SetDissolveTimestamp = { dissolve_timestamp_seconds : Nat64 };
-  public type Spawn = { new_controller : ?Principal; nonce : ?Nat64 };
+  public type SetOpenTimeWindowRequest = { open_time_window : ?TimeWindow };
+  public type SetSnsTokenSwapOpenTimeWindow = {
+    request : ?SetOpenTimeWindowRequest;
+    swap_canister_id : ?Principal;
+  };
+  public type SettleCommunityFundParticipation = {
+    result : ?Result_6;
+    open_sns_token_swap_proposal_id : ?Nat64;
+  };
+  public type Spawn = {
+    percentage_to_spawn : ?Nat32;
+    new_controller : ?Principal;
+    nonce : ?Nat64;
+  };
   public type SpawnResponse = { created_neuron_id : ?NeuronId };
   public type Split = { amount_e8s : Nat64 };
+  public type StakeMaturity = { percentage_to_stake : ?Nat32 };
+  public type StakeMaturityResponse = {
+    maturity_e8s : Nat64;
+    staked_maturity_e8s : Nat64;
+  };
+  public type SwapBackgroundInformation = {
+    ledger_index_canister_summary : ?CanisterSummary;
+    fallback_controller_principal_ids : [Principal];
+    ledger_archive_canister_summaries : [CanisterSummary];
+    ledger_canister_summary : ?CanisterSummary;
+    swap_canister_summary : ?CanisterSummary;
+    governance_canister_summary : ?CanisterSummary;
+    root_canister_summary : ?CanisterSummary;
+    dapp_canister_summaries : [CanisterSummary];
+  };
   public type Tally = {
     no : Nat64;
     yes : Nat64;
     total : Nat64;
     timestamp_seconds : Nat64;
   };
+  public type TimeWindow = {
+    start_timestamp_seconds : Nat64;
+    end_timestamp_seconds : Nat64;
+  };
   public type UpdateNodeProvider = { reward_account : ?AccountIdentifier };
   public type WaitForQuietState = {
     current_deadline_timestamp_seconds : Nat64;
   };
+
   public type Self = Governance -> async Interface;
   public type Interface = actor {
     claim_gtc_neurons : shared (Principal, [NeuronId]) -> async Result;
@@ -321,15 +425,20 @@ module {
     get_full_neuron : shared query Nat64 -> async Result_2;
     get_full_neuron_by_id_or_subaccount : shared query NeuronIdOrSubaccount -> async Result_2;
     get_monthly_node_provider_rewards : shared () -> async Result_3;
+    get_most_recent_monthly_node_provider_rewards : shared query () -> async ?MostRecentMonthlyNodeProviderRewards;
+    get_network_economics_parameters : shared query () -> async NetworkEconomics;
     get_neuron_ids : shared query () -> async [Nat64];
     get_neuron_info : shared query Nat64 -> async Result_4;
     get_neuron_info_by_id_or_subaccount : shared query NeuronIdOrSubaccount -> async Result_4;
+    get_node_provider_by_caller : shared query Null -> async Result_5;
     get_pending_proposals : shared query () -> async [ProposalInfo];
     get_proposal_info : shared query Nat64 -> async ?ProposalInfo;
     list_known_neurons : shared query () -> async ListKnownNeuronsResponse;
     list_neurons : shared query ListNeurons -> async ListNeuronsResponse;
+    list_node_providers : shared query () -> async ListNodeProvidersResponse;
     list_proposals : shared query ListProposalInfo -> async ListProposalInfoResponse;
     manage_neuron : shared ManageNeuron -> async ManageNeuronResponse;
+    settle_community_fund_participation : shared SettleCommunityFundParticipation -> async Result;
     transfer_gtc_neuron : shared (NeuronId, NeuronId) -> async Result;
     update_node_provider : shared UpdateNodeProvider -> async Result;
   }

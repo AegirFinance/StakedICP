@@ -133,8 +133,8 @@ canister stop deposits
 
 canister install deposits --mode="$MODE" --argument "$(cat << EOM
 (record {
-  governance             = principal "$(canister id governance)";
-  ledger                 = principal "$(canister id ledger)";
+  governance             = principal "$(canister id nns-governance)";
+  ledger                 = principal "$(canister id nns-ledger)";
   ledgerCandid           = principal "ockk2-xaaaa-aaaai-aaaua-cai";
   token                  = principal "$(canister id token)";
   owners                 = vec { $OWNERS };

@@ -33,8 +33,8 @@ import Referrals    "./Referrals";
 import Staking      "./Staking";
 import Util         "./Util";
 import Withdrawals  "./Withdrawals";
-import Governance "../governance/Governance";
-import Ledger "../ledger/Ledger";
+import Governance "../nns-governance";
+import Ledger "../nns-ledger";
 import Metrics      "../metrics/types";
 import Token "../DIP20/motoko/src/token";
 

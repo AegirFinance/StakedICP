@@ -8,7 +8,7 @@ set -e
 MODE="${1:-install}"
 
 canister_exists() {
-  (dfx canister status "$1" 2>&1 | grep 'Module hash: 0x')
+  (dfx canister info "$1" 2>&1 | grep 'Module hash: 0x')
 }
 
 echo
@@ -18,55 +18,39 @@ echo
 vessel install
 
 echo
-echo == Create.
+echo == Create Minting Account.
+echo
+
+if (dfx identity list | grep minter 2>&1 >/dev/null) ; then
+    echo "minter account already exists" >&2
+else
+    dfx identity import --disable-encryption minter <(cat <<EOF
+-----BEGIN EC PRIVATE KEY-----
+MHQCAQEEICJxApEbuZznKFpV+VKACRK30i6+7u5Z13/DOl18cIC+oAcGBSuBBAAK
+oUQDQgAEPas6Iag4TUx+Uop+3NhE6s3FlayFtbwdhRVjvOar0kPTfE/N8N6btRnd
+74ly5xXEBNSXiENyxhEuzOZrIWMCNQ==
+-----END EC PRIVATE KEY-----
+EOF
+    )
+fi
+
+echo
+echo == Install NNS.
 echo
 
 # Created in specific order so that the canister ids always match
-dfx canister create governance
-dfx canister create ledger
+if canister_exists "nns-governance"; then
+    echo "nns-governance already exists skipping nns install" >&2
+else
+    dfx nns install --identity minter
+    dfx ledger transfer --identity minter --memo 0 --amount 10000 $(dfx ledger account-id)
+fi
+
+echo
+echo == Create Canisters.
+echo
+
 dfx canister create --all
-
-GOVERNANCE_CANISTER_ID="$(dfx canister id governance)"
-if [[ "$GOVERNANCE_CANISTER_ID" != "rrkah-fqaaa-aaaaa-aaaaq-cai" ]]; then
-  echo "Unexpected governance canister id: $GOVERNANCE_CANISTER_ID" >&2
-  exit 1
-fi
-
-LEDGER_CANISTER_ID="$(dfx canister id ledger)"
-if [[ "$LEDGER_CANISTER_ID" != "ryjl3-tyaaa-aaaaa-aaaba-cai" ]]; then
-  echo "Unexpected ledger canister id: $LEDGER_CANISTER_ID" >&2
-  exit 1
-fi
-
-echo
-echo == Install Ledger
-echo
-
-(canister_exists ledger) || (
-  ln -sf ledger.private.did src/ledger/ledger.did
-
-  CURRENT_ACC=$(dfx identity whoami)
-
-  dfx identity use minter || (dfx identity new minter && dfx identity use minter)
-  export MINT_ACC=$(dfx ledger account-id)
-
-  dfx identity use "$CURRENT_ACC"
-  export LEDGER_ACC=$(dfx ledger account-id)
-  export ARCHIVE_CONTROLLER=$(dfx identity get-principal)
-
-  dfx deploy ledger --argument '(record {minting_account = "'${MINT_ACC}'"; initial_values = vec { record { "'${LEDGER_ACC}'"; record { e8s=100_000_000_000 } }; }; send_whitelist = vec {}; archive_options = opt record { trigger_threshold = 2000; num_blocks_to_archive = 1000; controller_id = principal "'${ARCHIVE_CONTROLLER}'" }})'
-
-  ln -sf ledger.public.did src/ledger/ledger.did
-)
-
-echo
-echo == Install Governance
-echo
-
-(canister_exists governance) || (
-  MSG="$(cat src/governance/initial-governance.hex)"
-  dfx deploy governance --argument-type raw --argument "$MSG"
-)
 
 echo
 echo == Deploy
@@ -78,6 +62,7 @@ echo
 echo == Initial Data
 echo
 
+dfx canister call setSchedulerPaused '(false)'
 dfx canister call deposits applyInterest "(58000: nat64, null)"
 
 echo

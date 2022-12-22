@@ -15,8 +15,8 @@ import Time "mo:base/Time";
 import TrieMap "mo:base/TrieMap";
 
 import Account      "./Account";
-import Governance "../governance/Governance";
-import Ledger "../ledger/Ledger";
+import Governance "../nns-governance";
+import Ledger "../nns-ledger";
 import Metrics "../metrics/types";
 
 module {
@@ -216,8 +216,8 @@ module {
                     title = ?title;
                     action = ?#ManageNeuron({
                         id = null;
-                        command = ?#MergeMaturity({
-                            percentage_to_merge = percentage
+                        command = ?#StakeMaturity({
+                            percentage_to_stake = ?percentage
                         });
                         neuron_id_or_subaccount = ?#NeuronId({ id = id });
                     });
