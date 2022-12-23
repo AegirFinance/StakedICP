@@ -212,7 +212,7 @@ module {
             let title = "Merge " # Nat32.toText(percentage) # "% of maturity for neuron " # Nat64.toText(id);
             try {
                 let proposal = await propose({
-                    url = "https://stakedicp.com";
+                    url = "https://forum.dfinity.org";
                     title = ?title;
                     action = ?#ManageNeuron({
                         id = null;
@@ -247,7 +247,7 @@ module {
 
             let title = "Split Neuron " # Nat64.toText(id);
             let proposal = await propose({
-                url = "https://stakedicp.com";
+                url = "https://forum.dfinity.org";
                 title = ?title;
                 action = ?#ManageNeuron({
                     id = null;
@@ -276,7 +276,7 @@ module {
         public func dissolve(id: Nat64): async NeuronResult {
             let title = "Start Dissolving Neuron " # Nat64.toText(id);
             let proposal = await propose({
-                url = "https://stakedicp.com";
+                url = "https://forum.dfinity.org";
                 title = ?title;
                 action = ?#ManageNeuron({
                     id = null;
