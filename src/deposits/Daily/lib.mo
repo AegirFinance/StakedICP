@@ -79,6 +79,11 @@ module {
             return applyInterestJob.getAppliedInterest();
         };
 
+        public func getAppliedInterestMerges(): [[(Nat64, Nat64, Neurons.NeuronResult)]] {
+            return applyInterestJob.getMerges();
+        };
+
+
         public func setAppliedInterest(elems: [ApplyInterest.ApplyInterestSummary]) {
             applyInterestJob.setAppliedInterest(elems);
         };

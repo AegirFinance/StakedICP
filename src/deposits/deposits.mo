@@ -821,6 +821,11 @@ shared(init_msg) actor class Deposits(args: {
         daily.getResults()
     };
 
+    public shared(msg) func getAppliedInterestMerges(): async [[(Nat64, Nat64, Neurons.NeuronResult)]] {
+        owners.require(msg.caller);
+        daily.getAppliedInterestMerges()
+    };
+
     // ===== UPGRADE FUNCTIONS =====
 
     system func preupgrade() {
