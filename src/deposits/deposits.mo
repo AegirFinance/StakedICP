@@ -204,9 +204,19 @@ shared(init_msg) actor class Deposits(args: {
         return Account.fromPrincipal(Principal.fromActor(this), Account.defaultSubaccount());
     };
 
+    private var _aprOverride : ?Nat64 = null;
+
+    public shared(msg) func setAprOverride(microbips: ?Nat64) : async () {
+        owners.require(msg.caller);
+        _aprOverride := microbips;
+    };
+
     // Getter for the current APR in microbips
     public query func aprMicrobips() : async Nat64 {
-        return daily.getMeanAprMicrobips();
+        switch (_aprOverride) {
+            case (null) { daily.getMeanAprMicrobips() };
+            case (?apr) { apr };
+        }
     };
 
     // ===== METRICS FUNCTIONS =====
