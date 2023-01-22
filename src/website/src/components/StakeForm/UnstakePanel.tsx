@@ -350,7 +350,8 @@ function UnstakeDialog({
       throw new Error("Deposits canister missing");
     }
 
-    const result = await depositsCanister.createWithdrawal(Principal.fromText(principal), BigInt(amount*100000000));
+    // TODO: Support subaccount from wallet here.
+    const result = await depositsCanister.createWithdrawal({owner:Principal.fromText(principal), subaccount: []}, BigInt(amount*100000000));
     if ('err' in result && result.err) {
       throw new Error(format.withdrawalsError(result.err));
     } else if (!('ok' in result) || !result.ok) {

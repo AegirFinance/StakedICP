@@ -15,12 +15,13 @@ import Text "mo:base/Text";
 import Time "mo:base/Time";
 import TrieMap "mo:base/TrieMap";
 
-import Account "./Account";
+import NNS "./NNS";
 import Neurons "./Neurons";
 import Governance "../nns-governance";
 import Ledger "../nns-ledger";
 import Metrics "../metrics/types";
 import Token "../DIP20/motoko/src/token";
+import TokenTypes "../DIP20/motoko/src/types";
 
 module {
     // Cost to transfer ICP on the ledger
@@ -60,6 +61,7 @@ module {
     };
 
     public type WithdrawalsError = {
+        #ICRC1TransferError: TokenTypes.ICRC1TransferError;
         #InsufficientBalance;
         #InsufficientLiquidity;
         #InvalidAddress;
@@ -414,7 +416,7 @@ module {
 
         // Users call this to transfer their unlocked ICP in completed
         // withdrawals to an address of their choosing.
-        public func completeWithdrawal(user: Principal, amount: Nat64, to: Account.AccountIdentifier): Result.Result<WithdrawalCompletion, WithdrawalsError> {
+        public func completeWithdrawal(user: Principal, amount: Nat64, to: NNS.AccountIdentifier): Result.Result<WithdrawalCompletion, WithdrawalsError> {
             let now = Time.now();
 
             // Figure out which available withdrawals we're disbursing

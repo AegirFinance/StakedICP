@@ -14,7 +14,7 @@ import Text "mo:base/Text";
 import Time "mo:base/Time";
 import TrieMap "mo:base/TrieMap";
 
-import Account      "./Account";
+import NNS "./NNS";
 import Governance "../nns-governance";
 import Ledger "../nns-ledger";
 import Metrics "../metrics/types";
@@ -34,7 +34,7 @@ module {
     // Neuron is the local state we store about a neuron.
     public type Neuron = {
         id : Nat64;
-        accountId : Account.AccountIdentifier;
+        accountId : NNS.AccountIdentifier;
         dissolveState : ?Governance.DissolveState;
         cachedNeuronStakeE8s : Nat64;
     };
@@ -168,7 +168,7 @@ module {
                     case (#Ok(neuron)) {
                         return #ok({
                             id = id;
-                            accountId = Account.fromPrincipal(args.governance, Blob.fromArray(neuron.account));
+                            accountId = NNS.accountIdFromPrincipal(args.governance, Blob.fromArray(neuron.account));
                             dissolveState = neuron.dissolve_state;
                             cachedNeuronStakeE8s = neuron.cached_neuron_stake_e8s;
                         });
@@ -353,7 +353,7 @@ module {
                         case (?id) {
                             return ?{
                                 id = id.id;
-                                accountId = Account.fromPrincipal(args.governance, Blob.fromArray(neuron.account));
+                                accountId = NNS.accountIdFromPrincipal(args.governance, Blob.fromArray(neuron.account));
                                 dissolveState = neuron.dissolve_state;
                                 cachedNeuronStakeE8s = neuron.cached_neuron_stake_e8s;
                             };

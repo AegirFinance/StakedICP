@@ -2,7 +2,6 @@ import Buffer "mo:base/Buffer";
 import Error "mo:base/Error";
 import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
-import Principal "mo:base/Principal";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
 
@@ -14,6 +13,7 @@ import Withdrawals "../Withdrawals";
 import Ledger "../../nns-ledger";
 import Metrics "../../metrics/types";
 import Token "../../DIP20/motoko/src/token";
+import Account "../../DIP20/motoko/src/account";
 
 import ApplyInterest "./ApplyInterest";
 import FlushPendingDeposits "./FlushPendingDeposits";
@@ -71,7 +71,7 @@ module {
 
         // ===== GETTER/SETTER FUNCTIONS =====
 
-        public func setInitialSnapshot(): async (Text, [(Principal, Nat)]) {
+        public func setInitialSnapshot(): async (Text, [(Account.Account, Nat)]) {
             await applyInterestJob.setInitialSnapshot()
         };
 
@@ -136,7 +136,7 @@ module {
 
         public func run(
             now: Time.Time,
-            root: Principal,
+            root: Account.Account,
             queueMint: ApplyInterest.QueueMintFn,
             availableBalance: FlushPendingDeposits.AvailableBalanceFn,
             refreshAvailableBalance: FlushPendingDeposits.RefreshAvailableBalanceFn

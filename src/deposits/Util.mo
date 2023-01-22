@@ -3,12 +3,12 @@ import Blob "mo:base/Blob";
 import Nat64 "mo:base/Nat64";
 import Principal "mo:base/Principal";
 import Random "mo:base/Random";
-import Account "./Account";
+import NNS "./NNS";
 import Binary "./Binary";
 import SHA256 "./SHA256";
 
 module {
-    public func neuronSubaccount(controller : Principal, nonce : Nat64) : Account.Subaccount {
+    public func neuronSubaccount(controller : Principal, nonce : Nat64) : NNS.Subaccount {
        var arr : [Nat8] = [
            0x0c, 0x6e, 0x65, 0x75,
            0x72, 0x6f, 0x6e, 0x2d,
@@ -22,9 +22,9 @@ module {
        return Blob.fromArray(SHA256.sum256(arr));
     };
 
-    public func neuronAccountId(governance : Principal, controller : Principal, nonce : Nat64) : Account.AccountIdentifier {
+    public func neuronAccountId(governance : Principal, controller : Principal, nonce : Nat64) : NNS.AccountIdentifier {
         let subaccount = neuronSubaccount(controller, nonce);
-        return Account.fromPrincipal(governance, subaccount);
+        return NNS.accountIdFromPrincipal(governance, subaccount);
     };
 
     public func randomNat64() : async Nat64 {

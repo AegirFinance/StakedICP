@@ -15,7 +15,7 @@ import Text "mo:base/Text";
 import Time "mo:base/Time";
 import TrieMap "mo:base/TrieMap";
 
-import Account "./Account";
+import NNS "./NNS";
 import Neurons "./Neurons";
 import Governance "../nns-governance";
 import Ledger "../nns-ledger";
@@ -79,7 +79,7 @@ module {
             for (neuron in stakingNeurons.vals()) {
                 b.add({
                     id = { id = neuron.id };
-                    accountId = Account.toText(neuron.accountId);
+                    accountId = NNS.accountIdToText(neuron.accountId);
                 });
             };
             return b.toArray();
@@ -146,7 +146,7 @@ module {
 
         // depositIcp takes an amount of e8s to deposit, and returns a list of
         // transfers to make, routing the deposit ICP to the staking neurons.
-        public func depositIcp(totalE8s: Nat64, canisterE8s: Nat64, fromSubaccount: ?Account.Subaccount): [Ledger.TransferArgs] {
+        public func depositIcp(totalE8s: Nat64, canisterE8s: Nat64, fromSubaccount: ?NNS.Subaccount): [Ledger.TransferArgs] {
             if (canisterE8s <= minimumTransfer) {
                 return [];
             };
