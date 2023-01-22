@@ -402,19 +402,19 @@ shared(init_msg) actor class Deposits(args: {
         let balance = await ledger.account_balance({ account = Blob.toArray(sourceAccount) });
 
         // Transfer to staking neuron
-         if (Nat64.toNat(balance.e8s) <= minimumDeposit) {
-             return #Err(#BalanceLow);
-         };
-         let fee = { e8s = Nat64.fromNat(icpFee) };
-         let amount = { e8s = balance.e8s - fee.e8s };
-         let icpReceipt = await ledger.transfer({
-             memo : Nat64    = 0;
-             from_subaccount = ?Blob.toArray(subaccount);
-             to              = Blob.toArray(NNS.accountIdFromPrincipal(Principal.fromActor(this), NNS.defaultSubaccount()));
-             amount          = amount;
-             fee             = fee;
-             created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
-         });
+        if (Nat64.toNat(balance.e8s) <= minimumDeposit) {
+            return #Err(#BalanceLow);
+        };
+        let fee = { e8s = Nat64.fromNat(icpFee) };
+        let amount = { e8s = balance.e8s - fee.e8s };
+        let icpReceipt = await ledger.transfer({
+            memo : Nat64    = 0;
+            from_subaccount = ?Blob.toArray(subaccount);
+            to              = Blob.toArray(NNS.accountIdFromPrincipal(Principal.fromActor(this), NNS.defaultSubaccount()));
+            amount          = amount;
+            fee             = fee;
+            created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
+        });
 
         switch icpReceipt {
             case (#Err(_)) {
