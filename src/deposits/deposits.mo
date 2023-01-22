@@ -37,6 +37,7 @@ import Governance "../nns-governance";
 import Ledger "../nns-ledger";
 import Metrics      "../metrics/types";
 import Token "../DIP20/motoko/src/token";
+import TokenTypes "../DIP20/motoko/src/types";
 import Account "../DIP20/motoko/src/account";
 
 // The deposits canister is the main backend canister for StakedICP. It
@@ -133,14 +134,10 @@ shared(init_msg) actor class Deposits(args: {
     private stable var ledger : Ledger.Self = actor(Principal.toText(args.ledger));
 
     private stable var token : Token.Token = actor(Principal.toText(args.token));
-    private let mintingSubaccount = Blob.fromText("minting");
-    private let mintingAccount = {
-        owner = Principal.fromActor(this);
-        subaccount = ?mintingSubaccount;
-    };
+    private let mintingSubaccount = Blob.fromArray([109, 105, 110, 116, 105, 110, 103]); // "minting" 
 
-    private var pendingMints = TrieMap.TrieMap<Principal, Nat64>(Principal.equal, Principal.hash);
-    private stable var stablePendingMints : ?[(Principal, Nat64)] = null;
+    private var pendingMints = TrieMap.TrieMap<Account.Account, Nat64>(Account.equal, Account.hash);
+    private stable var stablePendingMints : ?[(Account.Account, Nat64)] = null;
 
     private stable var cachedLedgerBalanceE8s : Nat64 = 0;
 
@@ -201,13 +198,6 @@ shared(init_msg) actor class Deposits(args: {
         Result.iterate(neuron, neurons.setProposalNeuron);
         neuron
     };
-
-    private let account: Account.Account = Account.fromPrincipal(
-        Principal.fromActor(this),
-        null
-    );
-
-    public let accountId: Text = Account.toText(account);
 
     private var _aprOverride : ?Nat64 = null;
 
@@ -406,23 +396,25 @@ shared(init_msg) actor class Deposits(args: {
     private func doDepositIcpFor(user: Principal): async DepositReceipt {
         // Calculate target subaccount
         let subaccount = NNS.principalToSubaccount(user);
-        let sourceAccount = Account.fromPrincipal(Principal.fromActor(this), subaccount);
+        let sourceAccount = NNS.accountIdFromPrincipal(Principal.fromActor(this), subaccount);
 
         // Check ledger for value
-        let balance = await ledger.icrc1_balance_of(sourceAccount);
+        let balance = await ledger.account_balance({ account = Blob.toArray(sourceAccount) });
 
         // Transfer to staking neuron
-        if (balance <= minimumDeposit) {
-            return #Err(#BalanceLow);
-        };
-        let icpReceipt = await ledger.icrc1_transfer({
-            from_subaccount = ?Blob.toArray(subaccount);
-            to              = account;
-            amount          = balance - icpFee;
-            fee             = ?icpFee;
-            memo            = null;
-            created_at_time = ?Nat64.fromNat(Int.abs(Time.now()));
-        });
+         if (Nat64.toNat(balance.e8s) <= minimumDeposit) {
+             return #Err(#BalanceLow);
+         };
+         let fee = { e8s = Nat64.fromNat(icpFee) };
+         let amount = { e8s = balance.e8s - fee.e8s };
+         let icpReceipt = await ledger.transfer({
+             memo : Nat64    = 0;
+             from_subaccount = ?Blob.toArray(subaccount);
+             to              = Blob.toArray(NNS.accountIdFromPrincipal(Principal.fromActor(this), NNS.defaultSubaccount()));
+             amount          = amount;
+             fee             = fee;
+             created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
+         });
 
         switch icpReceipt {
             case (#Err(_)) {
@@ -454,10 +446,10 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     // Execute the pending mints for a specific user on the token canister.
-    private func flushMint(to : Account.Account) : async TxReceipt {
+    private func flushMint(to : Account.Account) : async TokenTypes.ICRC1TransferResult {
         let amount = Option.get(pendingMints.remove(to), 0 : Nat64);
         if (amount == 0) {
-            return #Err(#AmountTooSmall);
+            return #Err(#GenericError({error_code=0; message="amount too small"}))
         };
         Debug.print("minting: " # debug_show(amount) # " to " # debug_show(to));
         try {
@@ -480,7 +472,7 @@ shared(init_msg) actor class Deposits(args: {
         } catch (error) {
             // Mint failed, revert
             pendingMints.put(to, amount + Option.get(pendingMints.remove(to), 0 : Nat64));
-            #Err(#Other(Error.message(error)))
+            #Err(#GenericError({error_code=1; message=Error.message(error)}))
         }
     };
 
@@ -496,22 +488,21 @@ shared(init_msg) actor class Deposits(args: {
         };
         pendingMints := TrieMap.TrieMap(Account.equal, Account.hash);
         try {
-            switch (await token.mintAll(mints)) {
+            switch (await token.mintAllAccounts(mints)) {
                 case (#Err(err)) {
                     // Mint failed, revert
                     for ((to, amount) in mints.vals()) {
                         pendingMints.put(to, Nat64.fromNat(amount) + Option.get(pendingMints.get(to), 0 : Nat64));
                     };
                     #err(switch (err) {
-                        case (#AmountTooSmall) { "amount too small" };
-                        case (#BlockUsed) { "block used" };
-                        case (#ErrorOperationStyle) { "error operation style" };
-                        case (#ErrorTo) { "error to" };
-                        case (#InsufficientAllowance) { "insufficient allowance" };
-                        case (#InsufficientBalance) { "insufficient balance" };
-                        case (#LedgerTrap) { "ledger trap" };
-                        case (#Other(t)) { t };
-                        case (#Unauthorized) { "unauthorized" };
+                        case (#BadBurn(_)) { "amount too small" };
+                        case (#BadFee(_)) { "incorrect fee" };
+                        case (#InsufficientFunds(_)) { "insufficient funds" };
+                        case (#TooOld) { "transaction too old" };
+                        case (#CreatedInFuture(_)) { "transaction created in future" };
+                        case (#Duplicate(_)) { "duplicate transaction" };
+                        case (#TemporarilyUnavailable(_)) { "temporarily unavailable" };
+                        case (#GenericError({ message })) { message };
                     })
                 };
                 case (#Ok(count)) {
@@ -566,7 +557,10 @@ shared(init_msg) actor class Deposits(args: {
         let completedTransferIds = pendingTransfers.completedIds();
 
         // Go fetch the new balance.
-        cachedLedgerBalanceE8s := await ledger.icrc1_balance_of(account);
+        let account = Blob.toArray(NNS.accountIdFromPrincipal(Principal.fromActor(this), NNS.defaultSubaccount()));
+        cachedLedgerBalanceE8s := (await ledger.account_balance({
+            account = account;
+        })).e8s;
 
         // Now that we have an up-to-date balance we can clear the record of
         // our known-completed transfers.
@@ -625,7 +619,7 @@ shared(init_msg) actor class Deposits(args: {
         // balance for the user.
         // TODO: Figure out how to do this with ICRC1. Approve &
         // transferFrom flow
-        let burn = await token.burnForAccount(user, amount);
+        let burn = await token.burnForAccount(user, Nat64.toNat(amount));
         switch (burn) {
             case (#Err(err)) {
                 return #err(#TokenError(err));
@@ -651,7 +645,7 @@ shared(init_msg) actor class Deposits(args: {
             return #err(#InsufficientLiquidity);
         };
 
-        return #ok(withdrawals.createWithdrawal(user, amount, delay));
+        return #ok(withdrawals.createWithdrawal(user.owner, amount, delay));
     };
 
     // Complete withdrawal(s), transferring the ready amount to the
@@ -665,7 +659,7 @@ shared(init_msg) actor class Deposits(args: {
         //
         // Try to parse text as an address or a principal. If a principal, return
         // the default subaccount address for that principal.
-        let toAddress = switch (NNS.accountIdromText(to)) {
+        let toAddress = switch (NNS.accountIdFromText(to)) {
             case (#err(_)) {
                 // Try to parse as a principal
                 try {
@@ -743,7 +737,7 @@ shared(init_msg) actor class Deposits(args: {
 
     // ===== HELPER FUNCTIONS =====
 
-    public shared(msg) func setInitialSnapshot(): async (Text, [(Principal, Nat)]) {
+    public shared(msg) func setInitialSnapshot(): async (Text, [(Account.Account, Nat)]) {
         owners.require(msg.caller);
         await daily.setInitialSnapshot()
     };
@@ -847,7 +841,10 @@ shared(init_msg) actor class Deposits(args: {
 
     public shared(msg) func setTokenMintingAccount(): async () {
         owners.require(msg.caller);
-        await token.setMintingAccount(mintingAccount)
+        await token.setMintingAccount(?{
+            owner = Principal.fromActor(this);
+            subaccount = ?mintingSubaccount;
+        })
     };
 
     // ===== UPGRADE FUNCTIONS =====
@@ -874,7 +871,7 @@ shared(init_msg) actor class Deposits(args: {
         switch (stablePendingMints) {
             case (null) {};
             case (?entries) {
-                pendingMints := TrieMap.fromEntries<Principal, Nat64>(entries.vals(), Principal.equal, Principal.hash);
+                pendingMints := TrieMap.fromEntries<Account.Account, Nat64>(entries.vals(), Account.equal, Account.hash);
                 stablePendingMints := null;
             };
         };

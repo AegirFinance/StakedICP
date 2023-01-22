@@ -78,7 +78,7 @@ module {
 
         private func getAllHolders(): async [(Account.Account, Nat)] {
             return await args.token.getHolderAccounts(0, 0);
-        }
+        };
 
         // ===== GETTER/SETTER FUNCTIONS =====
 
@@ -230,11 +230,11 @@ module {
             for ((to, share) in mints.vals()) {
                 Debug.print("interest: " # debug_show(share) # " to " # debug_show(to));
                 ignore queueMint(to, Nat64.fromNat(share));
-                switch (args.referralTracker.payout(to, share)) {
+                switch (args.referralTracker.payout(to.owner, share)) {
                     case (null) {};
                     case (?(affiliate, payout)) {
                         Debug.print("affiliate: " # debug_show(payout) # " to " # debug_show(affiliate));
-                        ignore queueMint(affiliate, Nat64.fromNat(payout));
+                        ignore queueMint({owner=affiliate; subaccount=null}, Nat64.fromNat(payout));
                         affiliatePayouts := affiliatePayouts + payout;
                         assert(payout <= remainder);
                         remainder -= payout;
@@ -347,12 +347,18 @@ module {
             switch (upgradeData) {
                 case (?#v1(data)) {
                     // Convert the old Principal snapshot to a new Account snapshot
-                    let holders = Buffer.Buffer<(Account.Account, Nat64)>(data.snapshot.size());
-                    for ((principal, balance) in data.snapshot.vals()) {
-                        holders.add((Account.fromPrincipal(principal, null), balance));
+                    let holders = switch (data.snapshot) {
+                        case (null) { null };
+                        case (?snapshot) {
+                            let b = Buffer.Buffer<(Account.Account, Nat)>(snapshot.size());
+                            for ((principal, balance) in snapshot.vals()) {
+                                b.add(({owner=principal; subaccount=null}, balance));
+                            };
+                            ?b.toArray()
+                        };
                     };
                     postupgrade(?#v2({
-                        snapshot = Buffer.toArray(holders);
+                        snapshot = holders;
                         appliedInterest = data.appliedInterest;
                         meanAprMicrobips = data.meanAprMicrobips;
                         merges = data.merges;
