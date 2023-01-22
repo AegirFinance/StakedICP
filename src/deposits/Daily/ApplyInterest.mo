@@ -19,11 +19,18 @@ import Referrals "../Referrals";
 import Staking "../Staking";
 import Ledger "../../nns-ledger";
 import Token "../../DIP20/motoko/src/token";
+import Account "../../DIP20/motoko/src/account";
 
 module {
     public type UpgradeData = {
         #v1: {
             snapshot: ?[(Principal, Nat)];
+            appliedInterest: [ApplyInterestSummary];
+            meanAprMicrobips: Nat64;
+            merges: [[(Nat64, Nat64, Neurons.NeuronResult)]];
+        };
+        #v2: {
+            snapshot: ?[(Account.Account, Nat)];
             appliedInterest: [ApplyInterestSummary];
             meanAprMicrobips: Nat64;
             merges: [[(Nat64, Nat64, Neurons.NeuronResult)]];
@@ -44,7 +51,7 @@ module {
         affiliatePayouts: Nat;
     };
 
-    public type QueueMintFn = (to: Principal, amount: Nat64) -> Nat64;
+    public type QueueMintFn = (to: Account.Account, amount: Nat64) -> Nat64;
 
     // Job is step of the daily process which merges and distributes interest
     // to holders.
@@ -64,14 +71,18 @@ module {
         let microbips : Nat64 = 100_000_000;
 
         // State used across job runs
-        private var snapshot : ?[(Principal, Nat)] = null;
+        private var snapshot : ?[(Account.Account, Nat)] = null;
         private var appliedInterest : Buffer.Buffer<ApplyInterestSummary> = Buffer.Buffer(0);
         private var meanAprMicrobips : Nat64 = 0;
         private var merges : Buffer.Buffer<[(Nat64, Nat64, Neurons.NeuronResult)]> = Buffer.Buffer(10);
 
+        private func getAllHolders(): async [(Account.Account, Nat)] {
+            return await args.token.getHolderAccounts(0, 0);
+        }
+
         // ===== GETTER/SETTER FUNCTIONS =====
 
-        public func setInitialSnapshot(): async (Text, [(Principal, Nat)]) {
+        public func setInitialSnapshot(): async (Text, [(Account.Account, Nat)]) {
             switch (snapshot) {
                 case (null) {
                     let holders = await getAllHolders();
@@ -107,7 +118,7 @@ module {
         // ===== JOB START FUNCTION =====
 
         // Distribute newly earned interest to token holders.
-        public func run(now: Time.Time, root: Principal, queueMint: QueueMintFn): async ApplyInterestResult {
+        public func run(now: Time.Time, root: Account.Account, queueMint: QueueMintFn): async ApplyInterestResult {
             // take a snapshot of the holders for tomorrow's interest.
             let nextHolders = await getAllHolders();
 
@@ -173,7 +184,7 @@ module {
             merges.add(m);
         };
 
-        private func applyInterestToToken(now: Time.Time, interest: Nat, holders: [(Principal, Nat)], root: Principal, queueMint: QueueMintFn): ApplyInterestSummary {
+        private func applyInterestToToken(now: Time.Time, interest: Nat, holders: [(Account.Account, Nat)], root: Account.Account, queueMint: QueueMintFn): ApplyInterestSummary {
             // Calculate everything
             var beforeSupply : Nat = 0;
             for (i in Iter.range(0, holders.size() - 1)) {
@@ -199,7 +210,7 @@ module {
             var remainder = interest;
 
             // Calculate the holders portions
-            var mints = Buffer.Buffer<(Principal, Nat)>(holders.size());
+            var mints = Buffer.Buffer<(Account.Account, Nat)>(holders.size());
             var applied : Nat = 0;
             for (i in Iter.range(0, holders.size() - 1)) {
                 let (to, balance) = holders[i];
@@ -320,17 +331,11 @@ module {
             result
         };
 
-        private func getAllHolders(): async [(Principal, Nat)] {
-            let info = await args.token.getTokenInfo();
-            // *2 here is because this is not atomic, so if anyone joins in the
-            // meantime.
-            return await args.token.getHolders(0, info.holderNumber*2);
-        };
 
         // ===== UPGRADE FUNCTIONS =====
 
         public func preupgrade(): ?UpgradeData {
-            return ?#v1({
+            return ?#v2({
                 snapshot = snapshot;
                 appliedInterest = appliedInterest.toArray();
                 meanAprMicrobips = meanAprMicrobips;
@@ -341,6 +346,19 @@ module {
         public func postupgrade(upgradeData : ?UpgradeData) {
             switch (upgradeData) {
                 case (?#v1(data)) {
+                    // Convert the old Principal snapshot to a new Account snapshot
+                    let holders = Buffer.Buffer<(Account.Account, Nat64)>(data.snapshot.size());
+                    for ((principal, balance) in data.snapshot.vals()) {
+                        holders.add((Account.fromPrincipal(principal, null), balance));
+                    };
+                    postupgrade(?#v2({
+                        snapshot = Buffer.toArray(holders);
+                        appliedInterest = data.appliedInterest;
+                        meanAprMicrobips = data.meanAprMicrobips;
+                        merges = data.merges;
+                    }));
+                };
+                case (?#v2(data)) {
                     snapshot := data.snapshot;
                     appliedInterest := Buffer.Buffer<ApplyInterestSummary>(data.appliedInterest.size());
                     for (x in data.appliedInterest.vals()) {

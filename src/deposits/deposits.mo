@@ -804,7 +804,7 @@ shared(init_msg) actor class Deposits(args: {
                 name = "dailyHeartbeat";
                 interval = 1 * day;
                 function = func(now: Time.Time): async Result.Result<Any, Text> {
-                    let root = Principal.fromActor(this);
+                    let root = {owner = Principal.fromActor(this); subaccount = null};
                     #ok(await daily.run(
                         now,
                         root,
