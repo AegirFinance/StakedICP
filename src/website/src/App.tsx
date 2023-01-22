@@ -30,8 +30,8 @@ const globalStyles = globalCss({
 export default function App() {
   globalStyles();
 
-  // const maintenance = React.useMemo(() => !(new URLSearchParams(location.search).get("preview")), [location.search]);
-  const maintenance = false;
+  const maintenance = React.useMemo(() => !(new URLSearchParams(location.search).get("preview")), [location.search]);
+  // const maintenance = false;
 
   return (
     <div>
