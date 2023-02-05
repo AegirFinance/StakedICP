@@ -35,7 +35,7 @@ export default function App() {
 
   return (
     <div>
-      <WalletProvider whitelist={[deposits.canisterId, token.canisterId].filter(x => !!x) as string[]} host={process.env.NETWORK}>
+      <WalletProvider whitelist={[deposits.canisterId, token.canisterId].filter(x => !!x) as string[]} host={process.env.NETWORK} dev={process.env.NODE_ENV === "development"}>
         {maintenance ? (
           <Maintenance />
         ) : (

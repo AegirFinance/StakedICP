@@ -1,6 +1,6 @@
 import React from "react";
 import { useLocalStorage } from "../hooks";
-import { Connector, Data, PlugConnector } from "./connectors";
+import { BitfinityConnector, Connector, Data, PlugConnector } from "./connectors";
 
 type State = {
   cacheBuster: number;
@@ -40,12 +40,13 @@ export interface Props {
   connectorStorageKey?: string
   /**
    * Connectors used for linking accounts
-   * @default [new PlugConnector()]
+   * @default [new BitfinityConnector(), new PlugConnector()]
    */
   connectors?: Connector[] | (() => Connector[])
 
   whitelist?: string[];
   host?: string;
+  dev?: boolean;
 }
 
 // Provider to wrap the app in to make wallet data available globally.
@@ -55,7 +56,8 @@ export function Provider({
   connectorStorageKey = 'icp-react.wallet',
   whitelist,
   host,
-  connectors: connectors_ = [new PlugConnector({whitelist, host})],
+  dev,
+  connectors: connectors_ = [new BitfinityConnector({whitelist, host, dev}), new PlugConnector({whitelist, host})],
 }: Props) {
   const [lastUsedConnector, setLastUsedConnector] = useLocalStorage<
     string | null

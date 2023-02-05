@@ -1,6 +1,7 @@
 import { ActorSubclass } from "@dfinity/agent";
 import { Principal } from "@dfinity/principal";
 export * from "./PlugConnector";
+export * from "./BitfinityConnector";
 import type { Balance, CreateActor, RequestConnectParams, RequestTransferParams } from "plug";
 
 export interface Connector {
