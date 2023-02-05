@@ -94,7 +94,7 @@ module.exports = {
       ],
     }),
     new webpack.EnvironmentPlugin({
-      NETWORK: network() == "local" ? "http://localhost:8080" : "https://mainnet.dfinity.network",
+      NETWORK: network() == "local" ? "http://localhost:8000" : "https://mainnet.dfinity.network",
       NODE_ENV: process.env.NODE_ENV,
       DEPOSITS_CANISTER_ID: canisters["deposits"],
       TOKEN_CANISTER_ID: canisters["token"],
@@ -104,12 +104,12 @@ module.exports = {
       process: require.resolve("process/browser"),
     }),
   ],
-  // proxy /api to port 8080 during development
+  // proxy /api to port 8000 during development
   devServer: {
-    port: 8000,
+    port: 3000,
     proxy: {
       "/api": {
-        target: "http://localhost:8080",
+        target: "http://localhost:8000",
         changeOrigin: true,
         pathRewrite: {
           "^/api": "/api",

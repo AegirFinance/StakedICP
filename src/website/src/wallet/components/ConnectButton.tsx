@@ -23,13 +23,13 @@ export function ConnectButton({
   const [{ data: account }, disconnect] = useAccount();
   const [_, connect] = useConnect();
 
-  const switchAndConnect = React.useCallback((name: string) => {
+  const switchAndConnect = (name: string) => {
     let connector = (state.connectors ?? []).find(c => c.name === name);
     if (!connector) {
       throw new Error(`${name} not configured`);
     }
     connect(connector);
-  }, [connect, state.connectors]);
+  };
 
   if (account?.principal) {
     return (
@@ -56,26 +56,24 @@ export function ConnectButton({
       </DialogTrigger>
       <DialogContent>
         <DialogTitle>Connect your wallet</DialogTitle>
-        <DialogDescription>
-          <Flex css={{
-            flexDirection: "row",
-            justifyContent: "center",
-            flexWrap: 'wrap',
-            paddingTop: '1rem',
-            '> *': {
-              marginLeft: '0.75rem',
-              marginRight: '0.75rem',
-            }
-          }}>
-            <WalletButton onClick={() => { switchAndConnect("Plug") }}>
-              {<PlugLight />}
-              <span>Plug Wallet</span>
-            </WalletButton>
-            <WalletButton onClick={() => { switchAndConnect("Bitfinity") }}>
-              <span>Bitfinity Wallet</span>
-            </WalletButton>
-          </Flex>
-        </DialogDescription>
+        <Flex css={{
+          flexDirection: "row",
+          justifyContent: "center",
+          flexWrap: 'wrap',
+          paddingTop: '1rem',
+          '> *': {
+            marginLeft: '0.75rem',
+            marginRight: '0.75rem',
+          }
+        }}>
+          <WalletButton onClick={() => { switchAndConnect("Plug") }}>
+            {<PlugLight />}
+            <span>Plug Wallet</span>
+          </WalletButton>
+          <WalletButton onClick={() => { switchAndConnect("Bitfinity") }}>
+            <span>Bitfinity Wallet</span>
+          </WalletButton>
+        </Flex>
       </DialogContent>
     </Dialog>
   );

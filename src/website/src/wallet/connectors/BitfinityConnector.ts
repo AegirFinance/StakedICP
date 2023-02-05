@@ -61,9 +61,20 @@ export class BitfinityConnector {
   }
 
   async getBalances(): Promise<Balance[]> {
-    throw new Error("TODO: Implement getBalances");
-    // const ledger = await this.getICPLedger();
-    // await ledger.icrc1_balance();
+    const icp = await this.getICPLedger();
+    const balance = await icp.account_balance({
+         account: [...Buffer.from(await this.getAccountId(), 'hex')]
+    });
+    return [
+        {
+            amount: Number(balance.e8s) / 1e8,
+            canisterId: ledger.canisterId ?? null,
+            image: null,
+            name: "ICP",
+            symbol: "ICP",
+            value: Number(balance.e8s),
+        }
+    ];
   }
 
   async createActor<T>(options: CreateActor<T>): Promise<ActorSubclass<T>> {
@@ -81,9 +92,9 @@ export class BitfinityConnector {
   }
 
   async transfer(params: RequestTransferParams): Promise<{ height: bigint }> {
-    const ledger = await this.getICPLedger();
+    const icp = await this.getICPLedger();
     // TODO: Use all the request transfer params here
-    const result = await ledger.transfer({
+    const result = await icp.transfer({
         to: [...Buffer.from(params.to, 'hex')],
         fee: { e8s: BigInt(10000) },
         amount: { e8s: BigInt(params.amount) },
