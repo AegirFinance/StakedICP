@@ -15,7 +15,7 @@ export interface BitfinityConnectorOptions extends ConnectorOptions {
 // TODO: Extend EventEmitter
 // TODO: This needs to track the selected wallet.
 export class BitfinityConnector {
-  readonly name = "BitfinityWallet";
+  readonly name = "Bitfinity";
   readonly ready = typeof window !== 'undefined' && !!window.ic?.infinityWallet;
   private infinityWallet: BitfinityWallet | undefined;
   private options: BitfinityConnectorOptions;

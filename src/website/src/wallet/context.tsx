@@ -3,25 +3,21 @@ import { useLocalStorage } from "../hooks";
 import { BitfinityConnector, Connector, Data, PlugConnector } from "./connectors";
 
 type State = {
+  /** Flag for triggering refetch */
   cacheBuster: number;
+  /** Flag for when connection is in progress */
   connecting?: boolean;
+  /** Active connector */
   connector?: Connector;
+  /** Active data */
   data?: Data|null;
   error?: Error;
 };
 
 type ContextValue = {
-  state: {
-    /** Flag for triggering refetch */
-    cacheBuster: State['cacheBuster']
-    /** Flag for when connection is in progress */
-    connecting?: State['connecting']
-    /** Active connector */
-    connector?: State['connector']
+  state: State & {
     /** Connectors used for linking accounts */
     connectors: Connector[]
-    /** Active data */
-    data?: State['data']
   }
   setState: React.Dispatch<React.SetStateAction<State>>
   setLastUsedConnector: (newValue: string | null) => void

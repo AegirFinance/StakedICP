@@ -1,4 +1,5 @@
 import * as deposits from "../../declarations/deposits";
+import * as ledger from "../../declarations/ledger";
 import * as token from "../../declarations/token";
 import React from 'react';
 import { BrowserRouter, Route, Routes } from "react-router-dom";
@@ -35,7 +36,7 @@ export default function App() {
 
   return (
     <div>
-      <WalletProvider whitelist={[deposits.canisterId, token.canisterId].filter(x => !!x) as string[]} host={process.env.NETWORK} dev={process.env.NODE_ENV === "development"}>
+      <WalletProvider whitelist={[deposits.canisterId, ledger.canisterId, token.canisterId].filter(x => !!x) as string[]} host={process.env.NETWORK} dev={process.env.NODE_ENV === "development"}>
         {maintenance ? (
           <Maintenance />
         ) : (
