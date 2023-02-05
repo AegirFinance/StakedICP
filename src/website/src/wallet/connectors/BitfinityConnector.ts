@@ -81,7 +81,10 @@ export class BitfinityConnector {
     if (!this.infinityWallet) {
       throw new Error("BitfinityWallet not found");
     }
-    return await this.infinityWallet.createActor(options)
+    return await this.infinityWallet.createActor({
+      host: this.options.host,
+      ...options,
+    });
   }
 
   async getPrincipal(): Promise<Principal> {
