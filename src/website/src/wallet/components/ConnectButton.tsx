@@ -66,13 +66,13 @@ export function ConnectButton({
             marginRight: '0.75rem',
           }
         }}>
-          <WalletButton onClick={() => { switchAndConnect("Plug") }}>
-            <PlugLogo />
-            <span>Plug Wallet</span>
-          </WalletButton>
           <WalletButton onClick={() => { switchAndConnect("Bitfinity") }}>
             <BitfinityLogo />
             <span>Bitfinity Wallet</span>
+          </WalletButton>
+          <WalletButton onClick={() => { switchAndConnect("Plug") }}>
+            <PlugLogo />
+            <span>Plug Wallet</span>
           </WalletButton>
         </Flex>
       </DialogContent>
