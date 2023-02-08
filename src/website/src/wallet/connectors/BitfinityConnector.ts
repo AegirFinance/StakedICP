@@ -1,7 +1,7 @@
 import { ActorSubclass } from "@dfinity/agent";
 import { Principal } from "@dfinity/principal";
-import * as nnsLedger from '../../../../declarations/nns-ledger';
-import { _SERVICE as NNSLedger } from "../../../../declarations/nns-ledger/nns-ledger.did.d.js";
+import * as nnsLedger from '../../nns-ledger';
+import { _SERVICE as NNSLedger } from "../../nns-ledger/ledger";
 import { ConnectorOptions, Data } from "./index";
 import { Balance, RequestTransferParams } from "plug";
 import { BitfinityWallet, CreateActor } from "bitfinity";
@@ -98,7 +98,7 @@ export class BitfinityConnector {
     const icp = await this.getICPLedger();
     // TODO: Use all the request transfer params here
     const result = await icp.transfer({
-        to: [...Buffer.from(params.to, 'hex')],
+        to: Uint8Array.from(Buffer.from(params.to, 'hex')),
         fee: { e8s: BigInt(10000) },
         amount: { e8s: BigInt(params.amount) },
         memo: BigInt(0),

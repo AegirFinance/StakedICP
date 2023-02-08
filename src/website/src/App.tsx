@@ -1,6 +1,6 @@
 import * as deposits from "../../declarations/deposits";
-import * as nnsLedger from "../../declarations/nns-ledger";
 import * as token from "../../declarations/token";
+import * as nnsLedger from "./nns-ledger";
 import React from 'react';
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { GeoipModal, Maintenance } from './components';
