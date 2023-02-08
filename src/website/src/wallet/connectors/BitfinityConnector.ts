@@ -1,7 +1,7 @@
 import { ActorSubclass } from "@dfinity/agent";
 import { Principal } from "@dfinity/principal";
-import * as ledger from '../../../../declarations/ledger';
-import { _SERVICE as Ledger } from "../../../../declarations/ledger/ledger.did.d.js";
+import * as nnsLedger from '../../../../declarations/nns-ledger';
+import { _SERVICE as NNSLedger } from "../../../../declarations/nns-ledger/nns-ledger.did.d.js";
 import { ConnectorOptions, Data } from "./index";
 import { Balance, RequestTransferParams } from "plug";
 import { BitfinityWallet, CreateActor } from "bitfinity";
@@ -68,7 +68,7 @@ export class BitfinityConnector {
     return [
         {
             amount: Number(balance.e8s) / 1e8,
-            canisterId: ledger.canisterId ?? null,
+            canisterId: nnsLedger.canisterId ?? null,
             image: null,
             name: "ICP",
             symbol: "ICP",
@@ -112,14 +112,14 @@ export class BitfinityConnector {
     return { height: result.Ok };
   }
 
-  async getICPLedger(): Promise<ActorSubclass<Ledger>> {
-      if (!ledger.canisterId) {
+  async getICPLedger(): Promise<ActorSubclass<NNSLedger>> {
+      if (!nnsLedger.canisterId) {
         // TODO: Handle missing canisterId better.
         throw new Error("Ledger canister id missing");
       }
       return await this.createActor({
-          canisterId: ledger.canisterId,
-          interfaceFactory: ledger.idlFactory,
+          canisterId: nnsLedger.canisterId,
+          interfaceFactory: nnsLedger.idlFactory,
           host: this.options.host,
       });
   }

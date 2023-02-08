@@ -85,7 +85,7 @@ module.exports = {
       NETWORK: network() == "local" ? "http://localhost:8080" : "https://mainnet.dfinity.network",
       NODE_ENV: process.env.NODE_ENV,
       DEPOSITS_CANISTER_ID: canisters["deposits"],
-      LEDGER_CANISTER_ID: canisters["ledger"],
+      NNS_LEDGER_CANISTER_ID: canisters["nns-ledger"],
       TOKEN_CANISTER_ID: canisters["token"],
     }),
     new webpack.ProvidePlugin({
