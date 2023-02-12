@@ -63,7 +63,7 @@ export class BitfinityConnector {
   async getBalances(): Promise<Balance[]> {
     const icp = await this.getICPLedger();
     const balance = await icp.account_balance({
-         account: [...Buffer.from(await this.getAccountId(), 'hex')]
+         account: Uint8Array.from(Buffer.from(await this.getAccountId(), 'hex')),
     });
     return [
         {
