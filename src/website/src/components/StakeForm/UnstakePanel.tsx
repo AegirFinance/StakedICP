@@ -377,17 +377,16 @@ function UnstakeDialog({
         <>
           <DialogTitle>Are you sure?</DialogTitle>
           <DialogDescription>
-            <p>This action cannot be undone. Your {amount} stICP will be converted
-            to {amount} ICP.</p>
-            <p>
-              {delay === undefined ? (
-                 <ActivityIndicator /> 
-              ) : delay <= 0 ? (
-                "They will be available instantly."
-              ) : (
-                `They will be locked for up to ${format.delay(delay)} while this withdrawal is pending.`
-              )}
-            </p>
+            This action cannot be undone. Your {amount} stICP will be converted to {amount} ICP.
+          </DialogDescription>
+          <DialogDescription>
+            {delay === undefined ? (
+               <ActivityIndicator />
+            ) : delay <= 0 ? (
+              "They will be available instantly."
+            ) : (
+              `They will be locked for up to ${format.delay(delay)} while this withdrawal is pending.`
+            )}
           </DialogDescription>
         </>
       ) : state === "pending" ? (
@@ -478,7 +477,9 @@ function CompleteUnstakeButton({
         <>
           <DialogTitle>Destination</DialogTitle>
           <DialogDescription css={{display: "flex", flexDirection: "column", alignItems: "stretch"}}>
-            <p>Please enter the destination address or principal to receive the ICP:</p>
+            Please enter the destination address or principal to receive the ICP:
+          </DialogDescription>
+          <DialogDescription css={{display: "flex", flexDirection: "column", alignItems: "stretch"}}>
             <Input
               type="text"
               name="to" 
