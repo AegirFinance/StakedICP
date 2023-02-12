@@ -62,7 +62,7 @@ echo
 echo == Initial Data
 echo
 
-dfx canister call setSchedulerPaused '(false)'
+dfx canister call deposits setSchedulerPaused '(false)'
 dfx canister call deposits applyInterest "(58000: nat64, null)"
 
 echo

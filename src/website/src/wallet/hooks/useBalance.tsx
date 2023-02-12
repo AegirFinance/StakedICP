@@ -84,7 +84,6 @@ export function useBalance({
             value,
           };
         } else {
-          // const balances = await connector.getBalances(config_.addressOrName);
           const balances = await connector.getBalances();
           const b = balances.find(b => b.symbol === 'ICP' && b.canisterId === null);
           if (!b) throw new Error("ICP balance not found");

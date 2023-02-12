@@ -1,27 +1,23 @@
 import React from "react";
 import { useLocalStorage } from "../hooks";
-import { Connector, Data, PlugConnector } from "./connectors";
+import { BitfinityConnector, Connector, Data, PlugConnector } from "./connectors";
 
 type State = {
+  /** Flag for triggering refetch */
   cacheBuster: number;
+  /** Flag for when connection is in progress */
   connecting?: boolean;
+  /** Active connector */
   connector?: Connector;
+  /** Active data */
   data?: Data|null;
   error?: Error;
 };
 
 type ContextValue = {
-  state: {
-    /** Flag for triggering refetch */
-    cacheBuster: State['cacheBuster']
-    /** Flag for when connection is in progress */
-    connecting?: State['connecting']
-    /** Active connector */
-    connector?: State['connector']
+  state: State & {
     /** Connectors used for linking accounts */
     connectors: Connector[]
-    /** Active data */
-    data?: State['data']
   }
   setState: React.Dispatch<React.SetStateAction<State>>
   setLastUsedConnector: (newValue: string | null) => void
@@ -40,12 +36,13 @@ export interface Props {
   connectorStorageKey?: string
   /**
    * Connectors used for linking accounts
-   * @default [new PlugConnector()]
+   * @default [new BitfinityConnector(), new PlugConnector()]
    */
   connectors?: Connector[] | (() => Connector[])
 
   whitelist?: string[];
   host?: string;
+  dev?: boolean;
 }
 
 // Provider to wrap the app in to make wallet data available globally.
@@ -55,7 +52,8 @@ export function Provider({
   connectorStorageKey = 'icp-react.wallet',
   whitelist,
   host,
-  connectors: connectors_ = [new PlugConnector({whitelist, host})],
+  dev,
+  connectors: connectors_ = [new BitfinityConnector({whitelist, host, dev}), new PlugConnector({whitelist, host})],
 }: Props) {
   const [lastUsedConnector, setLastUsedConnector] = useLocalStorage<
     string | null

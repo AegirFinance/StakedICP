@@ -4,7 +4,7 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const TerserPlugin = require("terser-webpack-plugin");
 const CopyPlugin = require("copy-webpack-plugin");
 
-let localCanisters, prodCanisters, canisters;
+let canisters;
 
 function network() {
   return process.env.DFX_NETWORK ||
@@ -13,22 +13,9 @@ function network() {
 
 
 function initCanisterIds() {
-  try {
-    localCanisters = require(path.resolve(".dfx", "local", "canister_ids.json"));
-  } catch (error) {
-    console.log("No local canister_ids.json found. Continuing production");
-  }
-  try {
-    prodCanisters = require(path.resolve("canister_ids.json"));
-  } catch (error) {
-    console.log("No production canister_ids.json found. Continuing with local");
-  }
-
-  canisters = network() === "local" ? localCanisters : prodCanisters;
-
+  canisters = require(path.resolve("canister_ids.json"));
   for (const canister in canisters) {
-    process.env[canister.toUpperCase() + "_CANISTER_ID"] =
-      canisters[canister][network()];
+    canisters[canister] = canisters[canister][network()];
   }
 }
 initCanisterIds();
@@ -95,8 +82,8 @@ module.exports = {
     }),
     new webpack.EnvironmentPlugin({
       NETWORK: network() == "local" ? "http://localhost:8080" : "https://mainnet.dfinity.network",
-      NODE_ENV: process.env.NODE_ENV,
       DEPOSITS_CANISTER_ID: canisters["deposits"],
+      NNS_LEDGER_CANISTER_ID: canisters["nns-ledger"],
       TOKEN_CANISTER_ID: canisters["token"],
     }),
     new webpack.ProvidePlugin({
@@ -106,7 +93,7 @@ module.exports = {
   ],
   // proxy /api to port 8080 during development
   devServer: {
-    port: 8000,
+    port: 3000,
     proxy: {
       "/api": {
         target: "http://localhost:8080",

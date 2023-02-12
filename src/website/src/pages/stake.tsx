@@ -169,6 +169,26 @@ function FAQ({neurons}: {neurons: string[]|null}) {
         </AccordionContent>
       </AccordionItem>
 
+      <AccordionItem value="add-stICP-to-bitfinity">
+        <AccordionHeader>
+          <AccordionTrigger>
+            <span>How do I add stICP to my Bitfinity Wallet?</span>
+            <AccordionChevron aria-hidden />
+          </AccordionTrigger>
+        </AccordionHeader>
+        <AccordionContent>
+          <ol>
+            <li>Open your Bitfinity Wallet</li>
+            <li>Click the link that says "Import Token" below your token list</li>
+            <li>Click "Custom", to add a custom token</li>
+            <li>For "Token Canister ID", paste: <Code>qfr6e-biaaa-aaaak-qafuq-cai</Code></li>
+            <li>For "Token Standard", select: <Code>ICRC1</Code></li>
+            <li>Click "Continue"</li>
+            <li>"Staked ICP" should now appear in your token list, with your balance</li>
+          </ol>
+        </AccordionContent>
+      </AccordionItem>
+
       <AccordionItem value="add-stICP-to-plug">
         <AccordionHeader>
           <AccordionTrigger>
