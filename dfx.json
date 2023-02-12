@@ -107,6 +107,7 @@
       "candid": "candid/nns-sns-wasm.did",
       "remote": {
         "id": {
+          "ic": "qaa6y-5yaaa-aaaaa-aaafa-cai",
           "local": "qaa6y-5yaaa-aaaaa-aaafa-cai"
         }
       },
