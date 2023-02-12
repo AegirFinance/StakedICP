@@ -59,21 +59,35 @@ export function ConnectButton({
         <Flex css={{
           flexDirection: "row",
           justifyContent: "center",
+          alignItems: "stretch",
           flexWrap: 'wrap',
           paddingTop: '1rem',
           '> *': {
             marginLeft: '0.75rem',
             marginRight: '0.75rem',
-          }
+          },
+          button: {
+            height: '144px',
+          },
         }}>
           <WalletButton onClick={() => { switchAndConnect("Bitfinity") }}>
             <BitfinityLogo />
-            <span>Bitfinity Wallet</span>
+            <h3>Bitfinity Wallet</h3>
           </WalletButton>
-          <WalletButton onClick={() => { switchAndConnect("Plug") }}>
-            <PlugLogo />
-            <span>Plug Wallet</span>
-          </WalletButton>
+          <Flex css={{
+            flexDirection: "column",
+            alignItems: "stretch",
+            h5: {
+              marginTop: '0.5rem',
+            }
+          }}>
+            <WalletButton onClick={() => { switchAndConnect("Plug") }}>
+              <PlugLogo />
+              <h3>Plug Wallet</h3>
+            </WalletButton>
+            <h5>(Deprecated)</h5>
+            <h6>Will be removed <time dateTime="2023-04-12T12:00Z">April 16, 2023</time>.</h6>
+          </Flex>
         </Flex>
       </DialogContent>
     </Dialog>
@@ -83,7 +97,7 @@ export function ConnectButton({
 const WalletButton = styled('button', {
   display: 'flex',
   flexDirection: 'column',
-  justifyContent: 'flex-end',
+  justifyContent: 'center',
   alignItems: 'center',
   border: 'none',
   padding: '1rem',
