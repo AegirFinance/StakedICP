@@ -145,7 +145,7 @@
   "networks": {
     "ic": {
       "providers": [
-        "https://mainnet.dfinity.network"
+        "https://ic0.app"
       ],
       "type": "persistent"
     },

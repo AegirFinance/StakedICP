@@ -81,7 +81,7 @@ module.exports = {
       ],
     }),
     new webpack.EnvironmentPlugin({
-      NETWORK: network() == "local" ? "http://localhost:8080" : "https://mainnet.dfinity.network",
+      NETWORK: network() == "local" ? "http://localhost:8080" : "https://ic0.app",
       DEPOSITS_CANISTER_ID: canisters["deposits"],
       NNS_LEDGER_CANISTER_ID: canisters["nns-ledger"],
       TOKEN_CANISTER_ID: canisters["token"],
