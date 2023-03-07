@@ -160,7 +160,7 @@ function FAQ({neurons}: {neurons: string[]|null}) {
           </p>
 
           <p>
-          stICP tokens are a standard <a href="https://github.com/Psychedelic/DIP20">DIP20 token</a>, allowing you to earn ICP staking rewards while benefitting from e.g. yields across decentralised finance products. They do not confer any voting or governance rights.
+          stICP tokens are a standard <a href="https://github.com/dfinity/ICRC-1">ICRC-1 token</a>, allowing you to earn ICP staking rewards while benefitting from e.g. yields across decentralised finance products. They do not confer any voting or governance rights.
           </p>
 
           <p>
@@ -179,12 +179,11 @@ function FAQ({neurons}: {neurons: string[]|null}) {
         <AccordionContent>
           <ol>
             <li>Open your Bitfinity Wallet</li>
-            <li>Click the link that says "Import Token" below your token list</li>
-            <li>Click "Custom", to add a custom token</li>
-            <li>For "Token Canister ID", paste: <Code>qfr6e-biaaa-aaaak-qafuq-cai</Code></li>
-            <li>For "Token Standard", select: <Code>ICRC1</Code></li>
-            <li>Click "Continue"</li>
-            <li>"Staked ICP" should now appear in your token list, with your balance</li>
+            <li>Click the blue "+" button in the bottom right of the token list</li>
+            <li>Click "Add Token"</li>
+            <li>Search for <Code>stICP</Code></li>
+            <li>Select stICP from the list</li>
+            <li>"stICP" should now appear in your token list, with your balance</li>
           </ol>
         </AccordionContent>
       </AccordionItem>
@@ -202,7 +201,7 @@ function FAQ({neurons}: {neurons: string[]|null}) {
             <li>Click the large blue plus icon to add a token</li>
             <li>Click "Custom", to add a custom token</li>
             <li>For "Token Canister ID", paste: <Code>qfr6e-biaaa-aaaak-qafuq-cai</Code></li>
-            <li>For "Token Standard", select: <Code>DIP20</Code></li>
+            <li>For "Token Standard", select: <Code>ICRC1</Code></li>
             <li>Click "Continue"</li>
             <li>Click "Add"</li>
             <li>"Staked ICP" should now appear in your plug token list, with your balance</li>
