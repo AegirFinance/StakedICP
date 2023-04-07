@@ -1,0 +1,14 @@
+[package]
+name = "signing"
+version = "0.1.0"
+authors = ["0xAegir@protonmail.com"]
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+serde = "1"
+candid = "0.8.4"
+ic-cdk = "0.7.1"

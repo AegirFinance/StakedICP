@@ -38,6 +38,7 @@ ${ORIGINAL_STAKING_NEURON_ID}
 EOM
 )"
     OWNERS='principal "b66ir-rprad-rut4a-acjje-naq3d-ymndg-itex7-47hrz-vvzqy-3le4a-eae"; principal "ckbyu-bzwwp-bxvwo-ewhjd-7ewsx-7wux3-c3foy-gp62f-enftx-nec3u-wqe"; principal "dtwfm-dtbib-y277g-oeali-iu4z4-m66x5-lofpb-oytcd-ursw2-2ne77-3qe"'
+    SIGNING_KEY_ID="key_1"
     export NODE_ENV=production
 
     if [[ "$MODE" == "reinstall" ]]; then
@@ -54,6 +55,7 @@ EOM
     STAKING_NEURONS="$(local_neurons | tail -n +2)"
 
     OWNERS="principal \"$(dfx identity get-principal)\""
+    SIGNING_KEY_ID="dfx_test_key"
     export NODE_ENV=development
     ;;
 
@@ -105,6 +107,21 @@ EOM
 
 fi
 
+if [[ "$CANISTER" == "" ]] || [[ "$CANISTER" == "signing" ]]; then
+
+echo
+echo == Install signing.
+echo
+
+canister install signing --mode="$MODE" --argument "$(cat << EOM
+(record {
+  owners = vec { $OWNERS; principal "$(canister id deposits)" };
+  key_id = "$SIGNING_KEY_ID";
+})
+EOM
+)"
+
+fi
 
 if [[ "$CANISTER" == "" ]] || [[ "$CANISTER" == "deposits" ]]; then
 

@@ -114,6 +114,11 @@
       "type": "custom",
       "wasm": ""
     },
+    "signing": {
+      "candid": "src/signing/signing.did",
+      "package": "signing",
+      "type": "rust"
+    },
     "token": {
       "main": "src/DIP20/motoko/src/token.mo",
       "type": "motoko"

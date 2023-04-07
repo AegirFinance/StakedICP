@@ -1,0 +1,5 @@
+service : {
+  get_principal : () -> (variant { Ok: record { p: principal; }; Err: text });
+  public_key : () -> (variant { Ok: record { public_key: blob; }; Err: text });
+  sign : (blob) -> (variant { Ok: record { signature: blob; }; Err: text });
+}
