@@ -37,6 +37,7 @@ module {
         accountId : NNS.AccountIdentifier;
         dissolveState : ?Governance.DissolveState;
         cachedNeuronStakeE8s : Nat64;
+        stakedMaturityE8sEquivalent: ?Nat64;
     };
 
     public type NeuronsError = {
@@ -127,23 +128,28 @@ module {
 
         // ===== NEURON INFO FUNCTIONS =====
 
-        // Fetch maturity info for a list of neuron ids, as an array of [(id, e8s)].
-        // TODO: try/catch error handling on await here?
-        public func maturities(ids: [Nat64]): async [(Nat64, Nat64)] {
+        // list fetches a bunch of neurons by ids
+        public func list(ids: [Nat64]): async [Neuron] {
             let response = await governance.list_neurons({
                 neuron_ids = ids;
                 include_neurons_readable_by_caller = false;
             });
-            let b = Buffer.Buffer<(Nat64, Nat64)>(response.full_neurons.size());
+            let b = Buffer.Buffer<Neuron>(response.full_neurons.size());
             for (neuron in response.full_neurons.vals()) {
                 switch (neuron.id) {
                     case (null) { };
                     case (?id) {
-                        b.add((id.id, neuron.maturity_e8s_equivalent));
+                        b.add({
+                            id = id.id;
+                            accountId = NNS.accountIdFromPrincipal(args.governance, Blob.fromArray(neuron.account));
+                            dissolveState = neuron.dissolve_state;
+                            cachedNeuronStakeE8s = neuron.cached_neuron_stake_e8s;
+                            stakedMaturityE8sEquivalent = neuron.staked_maturity_e8s_equivalent;
+                        });
                     };
                 };
             };
-            return b.toArray()
+            b.toArray()
         };
 
         // Refresh a neuron's balance and info
@@ -171,6 +177,7 @@ module {
                             accountId = NNS.accountIdFromPrincipal(args.governance, Blob.fromArray(neuron.account));
                             dissolveState = neuron.dissolve_state;
                             cachedNeuronStakeE8s = neuron.cached_neuron_stake_e8s;
+                            stakedMaturityE8sEquivalent = neuron.staked_maturity_e8s_equivalent;
                         });
                     };
                 };
@@ -180,65 +187,6 @@ module {
         };
 
         // ===== PROPOSAL COMMAND FUNCTIONS =====
-
-        public func mergeMaturity(id: Nat64, percentage: Nat32): async NeuronResult {
-            // We need re-fetch maturity here to ensure that this proposal
-            // passes. Otherwise we'll be charged for a failed proposal.
-            let maturity = Option.get((await maturities([id])).vals().next(), (id, 0 : Nat64)).1;
-            if (maturity <= icpFee) {
-                return #err(#InsufficientMaturity);
-            };
-
-            await doMergeMaturity(id, percentage);
-        };
-
-        public func mergeMaturities(ids: [Nat64], percentage: Nat32): async [(Nat64, Nat64, NeuronResult)] {
-            let b = Buffer.Buffer<(Nat64, Nat64, NeuronResult)>(ids.size());
-
-            // We need re-fetch maturities here to ensure that this
-            // proposal passes. Otherwise we'll be charged for a failed proposal.
-            for ((id, maturity) in (await maturities(ids)).vals()) {
-                let result = if (maturity <= icpFee) {
-                   #err(#InsufficientMaturity)
-                } else {
-                   await doMergeMaturity(id, percentage)
-                };
-                b.add((id, maturity, result));
-            };
-            return b.toArray();
-        };
-
-        private func doMergeMaturity(id: Nat64, percentage: Nat32): async NeuronResult {
-            let title = "Merge " # Nat32.toText(percentage) # "% of maturity for neuron " # Nat64.toText(id);
-            try {
-                let proposal = await propose({
-                    url = "https://forum.dfinity.org";
-                    title = ?title;
-                    action = ?#ManageNeuron({
-                        id = null;
-                        command = ?#StakeMaturity({
-                            percentage_to_stake = ?percentage
-                        });
-                        neuron_id_or_subaccount = ?#NeuronId({ id = id });
-                    });
-                    summary = title;
-                });
-                switch (proposal) {
-                    case (#err(#GovernanceError({error_type = 11}))) {
-                        // Insufficient maturity
-                        return #err(#InsufficientMaturity);
-                    };
-                    case (#err(err)) {
-                        return #err(err);
-                    };
-                    case (#ok(_)) {
-                        return await refresh(id);
-                    };
-                };
-            } catch (error) {
-                return #err(#Other(Error.message(error)));
-            };
-        };
 
         public func split(id: Nat64, amount_e8s: Nat64): async NeuronResult {
             if (amount_e8s < minimumStake + icpFee) {
@@ -356,6 +304,7 @@ module {
                                 accountId = NNS.accountIdFromPrincipal(args.governance, Blob.fromArray(neuron.account));
                                 dissolveState = neuron.dissolve_state;
                                 cachedNeuronStakeE8s = neuron.cached_neuron_stake_e8s;
+                                stakedMaturityE8sEquivalent = neuron.staked_maturity_e8s_equivalent;
                             };
                         };
                         case (_) { };

@@ -162,7 +162,15 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func stakingNeurons(): async [{ id : NeuronId ; accountId : Text }] {
-        staking.list()
+        let stakingNeurons = staking.list();
+        let b = Buffer.Buffer<{ id : Governance.NeuronId ; accountId : Text }>(stakingNeurons.size());
+        for (neuron in stakingNeurons.vals()) {
+            b.add({
+                id = { id = neuron.id };
+                accountId = NNS.accountIdToText(neuron.accountId);
+            });
+        };
+        return b.toArray();
     };
 
     public shared(msg) func stakingNeuronBalances(): async [(Nat64, Nat64)] {

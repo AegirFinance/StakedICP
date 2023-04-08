@@ -74,13 +74,10 @@ module {
         };
 
         // Lists the staking neurons
-        public func list(): [{ id : Governance.NeuronId ; accountId : Text }] {
-            let b = Buffer.Buffer<{ id : Governance.NeuronId ; accountId : Text }>(stakingNeurons.size());
+        public func list(): [Neurons.Neuron] {
+            let b = Buffer.Buffer<Neurons.Neuron>(stakingNeurons.size());
             for (neuron in stakingNeurons.vals()) {
-                b.add({
-                    id = { id = neuron.id };
-                    accountId = NNS.accountIdToText(neuron.accountId);
-                });
+                b.add(neuron);
             };
             return b.toArray();
         };
@@ -116,6 +113,14 @@ module {
                 stakingNeurons.vals(),
                 func (n: Neurons.Neuron): Nat64 { n.id }
             ))
+        };
+
+        public func addOrRefreshAll(neurons: [Neurons.Neuron]): [Bool] {
+            let b = Buffer.Buffer<Bool>(neurons.size());
+            for (neuron in neurons.vals()) {
+                b.add(addOrRefresh(neuron));
+            };
+            b.toArray()
         };
 
         // addOrRefresh idempotently adds a staking neuron, or refreshes it's balance

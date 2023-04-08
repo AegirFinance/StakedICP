@@ -123,33 +123,20 @@ module {
             let nextHolders = await getAllHolders();
 
             let neuronIds = args.staking.ids();
+            var neuronsBefore = args.staking.list();
+            let sumBefore = sumMaturity(neuronsBefore);
 
-            // This introduces a race condition with 'FlushPendingDeposits',
-            // which transfers more ICP into the neurons. So this must run
-            // before 'FlushPendingDeposits'.
-            var interest: Nat64 = 0;
-            let mergeResults = await args.neurons.mergeMaturities(neuronIds, 100);
-            logMerge(mergeResults);
-            for ((id, maturity, result) in mergeResults.vals()) {
-                switch (result) {
-                    case (#ok(neuron)) {
-                        // Update our cached stake values
-                        ignore args.staking.addOrRefresh(neuron);
-
-                        // Add up the interest we successfully merged.
-                        interest += maturity
-                    };
-                    case (#err(err)) {
-                        Debug.print("Error merging maturity for neuron " # debug_show(id) # ": " # debug_show(err));
-                    };
-                };
+            let neuronsAfter = await args.neurons.list(neuronIds);
+            let sumAfter = sumMaturity(neuronsAfter);
+            if (sumAfter < sumBefore) {
+                return #err(#InsufficientMaturity);
             };
+            let interest: Nat64 = sumAfter - sumBefore;
 
             // See how much maturity we have pending
             if (interest <= 10_000) {
                 return #err(#InsufficientMaturity);
             };
-
 
             // Apply the interest to the holders
             let apply = applyInterestToToken(
@@ -163,12 +150,23 @@ module {
             // Update the snapshot for next time.
             snapshot := ?nextHolders;
 
+            // Update the neuron cache for next time.
+            ignore args.staking.addOrRefreshAll(neuronsAfter);
+
             // Update the APY calculation
             appliedInterest.add(apply);
             appliedInterest := sortBuffer(appliedInterest, sortInterestByTime);
             updateMeanAprMicrobips();
 
             #ok(apply)
+        };
+
+        private func sumMaturity(neurons: [Neurons.Neuron]): Nat64 {
+            var sum: Nat64 = 0;
+            for (neuron in neurons.vals()) {
+                sum += Option.get(neuron.stakedMaturityE8sEquivalent, 0: Nat64);
+            };
+            sum
         };
 
         // Preserve the last 10 merges to stop it growing forever
