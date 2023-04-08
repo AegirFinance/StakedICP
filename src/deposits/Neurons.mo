@@ -128,11 +128,11 @@ module {
 
         // ===== NEURON INFO FUNCTIONS =====
 
-        // list fetches a bunch of neurons by ids
-        public func list(ids: [Nat64]): async [Neuron] {
+        // list fetches a bunch of neurons by ids (or all, if ids omitted)
+        public func list(ids: ?[Nat64]): async [Neuron] {
             let response = await governance.list_neurons({
-                neuron_ids = ids;
-                include_neurons_readable_by_caller = false;
+                neuron_ids = Option.get<[Nat64]>(ids, []);
+                include_neurons_readable_by_caller = Option.isNull(ids);
             });
             let b = Buffer.Buffer<Neuron>(response.full_neurons.size());
             for (neuron in response.full_neurons.vals()) {

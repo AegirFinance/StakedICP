@@ -126,7 +126,7 @@ module {
             var neuronsBefore = args.staking.list();
             let sumBefore = sumMaturity(neuronsBefore);
 
-            let neuronsAfter = await args.neurons.list(neuronIds);
+            let neuronsAfter = await args.neurons.list(?neuronIds);
             let sumAfter = sumMaturity(neuronsAfter);
             if (sumAfter < sumBefore) {
                 return #err(#InsufficientMaturity);

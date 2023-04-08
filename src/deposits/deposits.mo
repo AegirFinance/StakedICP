@@ -780,6 +780,39 @@ shared(init_msg) actor class Deposits(args: {
         return NNS.accountIdToText(NNS.accountIdFromPrincipal(args.governance, subaccount));
     };
 
+    // Called once/day by the external oracle
+    // 1. Apply Interest
+    //    a. Update cached neuron stakes (to figure out how much interest we gained today)
+    //    b. Take a new holders snapshot for the next day
+    //    c. Mint new tokens to holders
+    //    d. Update the holders snapshot for tomorrow
+    //    e. Log interest and update meanAprMicrobips
+    // 2. Flush Pending Deposits
+    //    a. Query token total supply & canister balance
+    //    b. Fulfill pending deposits from canister balance if possible
+    //    c. Deposit incoming ICP into neurons
+    //    d. Refresh staking neuron balances & cache
+    // 3. Split New Withdrawal Neurons
+    //    a. Garbage-collect disbursed neurons from the withdrawal module tracking
+    //       1. This should figure out which neurons *might* have been disbursed, and querying the
+    //       governance canister to confirm their state. This will make it idempotent.
+    //       2. If there are unknown dissolving neurons, they should be considered as new withdrawal
+    //       neurons. This will make it idempotent.
+    //    a. Query dissolving neurons total & pending total, to calculate dissolving target
+    //    b. Return a list of which staking neurons to split and how much
+    public shared(msg) func refreshNeuronsAndApplyInterest(): async Daily.DailyResult {
+        owners.require(msg.caller);
+        let now = Time.now();
+        let root = {owner = Principal.fromActor(this); subaccount = null};
+        await daily.run(
+            now,
+            root,
+            queueMint,
+            _availableBalance,
+            refreshAvailableBalance
+        )
+    };
+
     // ===== HEARTBEAT FUNCTIONS =====
 
     system func heartbeat() : async () {
@@ -800,20 +833,6 @@ shared(init_msg) actor class Deposits(args: {
                 interval = 1 * minute;
                 function = func(now: Time.Time): async Result.Result<Any, Text> {
                     #ok(await refreshAvailableBalance())
-                };
-            },
-            {
-                name = "dailyHeartbeat";
-                interval = 1 * day;
-                function = func(now: Time.Time): async Result.Result<Any, Text> {
-                    let root = {owner = Principal.fromActor(this); subaccount = null};
-                    #ok(await daily.run(
-                        now,
-                        root,
-                        queueMint,
-                        _availableBalance,
-                        refreshAvailableBalance
-                    ))
                 };
             }
         ]);
