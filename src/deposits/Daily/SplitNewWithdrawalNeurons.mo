@@ -25,16 +25,25 @@ module {
             //       governance canister to confirm their state. This will make it idempotent.
             //       2. If there are unknown dissolving neurons, they should be considered as new withdrawal
             //       neurons. This will make it idempotent.
-            // TODO: Are disbursed neurons gone? or do they still show up in
-            // the nns? If they are gone we need to query them and check
-            // they're gone. And make sure they show up in the listing.
-            let neurons = await args.neurons.list(null)
+            let neurons = await args.neurons.list(null);
             let disbursedNeurons = Buffer.Buffer<Nat64>(0);
             let dissolvingNeurons = Buffer.Buffer<Neurons.Neuron>(0);
             for (neuron in neurons.vals()) {
                 switch (neuron.dissolveState) {
-                    // TODO: Figure this out
-                }
+                    case (?#WhenDissolvedTimestampSeconds(timestamp)) {
+                        if (neuron.cachedNeuronStakeE8s == 0) {
+                            // Disbursed neurons stay in the nns with: cached_neuron_stake_e8s == 0
+                            disbursedNeurons.add(neuron.id);
+                        } else {
+                            // Still dissolving
+                            dissolvingNeurons.add(neuron);
+                        };
+                    };
+                    case (_) {
+                        // Neuron is not dissolving, withdrawals shouldn't be tracking it.
+                        disbursedNeurons.add(neuron.id);
+                    };
+                };
             };
             ignore args.withdrawals.addNeurons(dissolvingNeurons.toArray());
             ignore args.withdrawals.removeDisbursedNeurons(disbursedNeurons.toArray());

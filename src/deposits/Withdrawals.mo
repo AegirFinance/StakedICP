@@ -393,7 +393,7 @@ module {
             ns.toArray()
         };
 
-        // Once a neuron has been manually disbursed, we can forget about it.
+        // Once a neuron has been disbursed, we can forget about it.
         public func removeDisbursedNeurons(ids: [Nat64]): [Neurons.Neuron] {
             let ns = Buffer.Buffer<Neurons.Neuron>(ids.size());
             for (id in ids.vals()) {
