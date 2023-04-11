@@ -35,6 +35,13 @@ module {
             meanAprMicrobips: Nat64;
             merges: [[(Nat64, Nat64, Neurons.NeuronResult)]];
         };
+        #v3: {
+            snapshot: ?[(Account.Account, Nat)];
+            appliedInterest: [ApplyInterestSummary];
+            meanAprMicrobips: Nat64;
+            merges: [[(Nat64, Nat64, Neurons.NeuronResult)]];
+            totalMaturity: Nat64;
+        };
     };
 
     public type ApplyInterestResult = Result.Result<ApplyInterestSummary, Neurons.NeuronsError>;
@@ -75,6 +82,7 @@ module {
         private var appliedInterest : Buffer.Buffer<ApplyInterestSummary> = Buffer.Buffer(0);
         private var meanAprMicrobips : Nat64 = 0;
         private var merges : Buffer.Buffer<[(Nat64, Nat64, Neurons.NeuronResult)]> = Buffer.Buffer(10);
+        private var totalMaturity : Nat64 = 0;
 
         private func getAllHolders(): async [(Account.Account, Nat)] {
             return await args.token.getHolderAccounts(0, 0);
@@ -115,6 +123,14 @@ module {
             return merges.toArray();
         };
 
+        public func getTotalMaturity() : Nat64 {
+            return totalMaturity;
+        };
+
+        public func setTotalMaturity(v: Nat64) {
+            totalMaturity := v;
+        };
+
         // ===== JOB START FUNCTION =====
 
         // Distribute newly earned interest to token holders.
@@ -123,15 +139,13 @@ module {
             let nextHolders = await getAllHolders();
 
             let neuronIds = args.staking.ids();
-            var neuronsBefore = args.staking.list();
-            let sumBefore = sumMaturity(neuronsBefore);
 
             let neuronsAfter = await args.neurons.list(?neuronIds);
             let sumAfter = sumMaturity(neuronsAfter);
-            if (sumAfter < sumBefore) {
+            if (sumAfter < totalMaturity) {
                 return #err(#InsufficientMaturity);
             };
-            let interest: Nat64 = sumAfter - sumBefore;
+            let interest: Nat64 = sumAfter - totalMaturity;
 
             // See how much maturity we have pending
             if (interest <= 10_000) {
@@ -152,6 +166,7 @@ module {
 
             // Update the neuron cache for next time.
             ignore args.staking.addOrRefreshAll(neuronsAfter);
+            totalMaturity := sumAfter;
 
             // Update the APY calculation
             appliedInterest.add(apply);
@@ -333,11 +348,12 @@ module {
         // ===== UPGRADE FUNCTIONS =====
 
         public func preupgrade(): ?UpgradeData {
-            return ?#v2({
+            return ?#v3({
                 snapshot = snapshot;
                 appliedInterest = appliedInterest.toArray();
                 meanAprMicrobips = meanAprMicrobips;
-                merges = merges.toArray()
+                merges = merges.toArray();
+                totalMaturity = totalMaturity;
             });
         };
 
@@ -363,6 +379,15 @@ module {
                     }));
                 };
                 case (?#v2(data)) {
+                    postupgrade(?#v3({
+                        snapshot = data.snapshot;
+                        appliedInterest = data.appliedInterest;
+                        meanAprMicrobips = data.meanAprMicrobips;
+                        merges = data.merges;
+                        totalMaturity = 0;
+                    }));
+                };
+                case (?#v3(data)) {
                     snapshot := data.snapshot;
                     appliedInterest := Buffer.Buffer<ApplyInterestSummary>(data.appliedInterest.size());
                     for (x in data.appliedInterest.vals()) {
@@ -373,6 +398,7 @@ module {
                     for (x in data.merges.vals()) {
                         merges.add(x);
                     };
+                    totalMaturity := data.totalMaturity;
                 };
                 case (_) { return; }
             };

@@ -760,6 +760,16 @@ shared(init_msg) actor class Deposits(args: {
         daily.setAppliedInterest(elems);
     };
 
+    public shared(msg) func getTotalMaturity(): async Nat64 {
+        owners.require(msg.caller);
+        return daily.getTotalMaturity();
+    };
+
+    public shared(msg) func setTotalMaturity(v: Nat64): async () {
+        owners.require(msg.caller);
+        daily.setTotalMaturity(v);
+    };
+
     public shared(msg) func getReferralData(): async ?Referrals.UpgradeData {
         owners.require(msg.caller);
         return referralTracker.preupgrade();

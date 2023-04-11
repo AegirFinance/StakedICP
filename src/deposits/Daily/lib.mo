@@ -92,6 +92,14 @@ module {
             return applyInterestJob.getMeanAprMicrobips();
         };
 
+        public func getTotalMaturity() : Nat64 {
+            return applyInterestJob.getTotalMaturity();
+        };
+
+        public func setTotalMaturity(v: Nat64) {
+            applyInterestJob.setTotalMaturity(v);
+        };
+
         public func getResults(): DailyResult {
             (applyInterestResult, flushPendingDepositsResult, splitNewWithdrawalNeuronsResult)
         };
