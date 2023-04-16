@@ -20,3 +20,6 @@ _out
 node_modules/
 dist/
 src/declarations/
+
+# rust stuff
+target/
