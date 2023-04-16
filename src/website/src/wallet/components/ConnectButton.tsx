@@ -68,6 +68,7 @@ export function ConnectButton({
           },
           button: {
             height: '144px',
+            width: '140px',
           },
         }}>
           <WalletButton onClick={() => { switchAndConnect("Bitfinity") }}>
