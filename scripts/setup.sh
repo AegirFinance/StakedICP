@@ -42,7 +42,7 @@ echo oracle setup
         --private-pem ~/.config/dfx/identity/default/identity.pem \
         --signing-canister $(canister id signing) \
         --deposits $(canister id deposits) \
-        --governance $(canister id governance) \
+        --governance $(canister id nns-governance) \
         --icp-ledger $(canister id nns-ledger) \
         --ic-url $"IC_URL"
 )
