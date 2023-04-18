@@ -254,6 +254,13 @@ module {
             ns
         };
 
+        // Idempotently remove a neuron which should be forgotten about.
+        public func removeNeurons(ids: [Nat64]): () {
+            for (id in ids.vals()) {
+                dissolving.delete(Nat64.toText(id));
+            };
+        };
+
         // Attempt to create a new withdrawal for the user. The full amount
         // starts as `pending`, and the `depositIcp` method applies new
         // deposits, cash, and dissolving ICP towards fulfilling pending

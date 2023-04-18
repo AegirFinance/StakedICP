@@ -104,6 +104,20 @@ module {
             (applyInterestResult, flushPendingDepositsResult, splitNewWithdrawalNeuronsResult)
         };
 
+        public func flushPendingDeposits(
+            availableBalance: FlushPendingDeposits.AvailableBalanceFn,
+            refreshAvailableBalance: FlushPendingDeposits.RefreshAvailableBalanceFn
+        ): async ?FlushPendingDeposits.FlushPendingDepositsResult {
+            flushPendingDepositsResult := null;
+            let flush = try {
+                await flushPendingDepositsJob.run(availableBalance, refreshAvailableBalance)
+            } catch (error) {
+                #err(#Other(Error.message(error)))
+            };
+            flushPendingDepositsResult := ?flush;
+            flushPendingDepositsResult
+        };
+
         // ===== METRICS FUNCTIONS =====
 
         public func metrics(): [Metrics.Metric] {

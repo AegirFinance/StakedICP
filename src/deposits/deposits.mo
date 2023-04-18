@@ -23,6 +23,7 @@ import TrieMap "mo:base/TrieMap";
 
 import Daily        "./Daily";
 import ApplyInterest "./Daily/ApplyInterest";
+import FlushPendingDeposits "./Daily/FlushPendingDeposits";
 import Scheduler    "./Scheduler";
 import Hex          "./Hex";
 import Neurons      "./Neurons";
@@ -177,6 +178,29 @@ shared(init_msg) actor class Deposits(args: {
         staking.balances()
     };
 
+    // Remove all staking neurons, and replace with the new lsit
+    // Remove all withdrawal neurons
+    // Reset totalMaturity to 0
+    public shared(msg) func resetStakingNeurons(ids: [Nat64]): async Neurons.NeuronsResult {
+        owners.require(msg.caller);
+        staking.removeNeurons(staking.ids());
+        withdrawals.removeNeurons(withdrawals.ids());
+        daily.setTotalMaturity(0);
+        let b = Buffer.Buffer<Neurons.Neuron>(ids.size());
+        for (id in ids.vals()) {
+            switch (await neurons.refresh(id)) {
+                case (#err(err)) { return #err(err) };
+                case (#ok(neuron)) {
+                    // No minting here as we are treating these neurons as
+                    // pre-existing.
+                    ignore staking.addOrRefresh(neuron);
+                    b.add(neuron);
+                }
+            };
+        };
+        return #ok(b.toArray());
+    };
+
     // Idempotently add a neuron to the tracked staking neurons. The neurons
     // added here must be manageable by the proposal neuron. The starting
     // balance will be minted as stICP to the canister's token account.
@@ -194,6 +218,14 @@ shared(init_msg) actor class Deposits(args: {
                 #ok(neuron)
             };
         }
+    };
+
+    public shared(msg) func flushPendingDeposits(): async ?FlushPendingDeposits.FlushPendingDepositsResult {
+        owners.require(msg.caller);
+        await daily.flushPendingDeposits(
+            _availableBalance,
+            refreshAvailableBalance
+        )
     };
 
     public shared(msg) func proposalNeuron(): async ?Neurons.Neuron {

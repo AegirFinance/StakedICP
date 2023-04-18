@@ -131,6 +131,13 @@ module {
             isNew
         };
 
+        // Idempotently remove a neuron which should be forgotten about.
+        public func removeNeurons(ids: [Nat64]): () {
+            for (id in ids.vals()) {
+                stakingNeurons.delete(Nat64.toText(id));
+            };
+        };
+
         // helper to allow sorting neurons by balance
         func compareBalance(a: Neurons.Neuron, b: Neurons.Neuron): Order.Order {
             Nat64.compare(a.cachedNeuronStakeE8s, b.cachedNeuronStakeE8s)
