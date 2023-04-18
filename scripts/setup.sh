@@ -10,7 +10,7 @@ case "$NETWORK" in
         ;;
 
     "local")
-        IC_URL="http://$(jq -Sr .local.bind "$(dfx info networks-json-path)")"
+        IC_URL="http://localhost:$(dfx info replica-port)"
         ;;
 
     *)
@@ -35,14 +35,10 @@ echo deposits.setAppliedInterest
 canister call deposits setAppliedInterest "$(cat appliedInterest.did)"
 
 echo oracle setup
-(
-    cd src/oracle;
-
-    cargo run -- setup \
-        --private-pem ~/.config/dfx/identity/default/identity.pem \
-        --signing-canister $(canister id signing) \
-        --deposits $(canister id deposits) \
-        --governance $(canister id nns-governance) \
-        --icp-ledger $(canister id nns-ledger) \
-        --ic-url $"IC_URL"
-)
+cargo run -- setup \
+    --private-pem ~/.config/dfx/identity/default/identity.pem \
+    --signing-canister $(canister id signing) \
+    --deposits $(canister id deposits) \
+    --governance $(canister id nns-governance) \
+    --icp-ledger $(canister id nns-ledger) \
+    --ic-url "$IC_URL"
