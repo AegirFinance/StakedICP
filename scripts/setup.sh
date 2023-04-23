@@ -36,7 +36,7 @@ canister call deposits setAppliedInterest "$(cat appliedInterest.did)"
 
 echo oracle setup
 cargo run -- setup \
-    --private-pem <(dfx identity export default) \
+    --private-pem ~/.config/dfx/identity/default/identity.pem \
     --signing-canister $(canister id signing) \
     --deposits $(canister id deposits) \
     --governance $(canister id nns-governance) \

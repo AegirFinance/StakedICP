@@ -916,6 +916,16 @@ shared(init_msg) actor class Deposits(args: {
         })
     };
 
+    public shared(msg) func accountIdFromPrincipal(to: Principal): async Text {
+        owners.require(msg.caller);
+        NNS.accountIdToText(
+            NNS.accountIdFromPrincipal(
+                to,
+                NNS.defaultSubaccount()
+            )
+        )
+    };
+
     // ===== UPGRADE FUNCTIONS =====
 
     system func preupgrade() {

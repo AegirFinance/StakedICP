@@ -44,6 +44,10 @@ if canister_exists "nns-governance"; then
 else
     dfx nns install --identity minter
     dfx ledger transfer --identity minter --memo 0 --amount 10000 $(dfx ledger account-id)
+    # Transfer some to the signing canister for setup
+    # Signing canister address here is pre-calculated.
+    # TODO: Check it is the same every time or do we need to calculate it?
+    dfx ledger transfer --identity minter --memo 0 --amount 10000 "724d45949c2afc3dea49b5e15c19cdaacbdb5f190b59f56747a5fec1d1fe10bc"
 fi
 
 echo
