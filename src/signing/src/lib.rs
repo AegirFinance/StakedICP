@@ -5,16 +5,10 @@ use ic_cdk::{
         serde::{Deserialize, Serialize},
         Principal,
     },
-    storage,
-    update,
-    init,
-    pre_upgrade,
-    post_upgrade,
+    init, post_upgrade, pre_upgrade, storage, update,
 };
-use std::{
-    cell::RefCell,
-    str::FromStr,
-};
+use ic_ledger_types::{AccountIdentifier, Subaccount, DEFAULT_SUBACCOUNT};
+use std::{cell::RefCell, str::FromStr};
 
 thread_local! {
     static OWNERS: RefCell<Vec<Principal>> = RefCell::new(Vec::default());
@@ -108,7 +102,7 @@ pub enum EcdsaCurve {
 #[derive(CandidType, Deserialize, Serialize, Debug, Clone)]
 struct InitArgs {
     pub owners: Vec<Principal>,
-    pub key_id: String
+    pub key_id: String,
 }
 
 #[init]
@@ -142,6 +136,16 @@ async fn get_principal() -> Result<PrincipalReply, String> {
 }
 
 #[update]
+async fn address(subaccount: Option<Vec<u8>>) -> String {
+    let public_key = Principal::self_authenticating(get_public_key().await.unwrap());
+    let sub: [u8; 32] = subaccount
+        .unwrap_or(DEFAULT_SUBACCOUNT.0.to_vec())
+        .try_into()
+        .unwrap();
+    AccountIdentifier::new(&public_key, &Subaccount(sub)).to_string()
+}
+
+#[update]
 async fn public_key() -> Result<PublicKeyReply, String> {
     let public_key = get_public_key().await?;
     Ok(PublicKeyReply { public_key })
@@ -157,10 +161,14 @@ async fn sign(message: Vec<u8>) -> Result<SignatureReply, String> {
         derivation_path: derivation_path(),
         key_id: key_id(),
     };
-    let (res,): (SignWithECDSAReply,) =
-        api::call::call_with_payment(mgmt_canister_id(), "sign_with_ecdsa", (request,), 25_000_000_000)
-            .await
-            .map_err(|e| format!("Failed to call sign_with_ecdsa {}", e.1))?;
+    let (res,): (SignWithECDSAReply,) = api::call::call_with_payment(
+        mgmt_canister_id(),
+        "sign_with_ecdsa",
+        (request,),
+        25_000_000_000,
+    )
+    .await
+    .map_err(|e| format!("Failed to call sign_with_ecdsa {}", e.1))?;
 
     Ok(SignatureReply {
         signature: res.signature,
@@ -174,7 +182,6 @@ fn key_id() -> EcdsaKeyId {
 fn derivation_path() -> Vec<Vec<u8>> {
     vec![]
 }
-
 
 fn mgmt_canister_id() -> CanisterId {
     CanisterId::from_str("aaaaa-aa").unwrap()
@@ -205,7 +212,7 @@ impl EcdsaKeyIds {
 
 #[derive(CandidType, Deserialize, Debug)]
 enum ParseEcdsaKeyIdError {
-    UnknownKeyId
+    UnknownKeyId,
 }
 
 impl TryFrom<String> for EcdsaKeyIds {

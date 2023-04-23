@@ -2388,6 +2388,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-ledger-types"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d175cd78a7c9a83a7a7c06b2db8aee7caddf45b1fd5cf9590160ebedab01424"
+dependencies = [
+ "candid",
+ "crc32fast",
+ "hex",
+ "ic-cdk 0.7.4",
+ "serde",
+ "serde_bytes",
+ "sha2 0.9.9",
+]
+
+[[package]]
 name = "ic-metrics-encoder"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4504,6 +4519,7 @@ version = "0.1.0"
 dependencies = [
  "candid",
  "ic-cdk 0.7.4",
+ "ic-ledger-types",
  "serde",
 ]
 
