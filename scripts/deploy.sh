@@ -82,6 +82,14 @@ canister_exists() {
 }
 
 echo
+echo == mkdir -p ".dfx/$NETWORK/canisters/idl"
+echo
+
+# Seems like dfx has a bug where it doesn't auto-create this directory, so we
+# just create it to ensure it is always there.
+mkdir -p ".dfx/$NETWORK/canisters/idl"
+
+echo
 echo == Dependencies.
 echo
 
