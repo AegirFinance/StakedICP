@@ -44,6 +44,7 @@ echo Creating new neurons
 make_neuron() {
     "$DIR/../target/debug/oracle" make-neuron \
         --private-pem ~/.config/dfx/identity/default/identity.pem \
+        --deposits-canister $(canister id deposits) \
         --signing-canister $(canister id signing) \
         --governance $(canister id nns-governance) \
         --icp-ledger $(canister id nns-ledger) \
@@ -83,9 +84,9 @@ fi
 
 
 echo Reset the deposits canister
-canister call deposits resetStakingNeurons "(vec {$NEW_NEURON_IDS})"
+canister call deposits resetStakingNeurons --argument-file "$OUT"
 
 echo Check the remaining amount of needed ICP is in the deposits canister
 
 echo Flush pending deposits to rebalance neurons
-canister deposits call flushPendingDeposits
+canister call deposits flushPendingDeposits

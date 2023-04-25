@@ -186,19 +186,13 @@ shared(init_msg) actor class Deposits(args: {
         staking.removeNeurons(staking.ids());
         withdrawals.removeNeurons(withdrawals.ids());
         daily.setTotalMaturity(0);
-        let b = Buffer.Buffer<Neurons.Neuron>(ids.size());
-        for (id in ids.vals()) {
-            switch (await neurons.refresh(id)) {
-                case (#err(err)) { return #err(err) };
-                case (#ok(neuron)) {
-                    // No minting here as we are treating these neurons as
-                    // pre-existing.
-                    ignore staking.addOrRefresh(neuron);
-                    b.add(neuron);
-                }
-            };
+        let ns = await neurons.list(?ids);
+        for (neuron in ns.vals()) {
+            // No minting here as we are treating these neurons as
+            // pre-existing.
+            ignore staking.addOrRefresh(neuron);
         };
-        return #ok(b.toArray());
+        return #ok(ns);
     };
 
     // Idempotently add a neuron to the tracked staking neurons. The neurons
