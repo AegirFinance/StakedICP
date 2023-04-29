@@ -29,6 +29,9 @@ module {
 
     public type UpgradeData = {
         #v1: {
+            stakingNeurons: [(Text, Neurons.NeuronV1)];
+        };
+        #v2: {
             stakingNeurons: [(Text, Neurons.Neuron)];
         };
     };
@@ -249,7 +252,7 @@ module {
         // ===== UPGRADE FUNCTIONS =====
 
         public func preupgrade(): ?UpgradeData {
-            return ?#v1({
+            return ?#v2({
                 stakingNeurons = Iter.toArray(stakingNeurons.entries());
             });
         };
@@ -257,6 +260,21 @@ module {
         public func postupgrade(upgradeData: ?UpgradeData) {
             switch (upgradeData) {
                 case (?#v1(data)) {
+                    let neurons = Buffer.Buffer<(Text, Neurons.Neuron)>(data.stakingNeurons.size());
+                    for ((id, neuron) in Iter.fromArray(data.stakingNeurons)) {
+                        neurons.add((id, {
+                            id = neuron.id;
+                            accountId = neuron.accountId;
+                            dissolveState = neuron.dissolveState;
+                            cachedNeuronStakeE8s = neuron.cachedNeuronStakeE8s;
+                            stakedMaturityE8sEquivalent = null;
+                        }));
+                    };
+                    postupgrade(?#v2({
+                        stakingNeurons = neurons.toArray();
+                    }));
+                };
+                case (?#v2(data)) {
                     stakingNeurons := TrieMap.fromEntries(
                         data.stakingNeurons.vals(),
                         Text.equal,

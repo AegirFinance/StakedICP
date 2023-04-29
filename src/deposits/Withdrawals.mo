@@ -29,6 +29,10 @@ module {
 
     public type UpgradeData = {
         #v1: {
+            dissolving: [(Text, Neurons.NeuronV1)];
+            withdrawals: [(Text, Withdrawal)];
+        };
+        #v2: {
             dissolving: [(Text, Neurons.Neuron)];
             withdrawals: [(Text, Withdrawal)];
         };
@@ -508,7 +512,7 @@ module {
         // ===== UPGRADE FUNCTIONS =====
 
         public func preupgrade() : ?UpgradeData {
-            return ?#v1({
+            return ?#v2({
                 dissolving = Iter.toArray(dissolving.entries());
                 withdrawals = Iter.toArray(withdrawals.entries());
             });
@@ -521,6 +525,15 @@ module {
         public func postupgrade(upgradeData : ?UpgradeData) {
             switch (upgradeData) {
                 case (?#v1(data)) {
+                    postupgrade(?#v2({
+                        dissolving = Array.map<(Text, Neurons.NeuronV1), (Text, Neurons.Neuron)>(
+                            data.dissolving,
+                            func (id, neuron) = (id, Neurons.upgradeNeuronV1(neuron))
+                        );
+                        withdrawals = data.withdrawals;
+                    }));
+                };
+                case (?#v2(data)) {
                     for ((id, neuron) in Iter.fromArray(data.dissolving)) {
                         dissolving.put(id, neuron);
                     };

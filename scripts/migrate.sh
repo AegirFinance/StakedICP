@@ -30,15 +30,15 @@ cargo build -p oracle
 
 echo Get the signing canister address
 SIGNING_ADDRESS="$(canister call signing address | tr -d ')("')"
+echo Address: "$SIGNING_ADDRESS"
 
 echo Check initial balance
-SIGNING_BALANCE="$(dfx ledger balance "$SIGNING_ADDRESS")"
-if [[ "$(echo $SIGNING_BALANCE | cut -d\. -f1)" == "0" ]]; then
-    echo Insufficient Initial Balance: $SIGNING_BALANCE, Transfer ICP to $SIGNING_ADDRESS with:
-    echo "  dfx ledger --network $NETWORK transfer --memo 0 --amount 17 \"$SIGNING_ADDRESS\""
+LOCAL_BALANCE="$(dfx ledger --identity default balance)"
+if [[ "$(echo $LOCAL_BALANCE | cut -d\. -f1)" == "0" ]]; then
+    echo Insufficient Initial Balance: $LOCAL_BALANCE, Ensure the "default" account has 17 ICP
     exit 1
 fi
-echo Initial Balance: $SIGNING_BALANCE
+echo Initial Balance: $LOCAL_BALANCE
 
 echo Creating new neurons
 make_neuron() {
@@ -58,7 +58,6 @@ if ! test -f "$OUT" ; then
     <&2 echo "Creating $NETWORK neurons file: $OUT"
     NEW_NEURON_IDS=$(cat <<-EOM
     vec {
-$(make_neuron "252460800");
 $(make_neuron "15778800");
 $(make_neuron "31557600");
 $(make_neuron "47336400");
@@ -74,6 +73,7 @@ $(make_neuron "189345600");
 $(make_neuron "205124400");
 $(make_neuron "220903200");
 $(make_neuron "236682000");
+$(make_neuron "252460800");
 }
 EOM
 )
@@ -86,7 +86,7 @@ fi
 echo Reset the deposits canister
 canister call deposits resetStakingNeurons --argument-file "$OUT"
 
-echo Check the remaining amount of needed ICP is in the deposits canister
-
-echo Flush pending deposits to rebalance neurons
-canister call deposits flushPendingDeposits
+echo Check the remaining amount of needed ICP is in the deposits canister,
+echo top it up based on the token totalSupply - 16, then flush the pending
+echo deposits to rebalance neurons:
+echo $ dfx canister --network $NETWORK deposits flushPendingDeposits

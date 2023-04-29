@@ -25,6 +25,12 @@ module {
             applyInterestJob: ?ApplyInterest.UpgradeData;
             applyInterestResult: ?ApplyInterest.ApplyInterestResult;
             flushPendingDepositsResult: ?FlushPendingDeposits.FlushPendingDepositsResult;
+            splitNewWithdrawalNeuronsResult: ?SplitNewWithdrawalNeurons.SplitNewWithdrawalNeuronsResultV1;
+        };
+        #v2: {
+            applyInterestJob: ?ApplyInterest.UpgradeData;
+            applyInterestResult: ?ApplyInterest.ApplyInterestResult;
+            flushPendingDepositsResult: ?FlushPendingDeposits.FlushPendingDepositsResult;
             splitNewWithdrawalNeuronsResult: ?SplitNewWithdrawalNeurons.SplitNewWithdrawalNeuronsResult;
         };
     };
@@ -194,7 +200,7 @@ module {
         // ===== UPGRADE FUNCTIONS =====
 
         public func preupgrade() : ?UpgradeData {
-            return ?#v1({
+            return ?#v2({
                 // Only ApplyInterestJob has any upgrade state
                 applyInterestJob = applyInterestJob.preupgrade();
                 applyInterestResult = applyInterestResult;
@@ -206,6 +212,16 @@ module {
         public func postupgrade(upgradeData : ?UpgradeData) {
             switch (upgradeData) {
                 case (?#v1(data)) {
+                    postupgrade(?#v2({
+                        applyInterestJob = data.applyInterestJob;
+                        applyInterestResult = data.applyInterestResult;
+                        flushPendingDepositsResult = data.flushPendingDepositsResult;
+                        splitNewWithdrawalNeuronsResult = SplitNewWithdrawalNeurons.upgradeResultV1(
+                            data.splitNewWithdrawalNeuronsResult
+                        );
+                    }));
+                };
+                case (?#v2(data)) {
                     applyInterestJob.postupgrade(data.applyInterestJob);
                     applyInterestResult := data.applyInterestResult;
                     flushPendingDepositsResult := data.flushPendingDepositsResult;

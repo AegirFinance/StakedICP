@@ -24,6 +24,7 @@ import TrieMap "mo:base/TrieMap";
 import Daily        "./Daily";
 import ApplyInterest "./Daily/ApplyInterest";
 import FlushPendingDeposits "./Daily/FlushPendingDeposits";
+import SplitNewWithdrawalNeurons "./Daily/SplitNewWithdrawalNeurons";
 import Scheduler    "./Scheduler";
 import Hex          "./Hex";
 import Neurons      "./Neurons";
@@ -223,14 +224,12 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func proposalNeuron(): async ?Neurons.Neuron {
-        neurons.getProposalNeuron()
+        null
     };
 
     public shared(msg) func setProposalNeuron(id: Nat64): async Neurons.NeuronResult {
         owners.require(msg.caller);
-        let neuron = await neurons.refresh(id);
-        Result.iterate(neuron, neurons.setProposalNeuron);
-        neuron
+        #err(#Other("Proposal neuron is deprecated."))
     };
 
     private var _aprOverride : ?Nat64 = null;
@@ -769,6 +768,11 @@ shared(init_msg) actor class Deposits(args: {
         return withdrawals.withdrawalsFor(user);
     };
 
+    public shared(msg) func withdrawalsTotal() : async Nat64 {
+        owners.require(msg.caller);
+        return withdrawals.reservedIcp() + withdrawals.totalPending();
+    };
+
     // ===== HELPER FUNCTIONS =====
 
     public shared(msg) func setInitialSnapshot(): async (Text, [(Account.Account, Nat)]) {
@@ -836,17 +840,21 @@ shared(init_msg) actor class Deposits(args: {
     //       neurons. This will make it idempotent.
     //    a. Query dissolving neurons total & pending total, to calculate dissolving target
     //    b. Return a list of which staking neurons to split and how much
-    public shared(msg) func refreshNeuronsAndApplyInterest(): async Daily.DailyResult {
+    public shared(msg) func refreshNeuronsAndApplyInterest(): async [(Nat64, Nat64)] {
         owners.require(msg.caller);
         let now = Time.now();
         let root = {owner = Principal.fromActor(this); subaccount = null};
-        await daily.run(
+        let result = await daily.run(
             now,
             root,
             queueMint,
             _availableBalance,
             refreshAvailableBalance
-        )
+        );
+        switch (result.2) {
+            case (?#ok(neurons_to_split)) { neurons_to_split };
+            case _ { [] };
+        }
     };
 
     // ===== HEARTBEAT FUNCTIONS =====
