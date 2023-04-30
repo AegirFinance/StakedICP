@@ -22,22 +22,27 @@ use ic_cdk::{
 use ic_ledger_types::{AccountIdentifier, Subaccount, DEFAULT_SUBACCOUNT};
 use std::cell::RefCell;
 
+mod metrics;
+
 thread_local! {
-    static OWNERS: RefCell<Vec<Principal>> = RefCell::new(Vec::default());
     static KEY_ID: RefCell<EcdsaKeyId> = RefCell::new(EcdsaKeyIds::TestKeyLocalDevelopment.to_key_id());
+    static METRICS_CANISTER: RefCell<Option<Principal>> = RefCell::new(None);
+    static OWNERS: RefCell<Vec<Principal>> = RefCell::new(Vec::default());
 }
 
 #[derive(CandidType, Deserialize)]
 struct StableState {
-    owners: Vec<Principal>,
     key_id: EcdsaKeyId,
+    metrics_canister: Option<Principal>,
+    owners: Vec<Principal>,
 }
 
 #[pre_upgrade]
 fn pre_upgrade() {
     let state = StableState {
-        owners: OWNERS.with(|o| o.borrow().clone()),
         key_id: KEY_ID.with(|k| k.borrow().clone()),
+        metrics_canister: METRICS_CANISTER.with(|k| k.borrow().clone()),
+        owners: OWNERS.with(|o| o.borrow().clone()),
     };
     storage::stable_save((state,)).unwrap();
 }
@@ -45,15 +50,18 @@ fn pre_upgrade() {
 #[post_upgrade]
 fn post_upgrade() {
     let (s,): (StableState,) = storage::stable_restore().unwrap();
+    KEY_ID.with(|k| {
+        *k.borrow_mut() = s.key_id;
+    });
+    METRICS_CANISTER.with(|m| {
+        *m.borrow_mut() = s.metrics_canister;
+    });
     OWNERS.with(|o| {
         let mut owners = o.borrow_mut();
         owners.clear();
         for p in s.owners.iter() {
             owners.push(*p);
         }
-    });
-    KEY_ID.with(|k| {
-        *k.borrow_mut() = s.key_id;
     });
 }
 
@@ -74,30 +82,35 @@ struct SignatureReply {
 
 #[derive(CandidType, Deserialize, Serialize, Debug, Clone)]
 struct InitArgs {
-    pub owners: Vec<Principal>,
     pub key_id: String,
+    pub metrics_canister: Option<Principal>,
+    pub owners: Vec<Principal>,
 }
 
 #[init]
 async fn init(args: InitArgs) {
     let parsed_key_id: EcdsaKeyId = EcdsaKeyIds::try_from(args.key_id).unwrap().to_key_id();
+    KEY_ID.with(|key| {
+        let mut k = key.borrow_mut();
+        *k = parsed_key_id;
+    });
+    METRICS_CANISTER.with(|m| {
+        *m.borrow_mut() = args.metrics_canister;
+    });
     OWNERS.with(|owners| {
         let mut o = owners.borrow_mut();
         for p in args.owners.iter() {
             o.push(*p);
         }
     });
-    KEY_ID.with(|key| {
-        let mut k = key.borrow_mut();
-        *k = parsed_key_id;
-    });
+}
+
+fn is_owner(user: &Principal) -> bool {
+    OWNERS.with(|owners| (*owners.borrow()).contains(user))
 }
 
 fn require_owner(user: &Principal) {
-    assert!(
-        OWNERS.with(|owners| (*owners.borrow()).contains(user)),
-        "Caller is not an owner"
-    );
+    assert!(is_owner(user), "Caller is not an owner");
 }
 
 #[update]
@@ -140,6 +153,25 @@ async fn sign(message: Vec<u8>) -> Result<SignatureReply, String> {
     Ok(SignatureReply {
         signature: res.signature,
     })
+}
+
+#[update]
+async fn set_metrics(new_value: Option<Principal>) {
+    require_owner(&api::caller());
+    METRICS_CANISTER.with(|m| {
+        *m.borrow_mut() = new_value;
+    });
+}
+
+#[update]
+async fn metrics() -> Vec<metrics::Metric> {
+    if !is_owner(&api::caller()) {
+        let caller = api::caller();
+        METRICS_CANISTER.with(|m| {
+            assert!(Some(caller) == *m.borrow());
+        });
+    }
+    metrics::metrics().await
 }
 
 fn key_id() -> EcdsaKeyId {

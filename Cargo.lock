@@ -4520,6 +4520,7 @@ dependencies = [
  "candid",
  "ic-cdk 0.7.4",
  "ic-ledger-types",
+ "num-bigint",
  "serde",
 ]
 
