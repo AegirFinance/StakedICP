@@ -179,7 +179,7 @@ shared(init_msg) actor class Deposits(args: {
         staking.balances()
     };
 
-    // Remove all staking neurons, and replace with the new lsit
+    // Remove all staking neurons, and replace with the new list
     // Remove all withdrawal neurons
     // Reset totalMaturity to 0
     public shared(msg) func resetStakingNeurons(ids: [Nat64]): async Neurons.NeuronsResult {
