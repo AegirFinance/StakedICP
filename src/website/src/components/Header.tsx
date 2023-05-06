@@ -51,8 +51,8 @@ export function Header() {
       {account && (
         <Balance>{sticp ? sticp.formatted : <ActivityIndicator css={{marginRight: "1ch"}} /> } stICP</Balance>
       )}
-      <Link to="/rewards" style={{marginRight: "0.75rem"}}>
-        <Button variant="cancel">Rewards</Button>
+      <Link to="/referrals" style={{marginRight: "0.75rem"}}>
+        <Button variant="cancel">Referrals</Button>
       </Link>
       <ConnectButton />
     </Wrapper>

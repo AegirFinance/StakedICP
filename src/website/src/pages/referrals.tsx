@@ -8,7 +8,7 @@ import { useAsyncEffect } from '../hooks';
 import { styled } from '../stitches.config';
 import { ConnectButton, useAccount, useCanister } from "../wallet";
 
-export function Rewards() {
+export function Referrals() {
   const [stats, setStats] = React.useState<ReferralStats|null>(null);
   const [{ data: account }] = useAccount();
   const principal = account?.principal;

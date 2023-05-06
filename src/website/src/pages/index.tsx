@@ -1,5 +1,5 @@
 export * from "./404";
 export * from "./privacy-policy";
-export * from "./rewards";
+export * from "./referrals";
 export * from "./stake";
 export * from "./terms-of-use";

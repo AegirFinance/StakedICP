@@ -2,7 +2,7 @@ import * as deposits from "../../declarations/deposits";
 import * as token from "../../declarations/token";
 import * as nnsLedger from "./nns-ledger";
 import React from 'react';
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { GeoipModal, Maintenance } from './components';
 import { globalCss } from './stitches.config';
 import { Provider as WalletProvider } from "./wallet";
@@ -45,7 +45,8 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Pages.Stake />} />
               <Route path="/privacy-policy" element={<Pages.PrivacyPolicy />} />
-              <Route path="/rewards" element={<Pages.Rewards />} />
+              <Route path="/rewards" element={<Navigate to="/referrals" />} />
+              <Route path="/referrals" element={<Pages.Referrals />} />
               <Route path="/terms-of-use" element={<Pages.TermsOfUse />} />
               <Route path="*" element={<Pages.FourOhFour />} />
             </Routes>
