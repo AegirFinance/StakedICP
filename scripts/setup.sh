@@ -6,7 +6,7 @@ NETWORK=local
 
 case "$NETWORK" in
     "ic")
-        IC_URL="https://ic0.app"
+        IC_URL="https://icp0.io"
         ;;
 
     "local")

@@ -150,7 +150,7 @@
   "networks": {
     "ic": {
       "providers": [
-        "https://ic0.app"
+        "https://icp0.io"
       ],
       "type": "persistent"
     },

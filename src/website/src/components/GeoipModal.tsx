@@ -6,7 +6,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } fr
 import { Flex } from './Flex';
 import { useAsyncEffect, useLocalStorage } from "../hooks";
 
-const GEOIP_URL = `https://gp6lu-paaaa-aaaap-qaatq-cai.raw.ic0.app/country`;
+const GEOIP_URL = `https://gp6lu-paaaa-aaaap-qaatq-cai.raw.icp0.io/country`;
 
 type GeoipResponse = {iso_code?: string | null, is_in_european_union?: boolean | null, dismissed?: boolean};
 

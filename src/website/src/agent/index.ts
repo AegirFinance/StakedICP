@@ -7,7 +7,7 @@ export async function getBackendActor<T>({canisterId, interfaceFactory}: Pick<Cr
   }
 
   const host = process.env.NODE_ENV === "production"
-    ? `https://${canisterId}.ic0.app`
+    ? `https://${canisterId}.icp0.io`
     : "http://localhost:8080";
   const agent = new HttpAgent({ host });
   // for local development only, this must not be used for production
