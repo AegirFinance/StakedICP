@@ -33,17 +33,18 @@ SIGNING_ADDRESS="$(canister call signing address | tr -d ')("')"
 echo Address: "$SIGNING_ADDRESS"
 
 echo Check initial balance
-LOCAL_BALANCE="$(dfx ledger --identity default balance)"
+LOCAL_BALANCE="$(dfx ledger balance)"
 if [[ "$(echo $LOCAL_BALANCE | cut -d\. -f1)" == "0" ]]; then
-    echo Insufficient Initial Balance: $LOCAL_BALANCE, Ensure the "default" account has 17 ICP
+    echo Insufficient Initial Balance: $LOCAL_BALANCE, Ensure the "$(dfx identity whoami)" account has 17 ICP
     exit 1
 fi
 echo Initial Balance: $LOCAL_BALANCE
 
 echo Creating new neurons
+IDENTITY_PEM="$(dfx identity export $(dfx identity whoami))"
 make_neuron() {
     "$DIR/../target/debug/oracle" make-neuron \
-        --private-pem ~/.config/dfx/identity/default/identity.pem \
+        --private-pem <(echo "$IDENTITY_PEM") \
         --deposits-canister $(canister id deposits) \
         --signing-canister $(canister id signing) \
         --governance $(canister id nns-governance) \
