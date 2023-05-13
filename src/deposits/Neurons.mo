@@ -27,16 +27,25 @@ module {
     public type UpgradeData = {
         #v1: {
             governance: Principal;
-            proposalNeuron: ?Neuron;
+            proposalNeuron: ?NeuronV1;
         };
+        #v2;
     };
 
     // Neuron is the local state we store about a neuron.
+    public type NeuronV1 = {
+        id : Nat64;
+        accountId : NNS.AccountIdentifier;
+        dissolveState : ?Governance.DissolveState;
+        cachedNeuronStakeE8s : Nat64;
+    };
+
     public type Neuron = {
         id : Nat64;
         accountId : NNS.AccountIdentifier;
         dissolveState : ?Governance.DissolveState;
         cachedNeuronStakeE8s : Nat64;
+        stakedMaturityE8sEquivalent: ?Nat64;
     };
 
     public type NeuronsError = {
@@ -47,7 +56,18 @@ module {
         #GovernanceError: Governance.GovernanceError;
     };
 
+    public func upgradeNeuronV1(n: NeuronV1): Neuron {
+        {
+            id = n.id;
+            accountId = n.accountId;
+            dissolveState = n.dissolveState;
+            cachedNeuronStakeE8s = n.cachedNeuronStakeE8s;
+            stakedMaturityE8sEquivalent = null;
+        }
+    };
+
     public type NeuronResult = Result.Result<Neuron, NeuronsError>;
+    public type NeuronResultV1 = Result.Result<NeuronV1, NeuronsError>;
     public type NeuronsResult = Result.Result<[Neuron], NeuronsError>;
     public type Nat64Result = Result.Result<Nat64, NeuronsError>;
 
@@ -68,82 +88,41 @@ module {
         }
     };
 
-    // Proposal-based neuron management. Lets our canister "directly" manage
-    // NNS neurons, by creating proposals. Used by other modules, like
-    // Withdrawals, and Staking. The assumption is that the managed neurons
-    // have the "proposal neuron" added as a hot key. This allows the proposal
-    // neuron to submit proposals managing the managed neurons.
+    // Neuron management helpers.
     public class Manager(args: {
         governance: Principal;
     }) {
         private var governance: Governance.Interface = actor(Principal.toText(args.governance));
-        private var proposalNeuron: ?Neuron = null;
 
         public func metrics(): async [Metrics.Metric] {
-            let (proposalNeuronBalance, proposalNeuronFees): (Nat64, Nat64) = switch (proposalNeuron) {
-                case (null) { (0, 0) };
-                case (?{id}) {
-                    switch (await governance.get_full_neuron(id)) {
-                        case (#Err(err)) { (0, 0) };
-                        case (#Ok(n)) { (n.cached_neuron_stake_e8s, n.neuron_fees_e8s) };
-                    }
-                };
-            };
-
-            let ms = Buffer.Buffer<Metrics.Metric>(3);
-            ms.add({
-                name = "neuron_count";
-                t = "gauge";
-                help = ?"count of the neuron(s) by type";
-                labels = [("type", "proposal")];
-                value = if (proposalNeuron == null) { "0" } else { "1" };
-            });
-            ms.add({
-                name = "neuron_balance_e8s";
-                t = "gauge";
-                help = ?"e8s balance of the neuron(s)";
-                labels = [("type", "proposal")];
-                value = Nat64.toText(proposalNeuronBalance);
-            });
-            ms.add({
-                name = "neuron_fees_e8s";
-                t = "gauge";
-                help = ?"e8s fees paid by the neuron(s)";
-                labels = [("type", "proposal")];
-                value = Nat64.toText(proposalNeuronFees);
-            });
+            let ms = Buffer.Buffer<Metrics.Metric>(0);
             ms.toArray()
-        };
-
-        // ===== PROPOSAL NEURON MANAGEMENT FUNCTIONS =====
-
-        public func getProposalNeuron(): ?Neuron {
-            proposalNeuron
-        };
-
-        public func setProposalNeuron(neuron: Neuron) {
-            proposalNeuron := ?neuron;
         };
 
         // ===== NEURON INFO FUNCTIONS =====
 
-        // Fetch maturity info for a list of neuron ids, as an array of [(id, e8s)].
-        // TODO: try/catch error handling on await here?
-        public func maturities(ids: [Nat64]): async [(Nat64, Nat64)] {
+        // list fetches a bunch of neurons by ids (or all, if ids omitted)
+        public func list(ids: ?[Nat64]): async [Neuron] {
             let response = await governance.list_neurons({
-                neuron_ids = ids;
-                include_neurons_readable_by_caller = false;
+                neuron_ids = Option.get<[Nat64]>(ids, []);
+                include_neurons_readable_by_caller = Option.isNull(ids);
             });
-            let b = Buffer.Buffer<(Nat64, Nat64)>(response.full_neurons.size());
+            let b = Buffer.Buffer<Neuron>(response.full_neurons.size());
             for (neuron in response.full_neurons.vals()) {
                 switch (neuron.id) {
                     case (null) { };
                     case (?id) {
-                        b.add((id.id, neuron.maturity_e8s_equivalent));
+                        b.add({
+                            id = id.id;
+                            accountId = NNS.accountIdFromPrincipal(args.governance, Blob.fromArray(neuron.account));
+                            dissolveState = neuron.dissolve_state;
+                            cachedNeuronStakeE8s = neuron.cached_neuron_stake_e8s;
+                            stakedMaturityE8sEquivalent = neuron.staked_maturity_e8s_equivalent;
+                        });
                     };
                 };
             };
-            return b.toArray()
+            b.toArray()
         };
 
         // Refresh a neuron's balance and info
@@ -171,6 +150,7 @@ module {
                             accountId = NNS.accountIdFromPrincipal(args.governance, Blob.fromArray(neuron.account));
                             dissolveState = neuron.dissolve_state;
                             cachedNeuronStakeE8s = neuron.cached_neuron_stake_e8s;
+                            stakedMaturityE8sEquivalent = neuron.staked_maturity_e8s_equivalent;
                         });
                     };
                 };
@@ -179,206 +159,20 @@ module {
             }
         };
 
-        // ===== PROPOSAL COMMAND FUNCTIONS =====
-
-        public func mergeMaturity(id: Nat64, percentage: Nat32): async NeuronResult {
-            // We need re-fetch maturity here to ensure that this proposal
-            // passes. Otherwise we'll be charged for a failed proposal.
-            let maturity = Option.get((await maturities([id])).vals().next(), (id, 0 : Nat64)).1;
-            if (maturity <= icpFee) {
-                return #err(#InsufficientMaturity);
-            };
-
-            await doMergeMaturity(id, percentage);
-        };
-
-        public func mergeMaturities(ids: [Nat64], percentage: Nat32): async [(Nat64, Nat64, NeuronResult)] {
-            let b = Buffer.Buffer<(Nat64, Nat64, NeuronResult)>(ids.size());
-
-            // We need re-fetch maturities here to ensure that this
-            // proposal passes. Otherwise we'll be charged for a failed proposal.
-            for ((id, maturity) in (await maturities(ids)).vals()) {
-                let result = if (maturity <= icpFee) {
-                   #err(#InsufficientMaturity)
-                } else {
-                   await doMergeMaturity(id, percentage)
-                };
-                b.add((id, maturity, result));
-            };
-            return b.toArray();
-        };
-
-        private func doMergeMaturity(id: Nat64, percentage: Nat32): async NeuronResult {
-            let title = "Merge " # Nat32.toText(percentage) # "% of maturity for neuron " # Nat64.toText(id);
-            try {
-                let proposal = await propose({
-                    url = "https://forum.dfinity.org";
-                    title = ?title;
-                    action = ?#ManageNeuron({
-                        id = null;
-                        command = ?#StakeMaturity({
-                            percentage_to_stake = ?percentage
-                        });
-                        neuron_id_or_subaccount = ?#NeuronId({ id = id });
-                    });
-                    summary = title;
-                });
-                switch (proposal) {
-                    case (#err(#GovernanceError({error_type = 11}))) {
-                        // Insufficient maturity
-                        return #err(#InsufficientMaturity);
-                    };
-                    case (#err(err)) {
-                        return #err(err);
-                    };
-                    case (#ok(_)) {
-                        return await refresh(id);
-                    };
-                };
-            } catch (error) {
-                return #err(#Other(Error.message(error)));
-            };
-        };
-
-        public func split(id: Nat64, amount_e8s: Nat64): async NeuronResult {
-            if (amount_e8s < minimumStake + icpFee) {
-                return #err(#InsufficientStake)
-            };
-
-            let title = "Split Neuron " # Nat64.toText(id);
-            let proposal = await propose({
-                url = "https://forum.dfinity.org";
-                title = ?title;
-                action = ?#ManageNeuron({
-                    id = null;
-                    command = ?#Split({
-                        amount_e8s = amount_e8s;
-                    });
-                    neuron_id_or_subaccount = ?#NeuronId({ id = id });
-                });
-                summary = title;
-            });
-            switch (proposal) {
-                case (#err(err)) {
-                    return #err(err);
-                };
-                case (#ok(p)) {
-                    let result = await findNewNeuron(
-                        p.executed_timestamp_seconds,
-                        amount_e8s - icpFee
-                    );
-                    return Result.fromOption(result, #Other("Neuron not found, proposal: " # debug_show(p.id)));
-                };
-            };
-        };
-
-        // Start a neuron dissolving
-        public func dissolve(id: Nat64): async NeuronResult {
-            let title = "Start Dissolving Neuron " # Nat64.toText(id);
-            let proposal = await propose({
-                url = "https://forum.dfinity.org";
-                title = ?title;
-                action = ?#ManageNeuron({
-                    id = null;
-                    command = ?#Configure({
-                        operation = ?#StartDissolving({});
-                    });
-                    neuron_id_or_subaccount = ?#NeuronId({ id = id });
-                });
-                summary = title;
-            });
-            switch (proposal) {
-                case (#err(err)) {
-                    return #err(err);
-                };
-                case (#ok(_)) {
-                    return await refresh(id);
-                };
-            };
-        };
-
-        // ===== HELPER FUNCTIONS =====
-
-        // Lower-level proposal submission helper
-        private func propose(proposal: Governance.Proposal): async Result.Result<Governance.ProposalInfo, NeuronsError> {
-            try {
-                let proposalNeuronId: Nat64 = switch (proposalNeuron) {
-                    case (null) { return #err(#ProposalNeuronMissing); };
-                    case (?n) { n.id };
-                };
-
-                let manageNeuronResult = await governance.manage_neuron({
-                    id = null;
-                    command = ?#MakeProposal(proposal);
-                    neuron_id_or_subaccount = ?#NeuronId({ id = proposalNeuronId });
-                });
-
-                let proposalId = switch (manageNeuronResult.command) {
-                    case (?#MakeProposal { proposal_id = ?id }) {
-                        id.id
-                    };
-                    case (_) {
-                        return #err(#Other("Unexpected command response: " # debug_show(manageNeuronResult)));
-                    };
-                };
-
-                let proposalInfo = switch (await governance.get_proposal_info(proposalId)) {
-                    case (?p) { p };
-                    case (null) {
-                        return #err(#Other("Proposal not found: " # debug_show(proposalId)));
-                    };
-                };
-
-                switch (proposalInfo.failure_reason) {
-                    case (null) { };
-                    case (?err) {
-                        return #err(#GovernanceError(err));
-                    };
-                };
-
-                return #ok(proposalInfo);
-            } catch (error) {
-                return #err(#Other(Error.message(error)));
-            };
-        };
-
-        private func findNewNeuron(createdTimestampSeconds: Nat64, stakeE8s: Nat64): async ?Neuron {
-            let response = await governance.list_neurons({
-                neuron_ids = [];
-                include_neurons_readable_by_caller = true;
-            });
-            for (neuron in response.full_neurons.vals()) {
-                if (neuron.cached_neuron_stake_e8s == stakeE8s and neuron.created_timestamp_seconds == createdTimestampSeconds) {
-                    switch (neuron.id) {
-                        case (?id) {
-                            return ?{
-                                id = id.id;
-                                accountId = NNS.accountIdFromPrincipal(args.governance, Blob.fromArray(neuron.account));
-                                dissolveState = neuron.dissolve_state;
-                                cachedNeuronStakeE8s = neuron.cached_neuron_stake_e8s;
-                            };
-                        };
-                        case (_) { };
-                    };
-                };
-            };
-            return null;
-        };
-
         // ===== UPGRADE FUNCTIONS =====
 
         public func preupgrade(): ?UpgradeData {
-            return ?#v1({
-                governance = args.governance;
-                proposalNeuron = proposalNeuron;
-            });
+            return ?#v2;
         };
 
         public func postupgrade(upgradeData: ?UpgradeData) {
             switch (upgradeData) {
                 case (?#v1(data)) {
-                    governance := actor(Principal.toText(args.governance));
-                    proposalNeuron := data.proposalNeuron;
+                    postupgrade(?#v2);
+                };
+                case (?#v2) {
+                    // no-op
+                    return;
                 };
                 case (_) { return; };
             };

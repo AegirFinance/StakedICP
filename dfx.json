@@ -114,6 +114,11 @@
       "type": "custom",
       "wasm": ""
     },
+    "signing": {
+      "candid": "src/signing/signing.did",
+      "package": "signing",
+      "type": "rust"
+    },
     "token": {
       "main": "src/DIP20/motoko/src/token.mo",
       "type": "motoko"
@@ -141,11 +146,11 @@
       "subnet_type": "system"
     }
   },
-  "dfx": "0.12.1",
+  "dfx": "0.13.1",
   "networks": {
     "ic": {
       "providers": [
-        "https://ic0.app"
+        "https://icp0.io"
       ],
       "type": "persistent"
     },

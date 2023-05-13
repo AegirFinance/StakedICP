@@ -29,6 +29,9 @@ module {
 
     public type UpgradeData = {
         #v1: {
+            stakingNeurons: [(Text, Neurons.NeuronV1)];
+        };
+        #v2: {
             stakingNeurons: [(Text, Neurons.Neuron)];
         };
     };
@@ -74,13 +77,10 @@ module {
         };
 
         // Lists the staking neurons
-        public func list(): [{ id : Governance.NeuronId ; accountId : Text }] {
-            let b = Buffer.Buffer<{ id : Governance.NeuronId ; accountId : Text }>(stakingNeurons.size());
+        public func list(): [Neurons.Neuron] {
+            let b = Buffer.Buffer<Neurons.Neuron>(stakingNeurons.size());
             for (neuron in stakingNeurons.vals()) {
-                b.add({
-                    id = { id = neuron.id };
-                    accountId = NNS.accountIdToText(neuron.accountId);
-                });
+                b.add(neuron);
             };
             return b.toArray();
         };
@@ -118,12 +118,27 @@ module {
             ))
         };
 
+        public func addOrRefreshAll(neurons: [Neurons.Neuron]): [Bool] {
+            let b = Buffer.Buffer<Bool>(neurons.size());
+            for (neuron in neurons.vals()) {
+                b.add(addOrRefresh(neuron));
+            };
+            b.toArray()
+        };
+
         // addOrRefresh idempotently adds a staking neuron, or refreshes it's balance
         public func addOrRefresh(neuron: Neurons.Neuron): Bool {
             let id = Nat64.toText(neuron.id);
             let isNew = Option.isNull(stakingNeurons.get(id));
             stakingNeurons.put(id, neuron);
             isNew
+        };
+
+        // Idempotently remove a neuron which should be forgotten about.
+        public func removeNeurons(ids: [Nat64]): () {
+            for (id in ids.vals()) {
+                stakingNeurons.delete(Nat64.toText(id));
+            };
         };
 
         // helper to allow sorting neurons by balance
@@ -237,7 +252,7 @@ module {
         // ===== UPGRADE FUNCTIONS =====
 
         public func preupgrade(): ?UpgradeData {
-            return ?#v1({
+            return ?#v2({
                 stakingNeurons = Iter.toArray(stakingNeurons.entries());
             });
         };
@@ -245,6 +260,21 @@ module {
         public func postupgrade(upgradeData: ?UpgradeData) {
             switch (upgradeData) {
                 case (?#v1(data)) {
+                    let neurons = Buffer.Buffer<(Text, Neurons.Neuron)>(data.stakingNeurons.size());
+                    for ((id, neuron) in Iter.fromArray(data.stakingNeurons)) {
+                        neurons.add((id, {
+                            id = neuron.id;
+                            accountId = neuron.accountId;
+                            dissolveState = neuron.dissolveState;
+                            cachedNeuronStakeE8s = neuron.cachedNeuronStakeE8s;
+                            stakedMaturityE8sEquivalent = null;
+                        }));
+                    };
+                    postupgrade(?#v2({
+                        stakingNeurons = neurons.toArray();
+                    }));
+                };
+                case (?#v2(data)) {
                     stakingNeurons := TrieMap.fromEntries(
                         data.stakingNeurons.vals(),
                         Text.equal,

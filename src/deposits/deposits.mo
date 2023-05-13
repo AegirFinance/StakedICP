@@ -23,6 +23,8 @@ import TrieMap "mo:base/TrieMap";
 
 import Daily        "./Daily";
 import ApplyInterest "./Daily/ApplyInterest";
+import FlushPendingDeposits "./Daily/FlushPendingDeposits";
+import SplitNewWithdrawalNeurons "./Daily/SplitNewWithdrawalNeurons";
 import Scheduler    "./Scheduler";
 import Hex          "./Hex";
 import Neurons      "./Neurons";
@@ -162,11 +164,36 @@ shared(init_msg) actor class Deposits(args: {
     };
 
     public shared(msg) func stakingNeurons(): async [{ id : NeuronId ; accountId : Text }] {
-        staking.list()
+        let stakingNeurons = staking.list();
+        let b = Buffer.Buffer<{ id : Governance.NeuronId ; accountId : Text }>(stakingNeurons.size());
+        for (neuron in stakingNeurons.vals()) {
+            b.add({
+                id = { id = neuron.id };
+                accountId = NNS.accountIdToText(neuron.accountId);
+            });
+        };
+        return b.toArray();
     };
 
     public shared(msg) func stakingNeuronBalances(): async [(Nat64, Nat64)] {
         staking.balances()
+    };
+
+    // Remove all staking neurons, and replace with the new list
+    // Remove all withdrawal neurons
+    // Reset totalMaturity to 0
+    public shared(msg) func resetStakingNeurons(ids: [Nat64]): async Neurons.NeuronsResult {
+        owners.require(msg.caller);
+        staking.removeNeurons(staking.ids());
+        withdrawals.removeNeurons(withdrawals.ids());
+        daily.setTotalMaturity(0);
+        let ns = await neurons.list(?ids);
+        for (neuron in ns.vals()) {
+            // No minting here as we are treating these neurons as
+            // pre-existing.
+            ignore staking.addOrRefresh(neuron);
+        };
+        return #ok(ns);
     };
 
     // Idempotently add a neuron to the tracked staking neurons. The neurons
@@ -188,15 +215,21 @@ shared(init_msg) actor class Deposits(args: {
         }
     };
 
+    public shared(msg) func flushPendingDeposits(): async ?FlushPendingDeposits.FlushPendingDepositsResult {
+        owners.require(msg.caller);
+        await daily.flushPendingDeposits(
+            _availableBalance,
+            refreshAvailableBalance
+        )
+    };
+
     public shared(msg) func proposalNeuron(): async ?Neurons.Neuron {
-        neurons.getProposalNeuron()
+        null
     };
 
     public shared(msg) func setProposalNeuron(id: Nat64): async Neurons.NeuronResult {
         owners.require(msg.caller);
-        let neuron = await neurons.refresh(id);
-        Result.iterate(neuron, neurons.setProposalNeuron);
-        neuron
+        #err(#Other("Proposal neuron is deprecated."))
     };
 
     private var _aprOverride : ?Nat64 = null;
@@ -735,6 +768,11 @@ shared(init_msg) actor class Deposits(args: {
         return withdrawals.withdrawalsFor(user);
     };
 
+    public shared(msg) func withdrawalsTotal() : async Nat64 {
+        owners.require(msg.caller);
+        return withdrawals.reservedIcp() + withdrawals.totalPending();
+    };
+
     // ===== HELPER FUNCTIONS =====
 
     public shared(msg) func setInitialSnapshot(): async (Text, [(Account.Account, Nat)]) {
@@ -750,6 +788,16 @@ shared(init_msg) actor class Deposits(args: {
     public shared(msg) func setAppliedInterest(elems: [ApplyInterest.ApplyInterestSummary]): async () {
         owners.require(msg.caller);
         daily.setAppliedInterest(elems);
+    };
+
+    public shared(msg) func getTotalMaturity(): async Nat64 {
+        owners.require(msg.caller);
+        return daily.getTotalMaturity();
+    };
+
+    public shared(msg) func setTotalMaturity(v: Nat64): async () {
+        owners.require(msg.caller);
+        daily.setTotalMaturity(v);
     };
 
     public shared(msg) func getReferralData(): async ?Referrals.UpgradeData {
@@ -772,6 +820,43 @@ shared(init_msg) actor class Deposits(args: {
         return NNS.accountIdToText(NNS.accountIdFromPrincipal(args.governance, subaccount));
     };
 
+    // Called once/day by the external oracle
+    // 1. Apply Interest
+    //    a. Update cached neuron stakes (to figure out how much interest we gained today)
+    //    b. Take a new holders snapshot for the next day
+    //    c. Mint new tokens to holders
+    //    d. Update the holders snapshot for tomorrow
+    //    e. Log interest and update meanAprMicrobips
+    // 2. Flush Pending Deposits
+    //    a. Query token total supply & canister balance
+    //    b. Fulfill pending deposits from canister balance if possible
+    //    c. Deposit incoming ICP into neurons
+    //    d. Refresh staking neuron balances & cache
+    // 3. Split New Withdrawal Neurons
+    //    a. Garbage-collect disbursed neurons from the withdrawal module tracking
+    //       1. This should figure out which neurons *might* have been disbursed, and querying the
+    //       governance canister to confirm their state. This will make it idempotent.
+    //       2. If there are unknown dissolving neurons, they should be considered as new withdrawal
+    //       neurons. This will make it idempotent.
+    //    a. Query dissolving neurons total & pending total, to calculate dissolving target
+    //    b. Return a list of which staking neurons to split and how much
+    public shared(msg) func refreshNeuronsAndApplyInterest(): async [(Nat64, Nat64)] {
+        owners.require(msg.caller);
+        let now = Time.now();
+        let root = {owner = Principal.fromActor(this); subaccount = null};
+        let result = await daily.run(
+            now,
+            root,
+            queueMint,
+            _availableBalance,
+            refreshAvailableBalance
+        );
+        switch (result.2) {
+            case (?#ok(neurons_to_split)) { neurons_to_split };
+            case _ { [] };
+        }
+    };
+
     // ===== HEARTBEAT FUNCTIONS =====
 
     system func heartbeat() : async () {
@@ -792,20 +877,6 @@ shared(init_msg) actor class Deposits(args: {
                 interval = 1 * minute;
                 function = func(now: Time.Time): async Result.Result<Any, Text> {
                     #ok(await refreshAvailableBalance())
-                };
-            },
-            {
-                name = "dailyHeartbeat";
-                interval = 1 * day;
-                function = func(now: Time.Time): async Result.Result<Any, Text> {
-                    let root = {owner = Principal.fromActor(this); subaccount = null};
-                    #ok(await daily.run(
-                        now,
-                        root,
-                        queueMint,
-                        _availableBalance,
-                        refreshAvailableBalance
-                    ))
                 };
             }
         ]);
@@ -845,6 +916,16 @@ shared(init_msg) actor class Deposits(args: {
             owner = Principal.fromActor(this);
             subaccount = ?mintingSubaccount;
         })
+    };
+
+    public shared(msg) func accountIdFromPrincipal(to: Principal): async Text {
+        owners.require(msg.caller);
+        NNS.accountIdToText(
+            NNS.accountIdFromPrincipal(
+                to,
+                NNS.defaultSubaccount()
+            )
+        )
     };
 
     // ===== UPGRADE FUNCTIONS =====

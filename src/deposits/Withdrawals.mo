@@ -29,6 +29,10 @@ module {
 
     public type UpgradeData = {
         #v1: {
+            dissolving: [(Text, Neurons.NeuronV1)];
+            withdrawals: [(Text, Withdrawal)];
+        };
+        #v2: {
             dissolving: [(Text, Neurons.Neuron)];
             withdrawals: [(Text, Withdrawal)];
         };
@@ -254,6 +258,13 @@ module {
             ns
         };
 
+        // Idempotently remove a neuron which should be forgotten about.
+        public func removeNeurons(ids: [Nat64]): () {
+            for (id in ids.vals()) {
+                dissolving.delete(Nat64.toText(id));
+            };
+        };
+
         // Attempt to create a new withdrawal for the user. The full amount
         // starts as `pending`, and the `depositIcp` method applies new
         // deposits, cash, and dissolving ICP towards fulfilling pending
@@ -393,7 +404,7 @@ module {
             ns.toArray()
         };
 
-        // Once a neuron has been manually disbursed, we can forget about it.
+        // Once a neuron has been disbursed, we can forget about it.
         public func removeDisbursedNeurons(ids: [Nat64]): [Neurons.Neuron] {
             let ns = Buffer.Buffer<Neurons.Neuron>(ids.size());
             for (id in ids.vals()) {
@@ -501,7 +512,7 @@ module {
         // ===== UPGRADE FUNCTIONS =====
 
         public func preupgrade() : ?UpgradeData {
-            return ?#v1({
+            return ?#v2({
                 dissolving = Iter.toArray(dissolving.entries());
                 withdrawals = Iter.toArray(withdrawals.entries());
             });
@@ -514,6 +525,15 @@ module {
         public func postupgrade(upgradeData : ?UpgradeData) {
             switch (upgradeData) {
                 case (?#v1(data)) {
+                    postupgrade(?#v2({
+                        dissolving = Array.map<(Text, Neurons.NeuronV1), (Text, Neurons.Neuron)>(
+                            data.dissolving,
+                            func (id, neuron) = (id, Neurons.upgradeNeuronV1(neuron))
+                        );
+                        withdrawals = data.withdrawals;
+                    }));
+                };
+                case (?#v2(data)) {
                     for ((id, neuron) in Iter.fromArray(data.dissolving)) {
                         dissolving.put(id, neuron);
                     };

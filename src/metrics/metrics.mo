@@ -19,14 +19,17 @@ import Token "../DIP20/motoko/src/token";
 shared(init_msg) actor class Metrics(args: {
     deposits: Principal;
     token: Principal;
+    signing: Principal;
     auth: ?Text;
 }) = this {
 
-    private var deposits : Deposits.Deposits = actor(Principal.toText(args.deposits));
+    private var deposits : Types.Source = actor(Principal.toText(args.deposits));
     private var token : Token.Token = actor(Principal.toText(args.token));
+    private var signing : Types.Source = actor(Principal.toText(args.signing));
 
     private var depositsMetrics : ?[Types.Metric] = null;
     private var tokenInfo : ?TokenInfo = null;
+    private var signingMetrics : ?[Types.Metric] = null;
     private var lastUpdatedAt : ?Time.Time = null;
 
     private var errors: Buffer.Buffer<(Time.Time, Text, Error)> = Buffer.Buffer(0);
@@ -168,6 +171,15 @@ shared(init_msg) actor class Metrics(args: {
             };
         };
 
+        switch (signingMetrics) {
+            case (null) { };
+            case (?ms) {
+                for (m in ms.vals()) {
+                    lines.add(renderMetric(m));
+                };
+            };
+        };
+
         lines.add(renderMetric({
             name = "canister_balance_e8s";
             t = "gauge";
@@ -244,9 +256,11 @@ shared(init_msg) actor class Metrics(args: {
 
         let depositsMetrics = refreshDepositsMetrics();
         let tokenInfo = refreshTokenInfo();
+        let signingMetrics = refreshSigningMetrics();
 
         await depositsMetrics;
         await tokenInfo;
+        await signingMetrics;
 
         lastUpdatedAt := ?now;
     };
@@ -264,6 +278,14 @@ shared(init_msg) actor class Metrics(args: {
             tokenInfo := ?(await token.getTokenInfo());
         } catch (e) {
             errors.add((Time.now(), "token-info", e));
+        };
+    };
+
+    private func refreshSigningMetrics() : async () {
+        try {
+            signingMetrics := ?(await signing.metrics());
+        } catch (e) {
+            errors.add((Time.now(), "signing-metrics", e));
         };
     };
 

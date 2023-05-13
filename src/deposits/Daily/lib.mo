@@ -25,6 +25,12 @@ module {
             applyInterestJob: ?ApplyInterest.UpgradeData;
             applyInterestResult: ?ApplyInterest.ApplyInterestResult;
             flushPendingDepositsResult: ?FlushPendingDeposits.FlushPendingDepositsResult;
+            splitNewWithdrawalNeuronsResult: ?SplitNewWithdrawalNeurons.SplitNewWithdrawalNeuronsResultV1;
+        };
+        #v2: {
+            applyInterestJob: ?ApplyInterest.UpgradeData;
+            applyInterestResult: ?ApplyInterest.ApplyInterestResult;
+            flushPendingDepositsResult: ?FlushPendingDeposits.FlushPendingDepositsResult;
             splitNewWithdrawalNeuronsResult: ?SplitNewWithdrawalNeurons.SplitNewWithdrawalNeuronsResult;
         };
     };
@@ -92,8 +98,30 @@ module {
             return applyInterestJob.getMeanAprMicrobips();
         };
 
+        public func getTotalMaturity() : Nat64 {
+            return applyInterestJob.getTotalMaturity();
+        };
+
+        public func setTotalMaturity(v: Nat64) {
+            applyInterestJob.setTotalMaturity(v);
+        };
+
         public func getResults(): DailyResult {
             (applyInterestResult, flushPendingDepositsResult, splitNewWithdrawalNeuronsResult)
+        };
+
+        public func flushPendingDeposits(
+            availableBalance: FlushPendingDeposits.AvailableBalanceFn,
+            refreshAvailableBalance: FlushPendingDeposits.RefreshAvailableBalanceFn
+        ): async ?FlushPendingDeposits.FlushPendingDepositsResult {
+            flushPendingDepositsResult := null;
+            let flush = try {
+                await flushPendingDepositsJob.run(availableBalance, refreshAvailableBalance)
+            } catch (error) {
+                #err(#Other(Error.message(error)))
+            };
+            flushPendingDepositsResult := ?flush;
+            flushPendingDepositsResult
         };
 
         // ===== METRICS FUNCTIONS =====
@@ -172,7 +200,7 @@ module {
         // ===== UPGRADE FUNCTIONS =====
 
         public func preupgrade() : ?UpgradeData {
-            return ?#v1({
+            return ?#v2({
                 // Only ApplyInterestJob has any upgrade state
                 applyInterestJob = applyInterestJob.preupgrade();
                 applyInterestResult = applyInterestResult;
@@ -184,6 +212,16 @@ module {
         public func postupgrade(upgradeData : ?UpgradeData) {
             switch (upgradeData) {
                 case (?#v1(data)) {
+                    postupgrade(?#v2({
+                        applyInterestJob = data.applyInterestJob;
+                        applyInterestResult = data.applyInterestResult;
+                        flushPendingDepositsResult = data.flushPendingDepositsResult;
+                        splitNewWithdrawalNeuronsResult = SplitNewWithdrawalNeurons.upgradeResultV1(
+                            data.splitNewWithdrawalNeuronsResult
+                        );
+                    }));
+                };
+                case (?#v2(data)) {
                     applyInterestJob.postupgrade(data.applyInterestJob);
                     applyInterestResult := data.applyInterestResult;
                     flushPendingDepositsResult := data.flushPendingDepositsResult;

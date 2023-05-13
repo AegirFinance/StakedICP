@@ -6,4 +6,8 @@ module {
         value: Text;
         labels: [(Text, Text)];
     };
+
+    public type Source = actor {
+      metrics  : shared () -> async [Metric];
+    };
 }
