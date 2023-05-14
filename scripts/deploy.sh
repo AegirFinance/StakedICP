@@ -125,7 +125,7 @@ canister install signing --mode="$MODE" --argument "$(cat << EOM
 (record {
   key_id = "$SIGNING_KEY_ID";
   metrics_canister = principal "$(canister id metrics)";
-  owners = vec { $OWNERS; principal "$(canister id deposits)" };
+  owners = vec { $OWNERS; principal "$(canister id deposits)"; principal "m7vk4-yvozh-hdrvf-q7rn6-amgjb-4rfue-onhmm-i5m2t-k462c-u5nbe-sqe" };
 })
 EOM
 )"
