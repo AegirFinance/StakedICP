@@ -7,7 +7,6 @@ use ic_cdk::{
             ecdsa_public_key,
             EcdsaPublicKeyArgument,
             EcdsaPublicKeyResponse,
-            sign_with_ecdsa,
             SignWithEcdsaArgument,
             SignWithEcdsaResponse,
         },
@@ -21,8 +20,13 @@ use ic_cdk::{
 };
 use ic_ledger_types::{AccountIdentifier, Subaccount, DEFAULT_SUBACCOUNT};
 use std::cell::RefCell;
+use std::str::FromStr;
 
 mod metrics;
+
+fn mgmt_canister_id() -> Principal {
+    Principal::from_str(&"aaaaa-aa").unwrap()
+}
 
 thread_local! {
     static KEY_ID: RefCell<EcdsaKeyId> = RefCell::new(EcdsaKeyIds::TestKeyLocalDevelopment.to_key_id());
@@ -142,11 +146,16 @@ async fn sign(message: Vec<u8>) -> Result<SignatureReply, String> {
     require_owner(&api::caller());
     assert!(message.len() == 32);
 
-    let (res,): (SignWithEcdsaResponse,) = sign_with_ecdsa(SignWithEcdsaArgument {
-        message_hash: message.clone(),
-        derivation_path: derivation_path(),
-        key_id: key_id(),
-    })
+    let (res,): (SignWithEcdsaResponse,) = ic_cdk::api::call::call_with_payment(
+        mgmt_canister_id(),
+        "sign_with_ecdsa",
+        (SignWithEcdsaArgument {
+            message_hash: message.clone(),
+            derivation_path: derivation_path(),
+            key_id: key_id(),
+        },),
+        25_000_000_000,
+    )
     .await
     .map_err(|e| format!("Failed to call sign_with_ecdsa {}", e.1))?;
 
