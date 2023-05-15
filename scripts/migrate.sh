@@ -4,7 +4,7 @@ set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-NETWORK=local
+NETWORK=${1:-local}
 
 case "$NETWORK" in
     "ic")
@@ -33,18 +33,22 @@ SIGNING_ADDRESS="$(canister call signing address | tr -d ')("')"
 echo Address: "$SIGNING_ADDRESS"
 
 echo Check initial balance
-LOCAL_BALANCE="$(dfx ledger balance)"
+LOCAL_BALANCE="$(dfx ledger --network $NETWORK balance)"
 if [[ "$(echo $LOCAL_BALANCE | cut -d\. -f1)" == "0" ]]; then
     echo Insufficient Initial Balance: $LOCAL_BALANCE, Ensure the "$(dfx identity whoami)" account has 17 ICP
     exit 1
 fi
 echo Initial Balance: $LOCAL_BALANCE
 
+echo Exporting identity
+IDENTITY_PEM="$(mktemp)"
+dfx identity export "$(dfx identity whoami)" > "$IDENTITY_PEM"
+echo pem: $IDENTITY_PEM
+
 echo Creating new neurons
-IDENTITY_PEM="$(dfx identity export $(dfx identity whoami))"
 make_neuron() {
     "$DIR/../target/debug/oracle" make-neuron \
-        --private-pem <(echo "$IDENTITY_PEM") \
+        --private-pem "$IDENTITY_PEM" \
         --deposits-canister $(canister id deposits) \
         --signing-canister $(canister id signing) \
         --governance $(canister id nns-governance) \
@@ -85,7 +89,7 @@ fi
 
 
 echo Reset the deposits canister
-canister call deposits resetStakingNeurons --argument-file "$OUT"
+echo $ dfx canister --network $NETWORK call deposits resetStakingNeurons --argument-file "$OUT"
 
 echo Check the remaining amount of needed ICP is in the deposits canister,
 echo top it up based on the token totalSupply - 16, then flush the pending
