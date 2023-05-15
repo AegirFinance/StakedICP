@@ -9,7 +9,7 @@ fi
 echo token.getHolders
 dfx canister --network ic call token getHolders '(0, 1024)' > "$OUT/token.getHolders.did"
 
-for method in getAppliedInterest proposalNeuron stakingNeurons aprMicrobips getReferralData; do
+for method in getAppliedInterest proposalNeuron stakingNeurons aprMicrobips getReferralData withdrawalsTotal; do
     echo deposits.$method
     dfx canister --network ic call deposits "$method" > "$OUT/deposits.$method.did"
 done
