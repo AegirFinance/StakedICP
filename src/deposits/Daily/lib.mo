@@ -1,5 +1,6 @@
 import Buffer "mo:base/Buffer";
 import Error "mo:base/Error";
+import Int "mo:base/Int";
 import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
 import Text "mo:base/Text";
@@ -141,6 +142,10 @@ module {
                 };
                 case (_) { 0 };
             };
+            let lastHeartbeatAt: ?Int = switch (applyInterestResult) {
+                case (?#ok(a)) { ?a.timestamp };
+                case (_) { null };
+            };
 
             let ms = Buffer.Buffer<Metrics.Metric>(2);
             ms.add({
@@ -157,6 +162,19 @@ module {
                 labels = [];
                 value = Nat64.toText(lastHeartbeatInterestApplied);
             });
+            switch (lastHeartbeatAt) {
+                case (null) {};
+                case (?last) {
+                    ms.add({
+                        name = "last_heartbeat_at";
+                        t = "gauge";
+                        help = ?"nanosecond timestamp of the last time heartbeat ran";
+                        labels = [];
+                        value = Int.toText(last);
+                    });
+                };
+            };
+
             ms.toArray()
         };
 

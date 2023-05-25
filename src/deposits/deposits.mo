@@ -314,21 +314,6 @@ shared(init_msg) actor class Deposits(args: {
         appendIter(ms, staking.metrics().vals());
         appendIter(ms, withdrawals.metrics().vals());
 
-        // For backwards compatibility in the metrics dashboard.
-
-        switch (scheduler.getLastJobResult("dailyHeartbeat")) {
-            case (null) {};
-            case (?last) {
-                ms.add({
-                    name = "last_heartbeat_at";
-                    t = "gauge";
-                    help = ?"nanosecond timestamp of the last time heartbeat ran";
-                    labels = [];
-                    value = Int.toText(last.startedAt);
-                });
-            };
-        };
-
         ms.toArray()
     };
 
