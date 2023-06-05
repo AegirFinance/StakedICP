@@ -326,7 +326,7 @@ function FAQ({neurons}: {neurons: string[]|null}) {
         </AccordionHeader>
         <AccordionContent>
           <p>
-          To prevent manipulation and vote-buying, stICP holders cannot directly vote on NNS proposals. All ICP held by StakedICP follows the <a href="https://www.ic.community/followee-neuron-for-icp-maximalist-network/">ICP Maximalist Network neuron</a> to maximize rewards.
+          To prevent manipulation and vote-buying, stICP holders cannot directly vote on NNS proposals. All ICP held by StakedICP follows the <a href="https://www.synapse.vote/">Synapse.Vote neuron</a> to maximize rewards.
           </p>
           <p>
           All held ICP is locked securely in the StakedICP neurons:
