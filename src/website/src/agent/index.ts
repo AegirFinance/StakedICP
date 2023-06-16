@@ -6,10 +6,12 @@ export async function getBackendActor<T>({canisterId, interfaceFactory}: Pick<Cr
     throw new Error("Canister not deployed");
   }
 
-  const host = process.env.NODE_ENV === "production"
-    ? `https://${canisterId}.icp0.io`
-    : "http://localhost:8080";
-  const agent = new HttpAgent({ host });
+  const agent = new HttpAgent(
+    process.env.NODE_ENV === "production"
+      ? { host: "https://icp-api.io" }
+      : { host: "http://localhost:8080" }
+  );
+
   // for local development only, this must not be used for production
   if (process.env.NODE_ENV === 'development') {
     await agent.fetchRootKey();
