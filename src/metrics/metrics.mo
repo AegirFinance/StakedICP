@@ -73,7 +73,44 @@ shared(init_msg) actor class Metrics(args: {
     };
 
     public query func http_request(request: HttpRequest) : async HttpResponse {
-        let headers : [HeaderField] = [("Content-Type", "text/plain"), ("WWW-Authenticate", "Basic realm=\"Metrics\", charset=\"UTF-8\"")];
+        let unauthorized : HttpResponse = {
+            status_code = 401;
+            headers = [("Content-Type", "text/plain"), ("WWW-Authenticate", "Basic realm=\"Metrics\", charset=\"UTF-8\"")];
+            body = Text.encodeUtf8("Not authorized.");
+            streaming_strategy = null;
+            upgrade = false;
+        };
+
+        switch (request.method, request.url) {
+            case ("GET", "/metrics") {
+                if (not authorized(request)) {
+                    return unauthorized;
+                };
+                return metrics(true);
+            };
+            case ("GET", "/tvl") {
+                // Publicly accessible
+                return tvl();
+            };
+            case ("GET", "/errors") {
+                if (not authorized(request)) {
+                    return unauthorized;
+                };
+                return showErrors();
+            };
+            case (_, _) {
+                return {
+                    status_code = 404;
+                    headers = [("Content-Type", "text/plain")];
+                    body = Text.encodeUtf8("Not found");
+                    streaming_strategy = null;
+                    upgrade = false;
+                };
+            };
+        };
+    };
+
+    private func authorized(request : HttpRequest) : Bool {
         switch (args.auth) {
             case (null) { };
             case (?auth) {
@@ -86,34 +123,11 @@ shared(init_msg) actor class Metrics(args: {
 
                 let expected = "Basic " # auth;
                 if (found != expected) {
-                    return {
-                        status_code = 401;
-                        headers = headers;
-                        body = Text.encodeUtf8("Not authorized.");
-                        streaming_strategy = null;
-                        upgrade = false;
-                    };
+                    return false;
                 }
             };
         };
-
-        switch (Text.split(request.url, #text("?")).next()) {
-            case (?"/metrics") {
-                return metrics(true);
-            };
-            case (?"/errors") {
-                return showErrors();
-            };
-            case (_) {
-                return {
-                    status_code = 404;
-                    headers = headers;
-                    body = Text.encodeUtf8("Not found");
-                    streaming_strategy = null;
-                    upgrade = false;
-                };
-            };
-        };
+        return true;
     };
 
     public shared func http_request_update(request : HttpRequest) : async HttpResponse {
@@ -289,4 +303,17 @@ shared(init_msg) actor class Metrics(args: {
         };
     };
 
+    private func tvl() : HttpResponse {
+        let body = switch (tokenInfo) {
+            case (null) { "{}" };
+            case (?info) { "{\"tvl\": \"" # Nat.toText(info.metadata.totalSupply) # "\"}" };
+        };
+        return {
+            status_code = 200;
+            headers = [("Content-Type", "application/json")];
+            body = Text.encodeUtf8(body);
+            streaming_strategy = null;
+            upgrade = false;
+        };
+    };
 };
