@@ -13,7 +13,6 @@ import Token "../../DIP20/motoko/src/token";
 module {
     public type FlushPendingDepositsResult = Result.Result<[Ledger.TransferResult], Neurons.NeuronsError>;
 
-    public type AvailableBalanceFn = () -> Nat64;
     public type RefreshAvailableBalanceFn = () -> async Nat64;
 
     // Job is the step of the daily process which transfers pending deposits
@@ -32,10 +31,7 @@ module {
         // - pending withdrawals
         // - ICP in the canister
         // - staking neurons
-        public func run(
-            availableBalance: AvailableBalanceFn,
-            refreshAvailableBalance: RefreshAvailableBalanceFn
-        ): async FlushPendingDepositsResult {
+        public func run(refreshAvailableBalance: RefreshAvailableBalanceFn): async FlushPendingDepositsResult {
             // Note, this races with the queued mints in ApplyInterest. Once
             // ApplyInterest's flushes are finished, the total supply might be
             // higher than what we see here. So we run this after the ApplyInterest.

@@ -217,10 +217,7 @@ shared(init_msg) actor class Deposits(args: {
 
     public shared(msg) func flushPendingDeposits(): async ?FlushPendingDeposits.FlushPendingDepositsResult {
         owners.require(msg.caller);
-        await daily.flushPendingDeposits(
-            _availableBalance,
-            refreshAvailableBalance
-        )
+        await daily.flushPendingDeposits(refreshAvailableBalance)
     };
 
     public shared(msg) func proposalNeuron(): async ?Neurons.Neuron {
@@ -593,7 +590,7 @@ shared(init_msg) actor class Deposits(args: {
         // immediately so that the availableBalance doesn't fluctuate.
         ignore withdrawals.depositIcp(_availableBalance());
 
-        cachedLedgerBalanceE8s
+        _availableBalance()
     };
 
     // Datapoints representing available liquidity at a point in time.
@@ -833,7 +830,6 @@ shared(init_msg) actor class Deposits(args: {
             now,
             root,
             queueMint,
-            _availableBalance,
             refreshAvailableBalance
         );
         switch (result.2) {

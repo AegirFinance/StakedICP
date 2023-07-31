@@ -112,12 +112,11 @@ module {
         };
 
         public func flushPendingDeposits(
-            availableBalance: FlushPendingDeposits.AvailableBalanceFn,
             refreshAvailableBalance: FlushPendingDeposits.RefreshAvailableBalanceFn
         ): async ?FlushPendingDeposits.FlushPendingDepositsResult {
             flushPendingDepositsResult := null;
             let flush = try {
-                await flushPendingDepositsJob.run(availableBalance, refreshAvailableBalance)
+                await flushPendingDepositsJob.run(refreshAvailableBalance)
             } catch (error) {
                 #err(#Other(Error.message(error)))
             };
@@ -184,7 +183,6 @@ module {
             now: Time.Time,
             root: Account.Account,
             queueMint: ApplyInterest.QueueMintFn,
-            availableBalance: FlushPendingDeposits.AvailableBalanceFn,
             refreshAvailableBalance: FlushPendingDeposits.RefreshAvailableBalanceFn
         ) : async DailyResult {
             applyInterestResult := null;
@@ -199,7 +197,7 @@ module {
             applyInterestResult := ?apply;
 
             let flush = try {
-                await flushPendingDepositsJob.run(availableBalance, refreshAvailableBalance)
+                await flushPendingDepositsJob.run(refreshAvailableBalance)
             } catch (error) {
                 #err(#Other(Error.message(error)))
             };
