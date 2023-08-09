@@ -253,34 +253,31 @@ function FAQ({neurons}: {neurons: string[]|null}) {
           There exist a number of potential risks when staking ICP using liquid staking protocols.
             <ul>
               <li>
-                <p>
                 Smart contract security
-                </p>
-                <p>
-                There is an inherent risk that StakedICP could contain a smart contract vulnerability or bug. The StakedICP code is not audited. In the future, the StakedICP code will be open-sourced, audited and covered by an extensive bug bounty program to minimise this risk. Use at your own risk.
-                </p>
+                <br />
+                StakedICP's code has been reviewed internally and externally, but it hasn't undergone a formal audit. While we've taken steps to ensure its quality, it's important to acknowledge the potential for bugs. Our code review process helps identify issues, but it's impossible to guarantee a completely bug-free code. We're committed to transparency about this reality. Make sure to conduct your own due diligence and research before making any decisions. Always DYOR.
               </li>
 
               <li>
-              Internet Computer - Technical risk
+                Internet Computer - Technical risk
                 <br />
                 StakedICP is built atop experimental technology under active development, and there is no guarantee that the Internet Computer has been developed error-free. Any vulnerabilities inherent to the Internet Computer brings risk with it.
               </li>
 
               <li>
-              Internet Computer - Adoption risk
+                Internet Computer - Adoption risk
                 <br />
                 The value of stICP is built around the staking rewards associated with the Dfinity Internet Computer. If the Internet Computer fails to reach required levels of adoption we could experience significant fluctuations in the value of ICP and stICP.
               </li>
 
               <li>
-              StakedICP key management risk
+                StakedICP key management risk
                 <br />
-                ICP staked via StakedICP is locked securely in the StakedICP neurons to minimise custody risk. If neuron account keys are lost, or get hacked, we risk funds becoming locked.
+                The StakedICP canisters use the Internet Computer's Chain-key transactions to own and control the staking neurons.
               </li>
 
               <li>
-              stICP price risk
+                stICP price risk
                 <br />
                 Users risk an exchange price of stICP which is lower than inherent value due to withdrawal restrictions on StakedICP, making arbitrage and risk-free market-making impossible. StakedICP is driven to mitigate these risks and eliminate them entirely to the extent possible. Despite this, they may still exist and, as such, it is our duty to communicate them.
               </li>
