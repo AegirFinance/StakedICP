@@ -130,6 +130,18 @@ function FAQ({neurons}: {neurons: string[]|null}) {
           Rewards are distributed daily. There can be up to 48 hours
           between when you stake, and when you receive your first rewards.
           </p>
+
+          <p>
+          In v1 of the protocol (released 2022), both the staking neurons and the canisters were controlled by the StakedICP team directly. This allowed us to ship faster and test the product.
+          </p>
+
+          <p>
+          As of May 2023, the v2 of the protocol has launched. In v2, the staking neurons are no-longer directly controlled by the team, but are owned and controlled on-chain by the canisters themselves. The canisters, however are still managed by the StakedICP team. This allows the team to upgrade the code, adding features and continuing to build.
+          </p>
+
+          <p>
+          Eventually, we would like for the protocol to be fully under community goverenance. Full DAO control is the goal.
+          </p>
         </AccordionContent>
       </AccordionItem>
 
@@ -256,6 +268,8 @@ function FAQ({neurons}: {neurons: string[]|null}) {
                 Smart contract security
                 <br />
                 StakedICP's code has been reviewed internally and externally, but it hasn't undergone a formal audit. While we've taken steps to ensure its quality, it's important to acknowledge the potential for bugs. Our code review process helps identify issues, but it's impossible to guarantee a completely bug-free code. We're committed to transparency about this reality. Make sure to conduct your own due diligence and research before making any decisions. Always DYOR.
+                <br />
+                The canister and website source code is open-source <a href="https://github.com/AegirFinance/StakedICP">on Github</a>
               </li>
 
               <li>
