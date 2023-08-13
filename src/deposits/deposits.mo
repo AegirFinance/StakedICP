@@ -142,6 +142,7 @@ shared(init_msg) actor class Deposits(args: {
     private stable var stablePendingMints : ?[(Account.Account, Nat64)] = null;
 
     private stable var cachedLedgerBalanceE8s : Nat64 = 0;
+    private stable var cachedTokenTotalSupply : Nat64 = 0;
 
     // ===== OWNER FUNCTIONS =====
 
@@ -296,6 +297,13 @@ shared(init_msg) actor class Deposits(args: {
             help = ?"deposits canister available ICP balance";
             labels = [];
             value = Nat64.toText(_availableBalance());
+        });
+        ms.add({
+            name = "cached_token_total_supply";
+            t = "gauge";
+            help = ?"cached token total supply";
+            labels = [("token", "stICP"), ("canister", "deposits")];
+            value = Nat64.toText(cachedTokenTotalSupply);
         });
         ms.add({
             name = "pending_mint_count";
@@ -538,6 +546,28 @@ shared(init_msg) actor class Deposits(args: {
             };
             #err(Error.message(error))
         }
+    };
+
+    // ===== EXCHANGE RATE FUNCTIONS =====
+
+    // exchangeRate returns (stICP, totalICP), so the client can calculate the
+    // exchange rate
+    public shared(msg) func exchangeRate() : async (Nat64, Nat64) {
+        _exchangeRate()
+    };
+
+    private func _exchangeRate() : (Nat64, Nat64) {
+        let stIcp = cachedTokenTotalSupply;
+        var totalIcp = _availableBalance();
+        for ((id, b) in staking.balances().vals()) {
+            totalIcp += b;
+        };
+        (stIcp, totalIcp)
+    };
+
+    private func refreshTokenTotalSupply() : async Nat64 {
+        cachedTokenTotalSupply := Nat64.fromNat(await token.totalSupply());
+        cachedTokenTotalSupply
     };
 
     // ===== WITHDRAWAL FUNCTIONS =====
@@ -865,6 +895,13 @@ shared(init_msg) actor class Deposits(args: {
                 interval = 1 * minute;
                 function = func(now: Time.Time): async Result.Result<Any, Text> {
                     #ok(await refreshAvailableBalance())
+                };
+            },
+            {
+                name = "refreshTokenTotalSupply";
+                interval = 1 * minute;
+                function = func(now: Time.Time): async Result.Result<Any, Text> {
+                    #ok(await refreshTokenTotalSupply())
                 };
             }
         ]);
