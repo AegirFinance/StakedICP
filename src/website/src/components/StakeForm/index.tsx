@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Flex,
+    Flex,
 } from '../index';
 import { styled } from '../../stitches.config';
 import { StakePanel } from "./StakePanel";
@@ -12,13 +12,14 @@ export function StakeForm() {
     const [active, setActive] = React.useState<Panels>('stake');
     return (
         <>
-            <Flex css={{flexDirection: "row", justifyContent: "center"}}>
+            <Flex css={{ flexDirection: "row", justifyContent: "center" }}>
                 <Nav>
                     <Item title="Stake" active={active === 'stake'} onClick={() => setActive('stake')}>Stake</Item>
                     <Item title="Unstake" active={active === 'unstake'} onClick={() => setActive('unstake')}>Unstake</Item>
                 </Nav>
             </Flex>
             {active === 'stake' ? <StakePanel /> : <UnstakePanel />}
+            <Attribution>Data from CoinGecko</Attribution>
         </>
     );
 }
@@ -57,4 +58,14 @@ const Item = styled('a', {
             },
         },
     },
+});
+
+const Attribution = styled('div', {
+    fontWeight: 'light',
+    fontSize: '$1',
+    margin: '$2',
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "baseline",
 });

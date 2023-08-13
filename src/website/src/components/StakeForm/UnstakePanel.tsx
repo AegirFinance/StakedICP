@@ -23,6 +23,7 @@ import * as format from "../../format";
 import { useAsyncEffect } from "../../hooks";
 import { styled } from '../../stitches.config';
 import { ConnectButton, useAccount, useBalance, useCanister, useContext } from "../../wallet";
+import { Price } from "./Price";
 
 function parseFloat(str: string): number {
     str = str.trim();
@@ -114,6 +115,7 @@ export function UnstakePanel() {
         onChange={(e) => {
           setAmount(e.currentTarget.value);
         }} />
+      <Price amount={parsedAmount ?? 0} />
       <StyledSlider
         disabled={!principal || sticp === undefined}
         value={[Math.min(Number((parsedAmount ?? 0) * 100_000_000), Number(sticp?.value ?? BigInt(0)))]}

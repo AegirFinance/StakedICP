@@ -17,6 +17,7 @@ import * as deposits from "../../../../declarations/deposits";
 import { Deposits } from "../../../../declarations/deposits/deposits.did";
 import { useAsyncEffect, useReferralCode } from '../../hooks';
 import { ConnectButton, useAccount, useCanister, useContext, useTransaction } from "../../wallet";
+import { Price } from "./Price";
 
 
 function parseFloat(str: string): number {
@@ -60,6 +61,7 @@ export function StakePanel() {
         onChange={(e) => {
           setAmount(e.currentTarget.value);
         }} />
+      <Price amount={stake ?? 0} />
       <h5 style={{marginBottom: '0.75rem'}}>You will receive</h5>
       <Input
         disabled
@@ -70,6 +72,7 @@ export function StakePanel() {
         name="receive"
         value={stake >= MINIMUM_DEPOSIT ? stake - FEE : 0}
         />
+      <Price amount={Math.max((stake ?? 0) - FEE, 0)} />
       {principal ? (
         <TransferDialog
           open={showTransferDialog}
