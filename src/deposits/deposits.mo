@@ -477,27 +477,15 @@ shared(init_msg) actor class Deposits(args: {
         let totalIcp = Nat64.toNat(totalIcp64);
         let depositAmount = Nat64.toNat(depositAmount)
         // Formula to maintain the exchange rate:
-        //   totalIcp / stIcp = (totalIcp + depositAmount) / (stIcp + toMintE8s)
+        //   stIcp / totalIcp = toMintE8s / depositAmount
         //
         // And solve for toMintE8s:
-        //   1 = (stIcp * (totalIcp + depositAmount)) / (totalIcp * (stIcp + toMintE8s))
-        //   totalIcp * (stIcp + toMintE8s) = stIcp * (totalIcp + depositAmount)
-        //   stIcp + toMintE8s = (stIcp * (totalIcp + depositAmount)) / totalIcp
-        //   toMintE8s = ((stIcp * (totalIcp + depositAmount)) / totalIcp) - stIcp
+        //   toMintE8s = (stIcp / totalIcp) * depositAmount
         //
         // Then, because we are working with Nats which have no decimals, we
         // need to add precision for the division...
         let precision: Nat = 100_000_000;
-        let toMintE8s = Nat64.fromNat(
-            (
-                (
-                    (stIcp * (totalIcp + depositAmount) * precision)
-                    / totalIcp
-                )
-                / precision
-            )
-            - stIcp
-        );
+        let toMintE8s = Nat64.fromNat((((stIcp * precision) / totalIcp) * depositAmount) / precision);
 
         // Mint the new tokens
         Debug.print("[Referrals.convert] user: " # debug_show(user));
@@ -691,7 +679,7 @@ shared(init_msg) actor class Deposits(args: {
         b.toArray();
     };
 
-    private func availableLiquidity(amount: Nat64): (Int, Nat64) {
+    private func availableLiquidity(amountIcp: Nat64): (Int, Nat64) {
         var maxDelay: Int = 0;
         var sum: Nat64 = 0;
         // Is there enough available liquidity in the neurons?
@@ -712,6 +700,24 @@ shared(init_msg) actor class Deposits(args: {
     public shared(msg) func createWithdrawal(user: Account.Account, amount: Nat64) : async Result.Result<Withdrawals.Withdrawal, Withdrawals.WithdrawalsError> {
         assert(msg.caller == user.owner);
 
+        // Calculate how much icp to pay out
+        let (stIcp64, totalIcp64) = _exchangeRate();
+        let stIcp = Nat64.toNat(stIcp64);
+        let totalIcp = Nat64.toNat(totalIcp64);
+        let burnAmount = Nat64.toNat(burnAmount)
+        assert(burnAmount <= stIcp);
+        // Convert with the exchange rate:
+        //   totalIcp / stIcp = toUnlockE8s / burnAmount
+        //
+        // And solve for toUnlockE8s:
+        //   toUnlockE8s = burnAmount * (totalIcp / stIcp)
+        //
+        // Then, because we are working with Nats which have no decimals, we
+        // need to add precision for the division...
+        let precision: Nat = 100_000_000;
+        assert(stIcp > 0);
+        let toUnlockE8s = Nat64.fromNat(((burnAmount * totalIcp * precision) / stIcp) / precision);
+
         // Burn the tokens from the user. This makes sure there is enough
         // balance for the user.
         // TODO: Figure out how to do this with ICRC1. Approve &
@@ -729,12 +735,12 @@ shared(init_msg) actor class Deposits(args: {
         // Minimum, 1 minute until withdrawals.depositIcp runs again.
         var delay: Int = 60;
         var availableNeurons: Nat64 = 0;
-        if (amount > availableCash) {
-            let (d, a) = availableLiquidity(amount - availableCash);
+        if (toUnlockE8s > availableCash) {
+            let (d, a) = availableLiquidity(toUnlockE8s - availableCash);
             delay := d;
             availableNeurons := a;
         };
-        if (availableCash+availableNeurons < amount) {
+        if (availableCash+availableNeurons < toUnlockE8s) {
             // Refund the user's burnt tokens. In practice, this should never
             // happen, as cash+neurons should be >= totalTokens.
             ignore queueMint(user, amount);
@@ -742,7 +748,7 @@ shared(init_msg) actor class Deposits(args: {
             return #err(#InsufficientLiquidity);
         };
 
-        return #ok(withdrawals.createWithdrawal(user.owner, amount, delay));
+        return #ok(withdrawals.createWithdrawal(user.owner, toUnlockE8s, delay));
     };
 
     // Complete withdrawal(s), transferring the ready amount to the

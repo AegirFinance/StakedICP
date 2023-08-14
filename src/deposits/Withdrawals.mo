@@ -265,8 +265,8 @@ module {
             };
         };
 
-        // Attempt to create a new withdrawal for the user. The full amount
-        // starts as `pending`, and the `depositIcp` method applies new
+        // Attempt to create a new withdrawal for the user. The full amount of
+        // ICP starts as `pending`, and the `depositIcp` method applies new
         // deposits, cash, and dissolving ICP towards fulfilling pending
         // deposits.
         public func createWithdrawal(user: Principal, amount: Nat64, delay: Int): Withdrawal {
