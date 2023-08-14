@@ -268,6 +268,7 @@ shared(init_msg) actor class Deposits(args: {
         };
 
         let neuronsMetrics = await neurons.metrics();
+        let exchange_rate = _exchangeRate();
 
         let ms = Buffer.Buffer<Metrics.Metric>(0);
         ms.add({
@@ -304,6 +305,20 @@ shared(init_msg) actor class Deposits(args: {
             help = ?"cached token total supply";
             labels = [("token", "stICP"), ("canister", "deposits")];
             value = Nat64.toText(cachedTokenTotalSupply);
+        });
+        ms.add({
+            name = "exchange_rate";
+            t = "gauge";
+            help = ?"total amounts used to calculate exchange rate";
+            labels = [("token", "stICP")];
+            value = Nat64.toText(exchange_rate.0);
+        });
+        ms.add({
+            name = "exchange_rate";
+            t = "gauge";
+            help = ?"total amounts used to calculate exchange rate";
+            labels = [("token", "ICP")];
+            value = Nat64.toText(exchange_rate.1);
         });
         ms.add({
             name = "pending_mint_count";
