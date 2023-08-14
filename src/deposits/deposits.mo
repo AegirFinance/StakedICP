@@ -471,14 +471,42 @@ shared(init_msg) actor class Deposits(args: {
         // Use this to fulfill any pending withdrawals.
         ignore withdrawals.depositIcp(amount.e8s);
 
+        // Calculate how much stIcp to mint
+        let (stIcp64, totalIcp64) = _exchangeRate();
+        let stIcp = Nat64.toNat(stIcp64);
+        let totalIcp = Nat64.toNat(totalIcp64);
+        let depositAmount = Nat64.toNat(depositAmount)
+        // Formula to maintain the exchange rate:
+        //   totalIcp / stIcp = (totalIcp + depositAmount) / (stIcp + toMintE8s)
+        //
+        // And solve for toMintE8s:
+        //   1 = (stIcp * (totalIcp + depositAmount)) / (totalIcp * (stIcp + toMintE8s))
+        //   totalIcp * (stIcp + toMintE8s) = stIcp * (totalIcp + depositAmount)
+        //   stIcp + toMintE8s = (stIcp * (totalIcp + depositAmount)) / totalIcp
+        //   toMintE8s = ((stIcp * (totalIcp + depositAmount)) / totalIcp) - stIcp
+        //
+        // Then, because we are working with Nats which have no decimals, we
+        // need to add precision for the division...
+        let precision: Nat = 100_000_000;
+        let toMintE8s = Nat64.fromNat(
+            (
+                (
+                    (stIcp * (totalIcp + depositAmount) * precision)
+                    / totalIcp
+                )
+                / precision
+            )
+            - stIcp
+        );
+
         // Mint the new tokens
         Debug.print("[Referrals.convert] user: " # debug_show(user));
         referralTracker.convert(user);
         let userAccount = {owner=user; subaccount=null};
-        ignore queueMint(userAccount, amount.e8s);
+        ignore queueMint(userAccount, toMintE8s);
         ignore flushMint(userAccount);
 
-        return #Ok(Nat64.toNat(amount.e8s));
+        return #Ok(Nat64.toNat(toMintE8s));
     };
 
     // For safety, minting tokens is a two-step process. First we queue them
@@ -571,6 +599,8 @@ shared(init_msg) actor class Deposits(args: {
         _exchangeRate()
     };
 
+    // _exchangeRate returns (stICP, totalICP) synchronously, so this contract
+    // can calculate the exchange rate
     private func _exchangeRate() : (Nat64, Nat64) {
         let stIcp = cachedTokenTotalSupply;
         var totalIcp = _availableBalance();
