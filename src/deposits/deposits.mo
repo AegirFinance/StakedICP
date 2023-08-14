@@ -291,6 +291,13 @@ shared(init_msg) actor class Deposits(args: {
             value = Nat.toText(ExperimentalCycles.balance());
         });
         ms.add({
+            name = "available_balance";
+            t = "gauge";
+            help = ?"deposits canister available ICP balance";
+            labels = [];
+            value = Nat64.toText(_availableBalance());
+        });
+        ms.add({
             name = "pending_mint_count";
             t = "gauge";
             help = ?"number of mints currently pending";
