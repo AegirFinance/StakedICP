@@ -475,7 +475,7 @@ shared(init_msg) actor class Deposits(args: {
         let (stIcp64, totalIcp64) = _exchangeRate();
         let stIcp = Nat64.toNat(stIcp64);
         let totalIcp = Nat64.toNat(totalIcp64);
-        let depositAmount = Nat64.toNat(depositAmount)
+        let depositAmount = Nat64.toNat(amount.e8s);
         // Formula to maintain the exchange rate:
         //   stIcp / totalIcp = toMintE8s / depositAmount
         //
@@ -484,7 +484,7 @@ shared(init_msg) actor class Deposits(args: {
         //
         // Then, because we are working with Nats which have no decimals, we
         // need to add precision for the division...
-        let precision: Nat = 100_000_000;
+        let precision : Nat = 100_000_000;
         let toMintE8s = Nat64.fromNat((((stIcp * precision) / totalIcp) * depositAmount) / precision);
 
         // Mint the new tokens
@@ -679,7 +679,8 @@ shared(init_msg) actor class Deposits(args: {
         b.toArray();
     };
 
-    private func availableLiquidity(amountIcp: Nat64): (Int, Nat64) {
+    // amount is in ICP e8s
+    private func availableLiquidity(amount: Nat64): (Int, Nat64) {
         var maxDelay: Int = 0;
         var sum: Nat64 = 0;
         // Is there enough available liquidity in the neurons?
@@ -704,7 +705,7 @@ shared(init_msg) actor class Deposits(args: {
         let (stIcp64, totalIcp64) = _exchangeRate();
         let stIcp = Nat64.toNat(stIcp64);
         let totalIcp = Nat64.toNat(totalIcp64);
-        let burnAmount = Nat64.toNat(burnAmount)
+        let burnAmount = Nat64.toNat(amount);
         assert(burnAmount <= stIcp);
         // Convert with the exchange rate:
         //   totalIcp / stIcp = toUnlockE8s / burnAmount
