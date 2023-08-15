@@ -331,8 +331,7 @@ module {
                 if (interest.timestamp < start) {
                     break range;
                 };
-                let after : Nat = interest.affiliatePayouts + Nat64.toNat(interest.applied.e8s + interest.remainder.e8s + interest.supply.before.e8s);
-                sum := sum + ((microbips * after) / Nat64.toNat(interest.supply.before.e8s)) - microbips;
+                sum := sum + ((microbips * Nat64.toNat(interest.supply.after.e8s)) / Nat64.toNat(interest.supply.before.e8s)) - microbips;
                 earliest := interest.timestamp;
             };
             // truncate to start of first day where we found an application.
