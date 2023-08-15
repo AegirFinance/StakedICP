@@ -190,7 +190,7 @@ module {
             splitNewWithdrawalNeuronsResult := null;
 
             let apply = try {
-                await applyInterestJob.run(now, root, queueMint)
+                await applyInterestJob.run(now, root, queueMint, refreshAvailableBalance)
             } catch (error) {
                 #err(#Other(Error.message(error)))
             };
