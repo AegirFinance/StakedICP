@@ -17,16 +17,13 @@ export function units(value: BigNumberish, decimals: BigNumberish = 8, pad=false
     let fraction = value.mod(multiplier).toString();
     while (fraction.length < multiplier.length - 1) { fraction = "0" + fraction; }
 
-    // Strip training 0
+    // Strip trailing 0s
     if (!pad) {
-      const matches = fraction?.match(/^([0-9]*[1-9]|0)(0*)/);
-      if (matches && matches.length > 0) {
-        fraction = matches[0];
-      }
+      fraction = fraction.replace(/0+$/, '');
     }
 
     const whole = value.div(multiplier).toString();
-    if (multiplier.length === 1) {
+    if (multiplier.length === 1 || fraction.length === 0) {
         value = whole;
     } else {
         value = whole + "." + fraction;
