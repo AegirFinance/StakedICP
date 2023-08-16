@@ -73,7 +73,10 @@ export function UnstakePanel({rate}: {rate: ExchangeRate|undefined}) {
 
   const delay: bigint | undefined = React.useMemo(() => {
       if (!liquidityGraph) return undefined;
-      let remaining: bigint = parsedAmount;
+      if (!rate) return undefined;
+      // convert the user's chosen amount of stICP to unlocked ICP.
+      let remaining: bigint = (parsedAmount * rate.totalIcp) / rate.stIcp;
+      // Figure out the delay to unlock that amount of ICP
       let maxDelay: bigint = BigInt(60); // At least 1 minute
       for (let [d, available] of liquidityGraph) {
           if (remaining <= 0) return maxDelay;
