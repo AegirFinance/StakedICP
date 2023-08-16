@@ -583,7 +583,7 @@ shared(init_msg) actor class Deposits(args: {
 
     // exchangeRate returns (stICP, totalICP), so the client can calculate the
     // exchange rate
-    public shared(msg) func exchangeRate() : async (Nat64, Nat64) {
+    public query func exchangeRate() : async (Nat64, Nat64) {
         _exchangeRate()
     };
 
