@@ -23,6 +23,7 @@ import * as format from "../../format";
 import { useAsyncEffect } from "../../hooks";
 import { styled } from '../../stitches.config';
 import { ConnectButton, useAccount, useBalance, useCanister, useContext } from "../../wallet";
+import { ExchangeRate } from "./index";
 import { Price } from "./Price";
 
 function parseFloat(str: string): number {
@@ -33,22 +34,21 @@ function parseFloat(str: string): number {
     return +str;
 }
 
-export function UnstakePanel() {
+export function UnstakePanel({rate}: {rate: ExchangeRate|undefined}) {
   const { state: { cacheBuster } } = useContext();
   const [{ data: account }] = useAccount();
   const principal = account?.principal;
   const [{data: sticp}] = useBalance({ token: token.canisterId });
   const [amount, setAmount] = React.useState("");
-  const parsedAmount = React.useMemo(() => {
+  const parsedAmount : bigint = React.useMemo(() => {
     if (!amount) {
-        return 0;
+        return BigInt(0);
     }
     const parsed = parseFloat(amount);
     if (parsed === NaN || parsed === -NaN || parsed === +Infinity || parsed === -Infinity || parsed < 0) {
-        return 0;
+        return BigInt(0);
     }
-    // TODO: Enforce max decimals here
-    return parsed;
+    return BigInt(Math.floor(parsed*100_000_000));
   }, [amount]);
   const [showConfirmationDialog, setShowConfirmationDialog] = React.useState(false);
 
@@ -69,8 +69,7 @@ export function UnstakePanel() {
 
   const delay: bigint | undefined = React.useMemo(() => {
       if (!liquidityGraph) return undefined;
-      if (parsedAmount === NaN || parsedAmount === -NaN || parsedAmount === +Infinity || parsedAmount === -Infinity || parsedAmount < 0) return undefined;
-      let remaining: bigint = BigInt(Math.floor(parsedAmount*100_000_000));
+      let remaining: bigint = parsedAmount;
       let maxDelay: bigint = BigInt(60); // At least 1 minute
       for (let [d, available] of liquidityGraph) {
           if (remaining <= 0) return maxDelay;
@@ -115,10 +114,10 @@ export function UnstakePanel() {
         onChange={(e) => {
           setAmount(e.currentTarget.value);
         }} />
-      <Price amount={parsedAmount ?? 0} />
+      <Price amount={parsedAmount} />
       <StyledSlider
         disabled={!principal || sticp === undefined}
-        value={[Math.min(Number((parsedAmount ?? 0) * 100_000_000), Number(sticp?.value ?? BigInt(0)))]}
+        value={[Math.min(Number(parsedAmount), Number(sticp?.value ?? BigInt(0)))]}
         min={0}
         max={Number(sticp?.value ?? BigInt(100))}
         step={1}
@@ -146,7 +145,7 @@ export function UnstakePanel() {
               </DataTableRow>
               <DataTableRow>
                   <DataTableLabel>Exchange rate</DataTableLabel>
-                  <DataTableValue>1 stICP = 1 ICP</DataTableValue>
+                  <DataTableValue>1 stICP = {rate ? format.units(rate.totalIcp*BigInt(100_000_000)/rate.stIcp, 8) : '...'} ICP</DataTableValue>
               </DataTableRow>
               <DataTableRow>
                   <DataTableLabel>Transaction cost</DataTableLabel>

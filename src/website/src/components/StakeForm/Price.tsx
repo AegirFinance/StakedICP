@@ -1,20 +1,23 @@
+import { BigNumber } from '@ethersproject/bignumber';
 import axios from 'axios';
 import React from 'react';
 import {
     Flex,
 } from '../index';
+import * as format from "../../format";
 import { useInterval } from "../../hooks";
 
-export function Price({amount}: {amount: number}) {
-    const price = fetchPrice();
+export function Price({amount}: {amount: bigint}) {
+    const price = BigInt(Math.floor((usePrice() ?? 0) * 100));
+    const total = price && amount && (amount * price)/BigInt(100_000_000);
     return (
         <Flex css={{ margin: '$1', flexDirection: "row", justifyContent: "flex-end", fontSize: '$1', fontWeight: 'light', color: '$slate11' }}>
-            {price && amount ? `($${(price * amount).toFixed(2)} USD)` : "(... USD)"}
+            {total ? `($${format.units(total, 2, true)} USD)` : "(... USD)"}
         </Flex>
     );
 }
 
-function fetchPrice() {
+function usePrice() {
     const [price, setPrice] = React.useState<undefined | number>(undefined);
     const request = React.useCallback(async () => {
       try {
