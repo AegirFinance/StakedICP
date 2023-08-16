@@ -24,11 +24,15 @@ import { Price } from "./Price";
 
 
 function parseFloat(str: string): number {
-    str = str.trim();
-    if (str == "") {
+    try {
+        str = str.trim();
+        if (str == "") {
+            return NaN;
+        }
+        return +str;
+    } catch (err) {
         return NaN;
     }
-    return +str;
 }
 
 export function StakePanel({ rate }: { rate: ExchangeRate | undefined }) {
@@ -40,7 +44,7 @@ export function StakePanel({ rate }: { rate: ExchangeRate | undefined }) {
             return BigInt(0);
         }
         const parsed = parseFloat(amount);
-        if (parsed === NaN || parsed === +Infinity || parsed === -Infinity) {
+        if (isNaN(parsed) || !isFinite(parsed) || parsed < 0) {
             return BigInt(0);
         }
         return BigInt(Math.floor(parsed * 100000000));

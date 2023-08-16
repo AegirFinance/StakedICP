@@ -27,11 +27,15 @@ import { ExchangeRate } from "./index";
 import { Price } from "./Price";
 
 function parseFloat(str: string): number {
-    str = str.trim();
-    if (str == "") {
+    try {
+        str = str.trim();
+        if (str == "") {
+            return NaN;
+        }
+        return +str;
+    } catch (err) {
         return NaN;
     }
-    return +str;
 }
 
 export function UnstakePanel({rate}: {rate: ExchangeRate|undefined}) {
@@ -45,7 +49,7 @@ export function UnstakePanel({rate}: {rate: ExchangeRate|undefined}) {
         return BigInt(0);
     }
     const parsed = parseFloat(amount);
-    if (parsed === NaN || parsed === -NaN || parsed === +Infinity || parsed === -Infinity || parsed < 0) {
+    if (isNaN(parsed) || !isFinite(parsed) || parsed < 0) {
         return BigInt(0);
     }
     return BigInt(Math.floor(parsed*100_000_000));
