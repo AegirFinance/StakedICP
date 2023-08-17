@@ -323,7 +323,10 @@ function FAQ({neurons}: {neurons: string[]|null}) {
         </AccordionHeader>
         <AccordionContent>
           <p>
-          To ensure maximum staking rewards, all ICP earned while staked, is automatically merged into the StakedICP neurons. While there's currently no way to withdraw ICP from staking, stICP holders may soon exchange their stICP to ICP on liquidity pools.
+          If you go to "Unstake" above, you can begin withdrawing your stICP. This will burn the stICP, and begin unstaking the corresponding ICP from the NNS. There can be a delay to this process.
+          </p>
+          <p>
+          Soon, stICP holders may exchange their stICP to ICP on liquidity pools, for faster conversion.
           </p>
         </AccordionContent>
       </AccordionItem>
