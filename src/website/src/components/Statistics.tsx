@@ -129,13 +129,16 @@ function formatSupply(supply?: bigint): string {
   supply = supply || BigInt(0);
   supply = supply / BigInt(100_000_000);
   if (supply > 1_000_000_000) {
-    return `${supply / BigInt(1_000_000_000)}b`;
+    const supplyN = Math.floor(Number(supply) / 10_000_000) / 100;
+    return `${supplyN.toFixed(2).replace(/\.00$/, '')}b`;
   }
   if (supply > 1_000_000) {
-    return `${supply / BigInt(1_000_000)}m`;
+    const supplyN = Math.floor(Number(supply) / 10_000) / 100;
+    return `${supplyN.toFixed(2).replace(/\.00$/, '')}m`;
   }
   if (supply > 1_000) {
-    return `${supply / BigInt(1_000)}k`;
+    const supplyN = Math.floor(Number(supply) / 10) / 100;
+    return `${supplyN.toFixed(2).replace(/\.00$/, '')}k`;
   }
   return `${supply}`;
 }
