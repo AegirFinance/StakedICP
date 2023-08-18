@@ -84,7 +84,25 @@ export function Statistics({neurons}: {neurons: string[]|null}) {
           </h2>
         </Item>
         <Item>
-          <h5>Neurons</h5>
+          <h5>
+            <span>Neurons</span>
+            <HelpDialog aria-label="Neuron Details">
+              <p>
+                When you stake ICP, the protocol canisters deposit the ICP into
+                a collection of neurons in the NNS to earn NNS voting rewards.
+                The canisters manage and rebalanced the neurons to maintain the
+                liquidity and yield profile of the protocol. The neurons have a
+                range of staking delays, from 6 months, up to 8 years.
+              </p>
+              <br />
+              <p>
+                There are 16 neurons, because:
+              </p>
+              <p>
+                6 months + 1 year + 1.5 years + ... + 8 years = 16 neurons
+              </p>
+            </HelpDialog>
+          </h5>
           <h2>
             {neurons?.length ?? <ActivityIndicator />}
           </h2>
