@@ -138,6 +138,9 @@ const Item = styled(Flex, {
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'space-between',
+    '& > * + *': {
+        marginLeft: '$1',
+    }
   },
   '& h2': {
   },
