@@ -6,26 +6,27 @@ import { styled } from '../../stitches.config';
 import { StakePanel } from "./StakePanel";
 import { UnstakePanel } from "./UnstakePanel";
 
-type Panels = 'stake' | 'unstake';
+type Panels = 'stake' | 'delayed-unstake' | 'fast-unstake';
 
 export function StakeForm() {
     const [active, setActive] = React.useState<Panels>('stake');
     return (
-        <>
+        <Flex css={{ flexDirection: "column", justifyContent: "stretch" }}>
             <Flex css={{ flexDirection: "row", justifyContent: "center" }}>
                 <Nav>
                     <Item title="Stake" active={active === 'stake'} onClick={() => setActive('stake')}>Stake</Item>
-                    <Item title="Unstake" active={active === 'unstake'} onClick={() => setActive('unstake')}>Unstake</Item>
+                    <Item title="Delayed Unstake" active={active === 'delayed-unstake'} onClick={() => setActive('delayed-unstake')}>Delayed Unstake</Item>
+                    <Item title="Fast Unstake (Coming Soon)" active={false} disabled={true}>Fast Unstake (Coming Soon)</Item>
                 </Nav>
             </Flex>
             {active === 'stake' ? <StakePanel /> : <UnstakePanel />}
             <Attribution>Data from CoinGecko</Attribution>
-        </>
+        </Flex>
     );
 }
 
 const Nav = styled('nav', {
-    margin: '$2',
+    margin: '$2 0',
     display: "flex",
     flexDirection: "row",
     justifyContent: "center",
@@ -39,7 +40,7 @@ const Nav = styled('nav', {
 const Item = styled('a', {
     fontWeight: 'bold',
     textDecoration: 'none',
-    borderRadius: '$1',
+    borderRadius: '0',
     padding: '$2 $3',
     '&:first-child': {
         borderRadius: '$1 0 0 $1',
@@ -55,6 +56,15 @@ const Item = styled('a', {
         active: {
             true: {
                 background: '$slate5',
+            },
+        },
+        disabled: {
+            true: {
+                color: '$slate9',
+                '&:hover': {
+                    cursor: 'not-allowed',
+                    background: 'transparent',
+                },
             },
         },
     },
