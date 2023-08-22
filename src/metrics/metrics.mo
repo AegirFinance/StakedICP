@@ -23,11 +23,12 @@ shared(init_msg) actor class Metrics(args: {
     auth: ?Text;
 }) = this {
 
-    private var deposits : Types.Source = actor(Principal.toText(args.deposits));
+    private var deposits : Deposits.Deposits = actor(Principal.toText(args.deposits));
     private var token : Token.Token = actor(Principal.toText(args.token));
     private var signing : Types.Source = actor(Principal.toText(args.signing));
 
     private var depositsMetrics : ?[Types.Metric] = null;
+    private var depositsTotalIcp : ?Nat64 = null;
     private var tokenInfo : ?TokenInfo = null;
     private var signingMetrics : ?[Types.Metric] = null;
     private var lastUpdatedAt : ?Time.Time = null;
@@ -282,6 +283,8 @@ shared(init_msg) actor class Metrics(args: {
     private func refreshDepositsMetrics() : async () {
         try {
             depositsMetrics := ?(await deposits.metrics());
+            let (_, totalIcp) = await deposits.exchangeRate();
+            depositsTotalIcp := ?totalIcp;
         } catch (e) {
             errors.add((Time.now(), "deposits-metrics", e));
         };
@@ -304,9 +307,9 @@ shared(init_msg) actor class Metrics(args: {
     };
 
     private func tvl() : HttpResponse {
-        let body = switch (tokenInfo) {
+        let body = switch (depositsTotalIcp) {
             case (null) { "{}" };
-            case (?info) { "{\"tvl\": \"" # Nat.toText(info.metadata.totalSupply) # "\"}" };
+            case (?totalIcp) { "{\"tvl\": \"" # Nat64.toText(totalIcp) # "\"}" };
         };
         return {
             status_code = 200;
