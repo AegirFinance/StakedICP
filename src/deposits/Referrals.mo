@@ -294,7 +294,10 @@ module {
                 case (?affiliate) {
                     // Add the payout
                     let p = Option.get(payouts.get(affiliate), Buffer.Buffer<Payout>(0));
-                    p.add({ createdAt = now; amount = amount });
+                    // See if we can merge this into their latest payout (if the timestamp is the same)
+                    let record = Option.get(p.removeLast(), { createdAt = now; amount = 0 });
+                    p.add({ createdAt = now; amount = record.amount + amount});
+
                     payouts.put(affiliate, p);
 
                     // Update their affiliate's total
