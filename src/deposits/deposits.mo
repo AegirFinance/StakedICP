@@ -712,11 +712,11 @@ shared(init_msg) actor class Deposits(args: {
         // And solve for toUnlockE8s:
         //   toUnlockE8s = burnAmount * (totalIcp / stIcp)
         //
-        // Then, because we are working with Nats which have no decimals, we
-        // need to add precision for the division...
-        let precision: Nat = 100_000_000;
+        // Because we are working with Nats which have no decimals, we need to
+        // do the multiplication first, to retain precision.
         assert(stIcp > 0);
-        let toUnlockE8s = Nat64.fromNat(((burnAmount * totalIcp * precision) / stIcp) / precision);
+        let toUnlockE8s = Nat64.fromNat((burnAmount * totalIcp) / stIcp);
+        assert(toUnlockE8s > 0);
 
         // Burn the tokens from the user. This makes sure there is enough
         // balance for the user.
