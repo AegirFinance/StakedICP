@@ -75,7 +75,7 @@ module {
         let day : Int = 24 * hour;
 
         // For apr calcs
-        let microbips : Nat64 = 100_000_000;
+        let microbips : Nat = 100_000_000;
 
         // State used across job runs
         private var snapshot : ?[(Account.Account, Nat)] = null;
@@ -200,8 +200,7 @@ module {
         private func applyInterestToToken(now: Time.Time, interest: Nat, holders: [(Account.Account, Nat)], root: Account.Account, queueMint: QueueMintFn): ApplyInterestSummary {
             // Calculate everything
             var beforeSupply : Nat = 0;
-            for (i in Iter.range(0, holders.size() - 1)) {
-                let (_, balance) = holders[i];
+            for ((_, balance) in holders.vals()) {
                 beforeSupply += balance;
             };
 
@@ -219,21 +218,21 @@ module {
                 };
             };
 
-            var holdersPortion = (interest * 9) / 10;
+            let protocolPortion = interest / 10;
+            let holdersPortion = interest - protocolPortion;
             var remainder = interest;
 
             // Calculate the holders portions
             var mints = Buffer.Buffer<(Account.Account, Nat)>(holders.size());
             var applied : Nat = 0;
-            for (i in Iter.range(0, holders.size() - 1)) {
-                let (to, balance) = holders[i];
+            for ((to, balance) in holders.vals()) {
                 let share = (holdersPortion * balance) / beforeSupply;
                 if (share > 0) {
                     mints.add((to, share));
+                    assert(share <= remainder);
+                    remainder -= share;
+                    applied += share;
                 };
-                assert(share <= remainder);
-                remainder -= share;
-                applied += share;
             };
             assert(applied + remainder == interest);
             assert(holdersPortion >= remainder);
@@ -265,6 +264,7 @@ module {
 
             // Check everything matches up
             assert(applied+affiliatePayouts+remainder == interest);
+
 
             return {
                 timestamp = now;
@@ -302,7 +302,7 @@ module {
 
             // sum all interest applications that are in that period.
             var i : Nat = appliedInterest.size();
-            var sum : Nat64 = 0;
+            var sum : Nat = 0;
             var earliest : Time.Time  = last.timestamp;
             label range while (i > 0) {
                 i := i - 1;
@@ -310,8 +310,8 @@ module {
                 if (interest.timestamp < start) {
                     break range;
                 };
-                let after = interest.applied.e8s + Nat64.fromNat(interest.affiliatePayouts) + interest.remainder.e8s + interest.supply.before.e8s;
-                sum := sum + ((microbips * after) / interest.supply.before.e8s) - microbips;
+                let after : Nat = interest.affiliatePayouts + Nat64.toNat(interest.applied.e8s + interest.remainder.e8s + interest.supply.before.e8s);
+                sum := sum + ((microbips * after) / Nat64.toNat(interest.supply.before.e8s)) - microbips;
                 earliest := interest.timestamp;
             };
             // truncate to start of first day where we found an application.
@@ -319,11 +319,13 @@ module {
             earliest := (earliest / day) * day;
             // end of last day
             let latest = ((last.timestamp / day) * day) + day;
+            assert(earliest < latest);
             // Find the number of days we've spanned
-            let span = Nat64.fromNat(Int.abs((latest - earliest) / day));
+            let span = Int.abs((latest - earliest) / day);
+            assert(span > 0);
 
             // Find the mean
-            meanAprMicrobips := sum / span;
+            meanAprMicrobips := Nat64.fromNat(sum / span);
 
             Debug.print("meanAprMicrobips: " # debug_show(meanAprMicrobips));
         };
