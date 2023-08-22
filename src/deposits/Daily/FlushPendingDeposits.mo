@@ -2,6 +2,7 @@ import Buffer "mo:base/Buffer";
 import Error "mo:base/Error";
 import Nat64 "mo:base/Nat64";
 import Result "mo:base/Result";
+import Time "mo:base/Time";
 
 import Neurons "../Neurons";
 import PendingTransfers "../PendingTransfers";
@@ -31,7 +32,7 @@ module {
         // - pending withdrawals
         // - ICP in the canister
         // - staking neurons
-        public func run(refreshAvailableBalance: RefreshAvailableBalanceFn): async FlushPendingDepositsResult {
+        public func run(now: Time.Time, refreshAvailableBalance: RefreshAvailableBalanceFn): async FlushPendingDepositsResult {
             // Note, this races with the queued mints in ApplyInterest. Once
             // ApplyInterest's flushes are finished, the total supply might be
             // higher than what we see here. So we run this after the ApplyInterest.
@@ -43,7 +44,7 @@ module {
             };
 
             // First try to use it fulfill pending deposits
-            canisterE8s -= args.withdrawals.depositIcp(canisterE8s);
+            canisterE8s -= args.withdrawals.depositIcp(canisterE8s, ?now);
             if (canisterE8s == 0) {
                 return #ok([]);
             };

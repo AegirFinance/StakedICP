@@ -326,8 +326,8 @@ module {
         // Apply some "incoming" ICP towards paying off our pending
         // withdrawals. ICP should be incoming either from new deposits, or
         // newly disbursed neurons. Returns the amount consumed.
-        public func depositIcp(amount: Nat64): Nat64 {
-            let now = Time.now();
+        public func depositIcp(amount: Nat64, at: ?Time.Time): Nat64 {
+            let now = Option.get(at, Time.now());
             var remaining = amount;
             while (remaining > 0) {
                 switch (Deque.peekFront(pendingWithdrawals)) {

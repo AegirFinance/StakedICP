@@ -218,7 +218,7 @@ shared(init_msg) actor class Deposits(args: {
 
     public shared(msg) func flushPendingDeposits(): async ?FlushPendingDeposits.FlushPendingDepositsResult {
         owners.require(msg.caller);
-        await daily.flushPendingDeposits(refreshAvailableBalance)
+        await daily.flushPendingDeposits(Time.now(), refreshAvailableBalance)
     };
 
     public shared(msg) func proposalNeuron(): async ?Neurons.Neuron {
@@ -470,7 +470,7 @@ shared(init_msg) actor class Deposits(args: {
         };
 
         // Use this to fulfill any pending withdrawals.
-        ignore withdrawals.depositIcp(amount.e8s);
+        ignore withdrawals.depositIcp(amount.e8s, ?now);
 
         // Calculate how much stIcp to mint
         let (stIcp64, totalIcp64) = _exchangeRate();
@@ -658,7 +658,7 @@ shared(init_msg) actor class Deposits(args: {
 
         // See if we can fulfill any pending withdrawals. We do this atomically
         // immediately so that the availableBalance doesn't fluctuate.
-        ignore withdrawals.depositIcp(_availableBalance());
+        ignore withdrawals.depositIcp(_availableBalance(), null);
 
         _availableBalance()
     };
