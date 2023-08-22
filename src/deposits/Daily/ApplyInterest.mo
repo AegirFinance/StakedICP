@@ -217,7 +217,6 @@ module {
 
             var beforeStIcp : Nat = 0;
             for ((_, balance) in holders.vals()) {
-                let (_, balance) = holders[i];
                 beforeStIcp += balance;
             };
 
