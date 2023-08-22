@@ -446,6 +446,14 @@ shared(init_msg) actor class Deposits(args: {
         // Check ledger for value
         let balance = await ledger.account_balance({ account = Blob.toArray(sourceAccount) });
 
+        // Cache the exchange rate before we do the transfer, so the transfer
+        // doesn't impact the result.
+        let (stIcp64, totalIcp64) = _exchangeRate();
+        let stIcp = Nat64.toNat(stIcp64);
+        let totalIcp = Nat64.toNat(totalIcp64);
+        assert(stIcp > 0);
+        assert(totalIcp > 0);
+
         // Transfer to staking neuron
         if (Nat64.toNat(balance.e8s) <= minimumDeposit) {
             return #Err(#BalanceLow);
@@ -473,9 +481,6 @@ shared(init_msg) actor class Deposits(args: {
         ignore withdrawals.depositIcp(amount.e8s, ?now);
 
         // Calculate how much stIcp to mint
-        let (stIcp64, totalIcp64) = _exchangeRate();
-        let stIcp = Nat64.toNat(stIcp64);
-        let totalIcp = Nat64.toNat(totalIcp64);
         let depositAmount = Nat64.toNat(amount.e8s);
         // Formula to maintain the exchange rate:
         //   stIcp / totalIcp = toMintE8s / depositAmount
