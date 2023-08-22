@@ -98,6 +98,10 @@ function useExchangeRate(): ExchangeRate|undefined {
         if (!deposits.canisterId) throw new Error("Canister not deployed");
         const contract = await getBackendActor<Deposits>({canisterId: deposits.canisterId, interfaceFactory: deposits.idlFactory});
         const [stIcp, totalIcp] : [bigint, bigint] = await contract.exchangeRate();
+        if (stIcp === BigInt(0) || totalIcp === BigInt(0)) {
+            console.error("Error fetching exchange rate", {stIcp, totalIcp});
+            return;
+        }
         setRate({stIcp, totalIcp});
       } catch (err) {
         console.error("Error fetching exchange rate", err);
