@@ -256,7 +256,7 @@ module {
                 let share = (balance * protocolStIcp) / beforeStIcp;
                 if (share > 0) {
                     // Check if there is an affiliate for this user
-                    switch (args.referralTracker.payout(to.owner, share)) {
+                    switch (args.referralTracker.payout(to.owner, share, ?now)) {
                         case (null) {};
                         case (?(affiliate, payout)) {
                             Debug.print("affiliate: " # debug_show(payout) # " to " # debug_show(affiliate));

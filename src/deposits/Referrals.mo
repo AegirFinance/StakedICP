@@ -169,8 +169,8 @@ module {
 
         // Record a touch event for this referred user. If they already have a
         // touch within the last 30 days, this is a no-op.
-        public func touch(user: Principal, code: ?Text) {
-            let now = Time.now();
+        public func touch(user: Principal, code: ?Text, at: ?Time.Time) {
+            let now = Option.get(at, Time.now());
 
             // Do we recognize the code?
             var newAffiliate : Principal = switch (Option.chain(code, principalsByCode.get)) {
@@ -220,8 +220,8 @@ module {
         // Record a conversion event for this referred user. This permanently
         // associates them with their affiliate if it is still within the
         // conversion lookback window.
-        public func convert(user: Principal) {
-            let now = Time.now();
+        public func convert(user: Principal, at: ?Time.Time) {
+            let now = Option.get(at, Time.now());
 
             // Look up the lead
             let lead = Option.get(leads.get(user), {
@@ -271,7 +271,8 @@ module {
         // interest. This calculates how much the affiliate is owed.
         // conversionValue should be the amount earned by the protocol from
         // this user.
-        public func payout(user: Principal, conversionValue: Nat): ?(Principal, Nat) {
+        public func payout(user: Principal, conversionValue: Nat, at: ?Time.Time): ?(Principal, Nat) {
+            let now = Option.get(at, Time.now());
             // Look up the lead
             let lead = switch (leads.get(user)) {
                 case (null) { return null; };
@@ -293,7 +294,7 @@ module {
                 case (?affiliate) {
                     // Add the payout
                     let p = Option.get(payouts.get(affiliate), Buffer.Buffer<Payout>(0));
-                    p.add({ createdAt = Time.now(); amount = amount });
+                    p.add({ createdAt = now; amount = amount });
                     payouts.put(affiliate, p);
 
                     // Update their affiliate's total

@@ -404,7 +404,7 @@ shared(init_msg) actor class Deposits(args: {
     // address where the user should transfer their deposit ICP.
     public shared(msg) func getDepositAddress(code: ?Text): async Text {
         Debug.print("[Referrals.touch] user: " # debug_show(msg.caller) # ", code: " # debug_show(code));
-        referralTracker.touch(msg.caller, code);
+        referralTracker.touch(msg.caller, code, null);
         NNS.accountIdToText(NNS.accountIdFromPrincipal(Principal.fromActor(this), NNS.principalToSubaccount(msg.caller)));
     };
 
@@ -452,13 +452,14 @@ shared(init_msg) actor class Deposits(args: {
         };
         let fee = { e8s = Nat64.fromNat(icpFee) };
         let amount = { e8s = balance.e8s - fee.e8s };
+        let now = Time.now();
         let icpReceipt = await ledger.transfer({
             memo : Nat64    = 0;
             from_subaccount = ?Blob.toArray(subaccount);
             to              = Blob.toArray(NNS.accountIdFromPrincipal(Principal.fromActor(this), NNS.defaultSubaccount()));
             amount          = amount;
             fee             = fee;
-            created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
+            created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(now)) };
         });
 
         switch icpReceipt {
@@ -488,7 +489,7 @@ shared(init_msg) actor class Deposits(args: {
 
         // Mint the new tokens
         Debug.print("[Referrals.convert] user: " # debug_show(user));
-        referralTracker.convert(user);
+        referralTracker.convert(user, ?now);
         let userAccount = {owner=user; subaccount=null};
         ignore queueMint(userAccount, toMintE8s);
         ignore flushMint(userAccount);
