@@ -480,12 +480,11 @@ shared(init_msg) actor class Deposits(args: {
         //   stIcp / totalIcp = toMintE8s / depositAmount
         //
         // And solve for toMintE8s:
-        //   toMintE8s = (stIcp / totalIcp) * depositAmount
+        //   toMintE8s = (stIcp * depositAmount) / totalIcp
         //
-        // Then, because we are working with Nats which have no decimals, we
-        // need to add precision for the division...
-        let precision : Nat = 100_000_000;
-        let toMintE8s = Nat64.fromNat((((stIcp * precision) / totalIcp) * depositAmount) / precision);
+        // Because we are working with Nats which have no decimals, we need to
+        // do the multiplication first, to retain precision.
+        let toMintE8s = Nat64.fromNat((stIcp * depositAmount) / totalIcp);
 
         // Mint the new tokens
         Debug.print("[Referrals.convert] user: " # debug_show(user));
