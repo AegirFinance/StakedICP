@@ -1,4 +1,3 @@
-import { BigNumber } from "@ethersproject/bignumber";
 import React from 'react';
 import {
     ConfirmationDialog,
