@@ -262,8 +262,8 @@ const StyledThumb = styled(SliderPrimitive.Thumb, {
   },
 });
 
-function DelayStat({amount, delay}: {amount: number; delay: bigint | undefined}) {
-    if (amount === 0 || delay === undefined) {
+function DelayStat({amount, delay}: {amount: bigint; delay: bigint | undefined}) {
+    if (amount === BigInt(0) || delay === undefined) {
         return <ActivityIndicator />;
     }
 
@@ -312,14 +312,14 @@ function PendingWithdrawalsList({items}: {items: Withdrawal[] | null | undefined
 }
 
 interface UnstakeDialogParams {
-  amount: number;
+  amount: bigint;
   delay?: bigint;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   rawAmount: string;
 }
 
-const MINIMUM_WITHDRAWAL = 0.001;
+const MINIMUM_WITHDRAWAL = BigInt(100_000);
 
 function UnstakeDialog({
   amount,
@@ -349,7 +349,7 @@ function UnstakeDialog({
       throw new Error("Wallet not connected");
     }
     if (rawAmount && amount < MINIMUM_WITHDRAWAL) {
-      throw new Error(`Minimum withdrawal is ${MINIMUM_WITHDRAWAL} ICP`);
+      throw new Error(`Minimum withdrawal is ${format.units(MINIMUM_WITHDRAWAL, 8)} ICP`);
     }
     if (!amount) {
       throw new Error("Amount missing");
@@ -359,7 +359,7 @@ function UnstakeDialog({
     }
 
     // TODO: Support subaccount from wallet here.
-    const result = await depositsCanister.createWithdrawal({owner:Principal.fromText(principal), subaccount: []}, BigInt(amount*100000000));
+    const result = await depositsCanister.createWithdrawal({owner:Principal.fromText(principal), subaccount: []}, amount*BigInt(100000000));
     if ('err' in result && result.err) {
       throw new Error(format.withdrawalsError(result.err));
     } else if (!('ok' in result) || !result.ok) {
@@ -451,7 +451,7 @@ function CompleteUnstakeButton({
     if (!principal) {
       throw new Error("Wallet not connected");
     }
-    if (amount < BigInt(MINIMUM_WITHDRAWAL*100_000_000)) {
+    if (amount < MINIMUM_WITHDRAWAL*BigInt(100_000_000)) {
       throw new Error(`Minimum withdrawal is ${MINIMUM_WITHDRAWAL} ICP`);
     }
     if (!depositsCanister) {
