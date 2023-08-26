@@ -13,11 +13,12 @@ import {
   StakeForm,
   Statistics,
 } from '../components';
-import { useAsyncEffect } from "../hooks";
+import { useAsyncEffect, useExchangeRate } from "../hooks";
 import { keyframes, styled } from '../stitches.config';
 
 export function Stake() {
   const [neurons, setNeurons] = React.useState<string[]|null>(null);
+  const rate = useExchangeRate();
 
   useAsyncEffect(async () => {
     // TODO: Have to use dfinity agent here, as we dont need the user's plug wallet connected.
@@ -34,10 +35,10 @@ export function Stake() {
       <Layout>
         <Header />
         <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2"}}>
-          <Statistics neurons={neurons} />
+          <Statistics neurons={neurons} rate={rate} />
         </Flex>
         <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2", marginBottom: '$16'}}>
-          <StakeForm />
+          <StakeForm rate={rate} />
         </Flex>
         <Flex css={{flexDirection:"column", alignItems:"center", padding: "$2", backgroundColor: '$slate1', zIndex: 999, position: 'relative', marginBottom: '$8'}}>
           <Features />

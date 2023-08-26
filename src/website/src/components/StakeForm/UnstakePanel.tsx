@@ -20,10 +20,9 @@ import {
   STICPLogo,
 } from '../../components';
 import * as format from "../../format";
-import { useAsyncEffect } from "../../hooks";
+import { ExchangeRate, useAsyncEffect } from "../../hooks";
 import { styled } from '../../stitches.config';
 import { ConnectButton, useAccount, useBalance, useCanister, useContext } from "../../wallet";
-import { ExchangeRate } from "./index";
 import { Price } from "./Price";
 
 function parseFloat(str: string): number {
@@ -38,7 +37,7 @@ function parseFloat(str: string): number {
     }
 }
 
-export function UnstakePanel({rate}: {rate: ExchangeRate|undefined}) {
+export function UnstakePanel({rate}: {rate: ExchangeRate|null}) {
   const { state: { cacheBuster } } = useContext();
   const [{ data: account }] = useAccount();
   const principal = account?.principal;

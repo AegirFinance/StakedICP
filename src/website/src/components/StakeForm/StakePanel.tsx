@@ -15,10 +15,9 @@ import {
 import { styled } from '../../stitches.config';
 import * as deposits from "../../../../declarations/deposits";
 import { Deposits } from "../../../../declarations/deposits/deposits.did";
-import { useAsyncEffect, useReferralCode } from '../../hooks';
+import { ExchangeRate, useAsyncEffect, useReferralCode } from '../../hooks';
 import * as format from "../../format";
 import { ConnectButton, useAccount, useCanister, useContext, useTransaction } from "../../wallet";
-import { ExchangeRate } from "./index";
 import { Price } from "./Price";
 
 
@@ -34,7 +33,7 @@ function parseFloat(str: string): number {
     }
 }
 
-export function StakePanel({ rate }: { rate: ExchangeRate | undefined }) {
+export function StakePanel({ rate }: { rate: ExchangeRate | null }) {
     const [{ data: account }] = useAccount();
     const principal = account?.principal;
     const [amount, setAmount] = React.useState("");

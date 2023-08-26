@@ -1,19 +1,14 @@
 import React from 'react';
-import * as deposits from '../../../../declarations/deposits';
-import { Deposits } from "../../../../declarations/deposits/deposits.did.d.js";
-import { getBackendActor }  from '../../agent';
 import { styled } from '../../stitches.config';
-import { useInterval } from "../../hooks";
+import { ExchangeRate } from "../../hooks";
 import { Flex } from '../index';
 import { StakePanel } from "./StakePanel";
 import { UnstakePanel } from "./UnstakePanel";
 
 type Panels = 'stake' | 'delayed-unstake' | 'fast-unstake';
 
-export function StakeForm() {
+export function StakeForm({rate}: {rate: ExchangeRate|null}) {
     const [active, setActive] = React.useState<Panels>('stake');
-
-    const exchangeRate = useExchangeRate();
 
     return (
         <Flex css={{ flexDirection: "column", justifyContent: "stretch" }}>
@@ -24,7 +19,7 @@ export function StakeForm() {
                     <Item title="Fast Unstake (Coming Soon)" active={false} disabled={true}>Fast Unstake (Coming Soon)</Item>
                 </Nav>
             </Flex>
-            {active === 'stake' ? <StakePanel rate={exchangeRate} /> : <UnstakePanel rate={exchangeRate} />}
+            {active === 'stake' ? <StakePanel rate={rate} /> : <UnstakePanel rate={rate} />}
             <Attribution>Data from CoinGecko</Attribution>
         </Flex>
     );
@@ -84,32 +79,3 @@ const Attribution = styled('div', {
     justifyContent: "flex-end",
     alignItems: "baseline",
 });
-
-export type ExchangeRate = {
-    stIcp: bigint,
-    totalIcp: bigint,
-};
-
-function useExchangeRate(): ExchangeRate|undefined {
-    const [rate, setRate] = React.useState<undefined | ExchangeRate>(undefined);
-    const request = React.useCallback(async () => {
-      try {
-        // TODO: Have to use dfinity agent here, as we dont need the user's plug wallet connected.
-        if (!deposits.canisterId) throw new Error("Canister not deployed");
-        const contract = await getBackendActor<Deposits>({canisterId: deposits.canisterId, interfaceFactory: deposits.idlFactory});
-        const [stIcp, totalIcp] : [bigint, bigint] = await contract.exchangeRate();
-        if (stIcp === BigInt(0) || totalIcp === BigInt(0)) {
-            console.error("Error fetching exchange rate", {stIcp, totalIcp});
-            return;
-        }
-        setRate({stIcp, totalIcp});
-      } catch (err) {
-        console.error("Error fetching exchange rate", err);
-      }
-    }, [setRate]);
-    useInterval(request, 30000);
-    React.useEffect(() => {
-        request();
-    }, []);
-    return rate;
-}
