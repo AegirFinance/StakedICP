@@ -89,14 +89,18 @@ module {
         public func balances(): [(Nat64, Nat64)] {
             let b = Buffer.Buffer<(Nat64, Nat64)>(stakingNeurons.size());
             for (neuron in stakingNeurons.vals()) {
-                b.add((neuron.id, neuron.cachedNeuronStakeE8s));
+                b.add((neuron.id, Neurons.balance(neuron)));
             };
             return b.toArray();
         };
 
         // Returns array of delays (seconds) and the amount (e8s) becoming
         // available after that delay.
+        //
         // TODO: Group by delay, incase there is any overlap
+        //
+        // TODO: Account for the stakedMaturity as well here, once we can
+        // handle that in the splitNeurons method below.
         public func availableLiquidityGraph(): [(Int, Nat64)] {
             var sum: Nat64 = 0;
             let b = Buffer.Buffer<(Int, Nat64)>(stakingNeurons.size());
@@ -143,7 +147,7 @@ module {
 
         // helper to allow sorting neurons by balance
         func compareBalance(a: Neurons.Neuron, b: Neurons.Neuron): Order.Order {
-            Nat64.compare(a.cachedNeuronStakeE8s, b.cachedNeuronStakeE8s)
+            Nat64.compare(Neurons.balance(a), Neurons.balance(b))
         };
 
         // helper to allow sorting neurons by dissolve delay
@@ -174,7 +178,7 @@ module {
             let neurons = Array.sort(
                 Array.filter<Neurons.Neuron>(
                     Iter.toArray(stakingNeurons.vals()),
-                    func(n) { (n.cachedNeuronStakeE8s + minimumTransfer) <= target }
+                    func(n) { (Neurons.balance(n) + minimumTransfer) <= target }
                 ),
                 compareBalance
             );
@@ -182,7 +186,7 @@ module {
             var remaining = canisterE8s;
             let b = Buffer.Buffer<Ledger.TransferArgs>(neurons.size());
             for (n in neurons.vals()) {
-                let amount = Nat64.min(remaining, target - n.cachedNeuronStakeE8s);
+                let amount = Nat64.min(remaining, target - Neurons.balance(n));
 
                 // If we're close to the target, stop here. Avoid small
                 // transfers, to save on fees. At this point either neurons are
@@ -216,6 +220,11 @@ module {
         // the NNS to eventually fulfill all pending deposits.
         //
         // If successful, it returns: [(NeuronID, AmountToSplit+Fee)]
+        //
+        // TODO: Account for stakedMaturity here and handle that as part of the
+        // split. This means that occasionally we may want to keep the newly
+        // split neuron, and start dissolving the original to reify the earned
+        // maturity.
         public func splitNeurons(e8s: Nat64): Result.Result<[(Nat64, Nat64)], Neurons.NeuronsError> {
             if (e8s == 0) {
                 return #ok([]);

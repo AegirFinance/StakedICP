@@ -158,7 +158,7 @@ module {
             let apply = payProtocolAndAffiliates(
                 now,
                 Nat64.toNat(interest),
-                Nat64.toNat(sumStake(neuronsAfter) + availableBalance),
+                Nat64.toNat(sumBalances(neuronsAfter) + availableBalance),
                 Option.get(snapshot, nextHolders),
                 root,
                 queueMint
@@ -179,10 +179,10 @@ module {
             #ok(apply)
         };
 
-        private func sumStake(neurons: [Neurons.Neuron]): Nat64 {
+        private func sumBalances(neurons: [Neurons.Neuron]): Nat64 {
             var sum: Nat64 = 0;
             for (neuron in neurons.vals()) {
-                sum += neuron.cachedNeuronStakeE8s;
+                sum += Neurons.balance(neuron);
             };
             sum
         };

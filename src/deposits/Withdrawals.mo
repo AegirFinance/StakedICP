@@ -114,7 +114,7 @@ module {
         public func totalDissolving(): Nat64 {
             var sum: Nat64 = 0;
             for (n in dissolving.vals()) {
-                sum += n.cachedNeuronStakeE8s;
+                sum += Neurons.balance(n);
             };
             return sum;
         };
@@ -160,7 +160,7 @@ module {
             var neuronBalanceE8s: Nat64 = 0;
             for (n in dissolving.vals()) {
                 neuronCount += 1;
-                neuronBalanceE8s += n.cachedNeuronStakeE8s;
+                neuronBalanceE8s += Neurons.balance(n);
             };
 
             let ms = Buffer.Buffer<Metrics.Metric>(9);
