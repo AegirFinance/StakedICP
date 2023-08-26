@@ -72,8 +72,7 @@ export function Statistics({neurons, rate}: {neurons: string[]|null, rate: Excha
               </p>
 
               <p>
-                Rewards are distributed daily. There can be up to 48 hours between
-                when you deposit, and when you receive your first rewards.
+                Rewards accrue directly to the stICP token value by increasing the ICP:stICP exchange rate.
               </p>
             </HelpDialog>
           </h5>

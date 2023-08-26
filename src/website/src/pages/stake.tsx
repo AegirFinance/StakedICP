@@ -70,7 +70,7 @@ function Features() {
     <Flex css={{flexDirection:"row", flexWrap: "wrap", alignItems:"space-around", padding: "$4", maxWidth: 1024}}>
       <Feature>
         <h2>Auto-Compounding</h2>
-        <p>ICP is staked for 8 years, and interest accrues daily to maximize your returns. No more manual merge-maturity.</p>
+        <p>ICP is staked for 8 years, and interest accrues daily to maximize your returns. You automatically receive the benefits of staking just by holding the stICP token.</p>
       </Feature>
       <Feature>
         <h2>No Lock-in</h2>
@@ -120,7 +120,13 @@ function FAQ({neurons}: {neurons: string[]|null}) {
         </AccordionHeader>
         <AccordionContent>
           <p>
-          When staking with StakedICP, users receive stICP tokens on a 1:1 basis representing their staked ICP. stICP balances can be used like regular ICP to earn yields and lending rewards, and are updated on a daily basis to reflect your ICP staking rewards.
+          When staking with StakedICP, users receive stICP tokens representing their staked ICP and earned maturity. stICP balances can be used like regular ICP to earn yields and lending rewards, and represent your staked ICP, and earned staking rewards.
+          </p>
+
+          <p>
+            <code>
+              stICP:ICP ratio = (total stICP supply) / (total ICP staked + total NNS maturity earned)
+            </code>
           </p>
 
           <p>
@@ -128,8 +134,23 @@ function FAQ({neurons}: {neurons: string[]|null}) {
           </p>
 
           <p>
-          Rewards are distributed daily. There can be up to 48 hours
-          between when you stake, and when you receive your first rewards.
+          Let's do a simple example as a demonstration.
+          </p>
+
+          <p>
+          Say you stake at the very beginning when 1 ICP = 1 stICP. You deposit 10 ICP and receive 10 stICP back.
+          </p>
+
+          <p>
+          After a few years, the balances in the protocol grow due to NNS voting rewards. Say 128 ICP had been staked with StakedICP and the sum of all neuron balances on the NNS was 160 ICP. Then 1 ICP would be worth (128/160) = 0.8 stICP; conversely, 1 stICP would be worth (160/128) = 1.25 ICP.
+          </p>
+
+          <p>
+          At this point, you could unstake or trade your 10 stICP and receive 12.5 ICP in return.
+          </p>
+
+          <p>
+          This means as long as you are holding stICP, you are staking with StakedICP! You do not need to get it from StakedICP directly. For example, you can purchase stICP on an exchange; as every stICP token is exactly the same, you will automatically receive the benefits of staking just by holding the token!
           </p>
 
           <p>
@@ -169,7 +190,11 @@ function FAQ({neurons}: {neurons: string[]|null}) {
         </AccordionHeader>
         <AccordionContent>
           <p>
-          stICP is a token that represents staked ICP in the StakedICP neuron, combining the value of initial stake + staking rewards. stICP tokens are minted upon stake and burned when redeemed. stICP token balances are pegged 1:1 to the ICP that are staked by StakedICP. stICP token’s balances are updated daily when staking rewards accrue.
+          stICP is a token that represents staked ICP in the StakedICP NNS neurons. The token combines the value of the initial stake + earned staking rewards. stICP tokens are minted upon stake and burned when redeemed. stICP token’s balances do not update, but the value of stICP increases relative to ICP.
+          </p>
+
+          <p>
+          The stICP/ICP exchange rate is updated approximately every 24 hours based on the NNS voting rewards earned by the StakedICP neurons.
           </p>
 
           <p>
@@ -177,7 +202,7 @@ function FAQ({neurons}: {neurons: string[]|null}) {
           </p>
 
           <p>
-          The stICP transaction fee is set at 0.0001. The same as normal ICP.
+          To prevent abuse, the stICP transaction fee is set at 0.0001. The same as normal ICP.
           </p>
         </AccordionContent>
       </AccordionItem>
@@ -231,7 +256,19 @@ function FAQ({neurons}: {neurons: string[]|null}) {
         </AccordionHeader>
         <AccordionContent>
           <p>
-          Pending audit results, StakedICP will be open-source, and all code will be continuously reviewed.
+          All code for StakedICP is reviewed before deployment, and on an ongoing basis.
+          </p>
+
+          <p>
+          The system is designed to rely as little as possible on human intervention or trust. For example, the StakedICP canisters use the Internet Computer's Chain-key transactions to own and control the staking neurons. This ensures that the canisters are the only ones capable of controlling the staking neurons.
+          </p>
+
+          <p>
+          Development is still ongoing, but we are coordinating with auditors to release audit results once the entire protocol is code-complete.
+          </p>
+
+          <p>
+          For more information, see "What are the risks of staking with StakedICP?" below.
           </p>
         </AccordionContent>
       </AccordionItem>
@@ -245,7 +282,7 @@ function FAQ({neurons}: {neurons: string[]|null}) {
         </AccordionHeader>
         <AccordionContent>
           <p>
-          The Internet Computer is soon to be the biggest staking economy in the space. However, staking on NNS requires daily work to ensure the best compounding rewards.In addition to this, for the best rewards, tokens are locked up for years.
+          The Internet Computer is soon to be the biggest staking economy in the space. However, staking on the NNS requires long token lock-ups with no liquidity. When your tokens are locked in the NNS there is no way to re-use them for DeFi, or get early-access to your rewards.
           </p>
 
           <p>
@@ -268,7 +305,7 @@ function FAQ({neurons}: {neurons: string[]|null}) {
               <li>
                 Smart contract security
                 <br />
-                StakedICP's code has been reviewed internally and externally, but it hasn't undergone a formal audit. While we've taken steps to ensure its quality, it's important to acknowledge the potential for bugs. Our code review process helps identify issues, but it's impossible to guarantee a completely bug-free code. We're committed to transparency about this reality. Make sure to conduct your own due diligence and research before making any decisions. Always DYOR.
+                StakedICP's code has been reviewed internally and externally, but it hasn't yet undergone a formal audit. While we've taken steps to ensure its quality, it's important to acknowledge the potential for bugs. Our code review process helps identify issues, but it's impossible to guarantee a completely bug-free code. We're committed to transparency about this reality. Make sure to conduct your own due diligence and research before making any decisions. Always DYOR.
                 <br />
                 The canister and website source code is open-source <a href="https://github.com/AegirFinance/StakedICP">on Github</a>
               </li>
@@ -326,6 +363,7 @@ function FAQ({neurons}: {neurons: string[]|null}) {
           <p>
           If you go to "Unstake" above, you can begin withdrawing your stICP. This will burn the stICP, and begin unstaking the corresponding ICP from the NNS. There can be a delay to this process.
           </p>
+
           <p>
           Soon, stICP holders may exchange their stICP to ICP on liquidity pools, for faster conversion.
           </p>
