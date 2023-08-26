@@ -205,12 +205,7 @@ shared(init_msg) actor class Deposits(args: {
         switch (await neurons.refresh(id)) {
             case (#err(err)) { #err(err) };
             case (#ok(neuron)) {
-                let isNew = staking.addOrRefresh(neuron);
-                if isNew {
-                    let canister = {owner = Principal.fromActor(this); subaccount = null};
-                    ignore queueMint(canister, neuron.cachedNeuronStakeE8s);
-                    ignore flushMint(canister);
-                };
+                ignore staking.addOrRefresh(neuron);
                 #ok(neuron)
             };
         }
