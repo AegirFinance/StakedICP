@@ -358,7 +358,7 @@ function UnstakeDialog({
     }
 
     // TODO: Support subaccount from wallet here.
-    const result = await depositsCanister.createWithdrawal({owner:Principal.fromText(principal), subaccount: []}, amount*BigInt(100000000));
+    const result = await depositsCanister.createWithdrawal({owner:Principal.fromText(principal), subaccount: []}, amount);
     if ('err' in result && result.err) {
       throw new Error(format.withdrawalsError(result.err));
     } else if (!('ok' in result) || !result.ok) {
@@ -450,14 +450,12 @@ function CompleteUnstakeButton({
     if (!principal) {
       throw new Error("Wallet not connected");
     }
-    if (amount < MINIMUM_WITHDRAWAL*BigInt(100_000_000)) {
-      throw new Error(`Minimum withdrawal is ${MINIMUM_WITHDRAWAL} ICP`);
+    if (amount < MINIMUM_WITHDRAWAL) {
+      throw new Error(`Minimum withdrawal is ${format.units(MINIMUM_WITHDRAWAL, 8)} ICP`);
     }
     if (!depositsCanister) {
       throw new Error("Deposits canister missing");
     }
-    ;
-
 
     const result = await depositsCanister.completeWithdrawal(Principal.fromText(principal), amount, to || principal);
     if ('err' in result && result.err) {
