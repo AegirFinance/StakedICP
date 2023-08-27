@@ -88,6 +88,10 @@ module {
         }
     };
 
+    public func balance(n: Neuron): Nat64 {
+        n.cachedNeuronStakeE8s + Option.get(n.stakedMaturityE8sEquivalent, 0: Nat64)
+    };
+
     // Neuron management helpers.
     public class Manager(args: {
         governance: Principal;

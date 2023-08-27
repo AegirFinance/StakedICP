@@ -114,7 +114,7 @@ module {
         public func totalDissolving(): Nat64 {
             var sum: Nat64 = 0;
             for (n in dissolving.vals()) {
-                sum += n.cachedNeuronStakeE8s;
+                sum += Neurons.balance(n);
             };
             return sum;
         };
@@ -160,7 +160,7 @@ module {
             var neuronBalanceE8s: Nat64 = 0;
             for (n in dissolving.vals()) {
                 neuronCount += 1;
-                neuronBalanceE8s += n.cachedNeuronStakeE8s;
+                neuronBalanceE8s += Neurons.balance(n);
             };
 
             let ms = Buffer.Buffer<Metrics.Metric>(9);
@@ -265,8 +265,8 @@ module {
             };
         };
 
-        // Attempt to create a new withdrawal for the user. The full amount
-        // starts as `pending`, and the `depositIcp` method applies new
+        // Attempt to create a new withdrawal for the user. The full amount of
+        // ICP starts as `pending`, and the `depositIcp` method applies new
         // deposits, cash, and dissolving ICP towards fulfilling pending
         // deposits.
         public func createWithdrawal(user: Principal, amount: Nat64, delay: Int): Withdrawal {
@@ -326,8 +326,8 @@ module {
         // Apply some "incoming" ICP towards paying off our pending
         // withdrawals. ICP should be incoming either from new deposits, or
         // newly disbursed neurons. Returns the amount consumed.
-        public func depositIcp(amount: Nat64): Nat64 {
-            let now = Time.now();
+        public func depositIcp(amount: Nat64, at: ?Time.Time): Nat64 {
+            let now = Option.get(at, Time.now());
             var remaining = amount;
             while (remaining > 0) {
                 switch (Deque.peekFront(pendingWithdrawals)) {

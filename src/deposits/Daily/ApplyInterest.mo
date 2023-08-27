@@ -59,6 +59,7 @@ module {
     };
 
     public type QueueMintFn = (to: Account.Account, amount: Nat64) -> Nat64;
+    public type RefreshAvailableBalanceFn = () -> async Nat64;
 
     // Job is step of the daily process which merges and distributes interest
     // to holders.
@@ -134,9 +135,10 @@ module {
         // ===== JOB START FUNCTION =====
 
         // Distribute newly earned interest to token holders.
-        public func run(now: Time.Time, root: Account.Account, queueMint: QueueMintFn): async ApplyInterestResult {
+        public func run(now: Time.Time, root: Account.Account, queueMint: QueueMintFn, refreshAvailableBalance: RefreshAvailableBalanceFn): async ApplyInterestResult {
             // take a snapshot of the holders for tomorrow's interest.
             let nextHolders = await getAllHolders();
+            let availableBalance = await refreshAvailableBalance();
 
             let neuronIds = args.staking.ids();
 
@@ -152,10 +154,11 @@ module {
                 return #err(#InsufficientMaturity);
             };
 
-            // Apply the interest to the holders
-            let apply = applyInterestToToken(
+            // Pay out the protocol cut and affiliate fees
+            let apply = payProtocolAndAffiliates(
                 now,
                 Nat64.toNat(interest),
+                Nat64.toNat(sumBalances(neuronsAfter) + availableBalance),
                 Option.get(snapshot, nextHolders),
                 root,
                 queueMint
@@ -174,6 +177,14 @@ module {
             updateMeanAprMicrobips();
 
             #ok(apply)
+        };
+
+        private func sumBalances(neurons: [Neurons.Neuron]): Nat64 {
+            var sum: Nat64 = 0;
+            for (neuron in neurons.vals()) {
+                sum += Neurons.balance(neuron);
+            };
+            sum
         };
 
         private func sumMaturity(neurons: [Neurons.Neuron]): Nat64 {
@@ -197,19 +208,24 @@ module {
             merges.add(m);
         };
 
-        private func applyInterestToToken(now: Time.Time, interest: Nat, holders: [(Account.Account, Nat)], root: Account.Account, queueMint: QueueMintFn): ApplyInterestSummary {
-            // Calculate everything
-            var beforeSupply : Nat = 0;
+        private func payProtocolAndAffiliates(now: Time.Time, interest: Nat, totalIcp: Nat, holders: [(Account.Account, Nat)], root: Account.Account, queueMint: QueueMintFn): ApplyInterestSummary {
+            assert(interest <= totalIcp);
+
+            // Figure out the total amount owed the protocol (10% of the interest)
+            let protocolInterest = interest / 10;
+            assert(protocolInterest < totalIcp);
+
+            var beforeStIcp : Nat = 0;
             for ((_, balance) in holders.vals()) {
-                beforeSupply += balance;
+                beforeStIcp += balance;
             };
 
-            if (interest == 0) {
+            if (interest == 0 or protocolInterest == 0 or beforeStIcp == 0) {
                 return {
                     timestamp = now;
                     supply = {
-                        before = { e8s = Nat64.fromNat(beforeSupply) };
-                        after = { e8s = Nat64.fromNat(beforeSupply) };
+                        before = { e8s = Nat64.fromNat(totalIcp - interest) };
+                        after = { e8s = Nat64.fromNat(totalIcp) };
                     };
                     applied = { e8s = 0 : Nat64 };
                     remainder = { e8s = 0 : Nat64 };
@@ -218,61 +234,65 @@ module {
                 };
             };
 
-            let protocolPortion = interest / 10;
-            let holdersPortion = interest - protocolPortion;
-            var remainder = interest;
+            // Convert the protocol portion to diluting stICP. Figure out how
+            // much stICP to mint to the protocol + affiliates, so that the
+            // minted amount represents a 10% share of the new interest.
+            //
+            //   protocolInterest / totalIcp = protocolStIcp / (beforeStIcp + protocolStIcp)
+            //   protocolInterest = (totalIcp * protocolStIcp) / (beforeStIcp + protocolStIcp)
+            //   protocolStIcp = (protocolInterest * beforeStIcp) / (totalIcp - protocolInterest)
+            let protocolStIcp : Nat = (protocolInterest * beforeStIcp) / (totalIcp - protocolInterest);
 
-            // Calculate the holders portions
+            // For each affiliate, figure out how much they are owed.
+            //
+            // TODO: We could possibly make this more efficient by looping
+            // through each affiliate, instead of each holder, since not all
+            // holders will have an affiliate.
             var mints = Buffer.Buffer<(Account.Account, Nat)>(holders.size());
-            var applied : Nat = 0;
+            var remainder = protocolStIcp;
+            var affiliatePayouts : Nat = 0;
             for ((to, balance) in holders.vals()) {
-                let share = (holdersPortion * balance) / beforeSupply;
+                // Figure out the share of the protocolStIcp driven by this holder
+                let share = (balance * protocolStIcp) / beforeStIcp;
                 if (share > 0) {
-                    mints.add((to, share));
-                    assert(share <= remainder);
-                    remainder -= share;
-                    applied += share;
+                    // Check if there is an affiliate for this user
+                    switch (args.referralTracker.payout(to.owner, share, ?now)) {
+                        case (null) {};
+                        case (?(affiliate, payout)) {
+                            Debug.print("affiliate: " # debug_show(payout) # " to " # debug_show(affiliate));
+                            mints.add(({owner=affiliate; subaccount=null}, payout));
+                            affiliatePayouts += payout;
+                            assert(payout <= remainder);
+                            remainder -= payout;
+                        };
+                    }
                 };
             };
-            assert(applied + remainder == interest);
-            assert(holdersPortion >= remainder);
 
-            // Queue the mints & affiliate payouts
-            var affiliatePayouts : Nat = 0;
-            for ((to, share) in mints.vals()) {
-                Debug.print("interest: " # debug_show(share) # " to " # debug_show(to));
-                ignore queueMint(to, Nat64.fromNat(share));
-                switch (args.referralTracker.payout(to.owner, share)) {
-                    case (null) {};
-                    case (?(affiliate, payout)) {
-                        Debug.print("affiliate: " # debug_show(payout) # " to " # debug_show(affiliate));
-                        ignore queueMint({owner=affiliate; subaccount=null}, Nat64.fromNat(payout));
-                        affiliatePayouts := affiliatePayouts + payout;
-                        assert(payout <= remainder);
-                        remainder -= payout;
-                    };
-                }
-            };
-
-            // Deal with our share. For now, just mint it to this canister.
+            // Protocol takes the remainder. For now, just mint it to this
+            // canister.
             if (remainder > 0) {
-                Debug.print("remainder: " # debug_show(remainder) # " to " # debug_show(root));
-                ignore queueMint(root, Nat64.fromNat(remainder));
-                applied += remainder;
+                mints.add((root, remainder));
                 remainder := 0;
             };
 
             // Check everything matches up
-            assert(applied+affiliatePayouts+remainder == interest);
+            assert(affiliatePayouts+remainder == protocolStIcp);
+
+            // Execute all mints
+            for ((to, amount) in mints.vals()) {
+                Debug.print("mint: " # debug_show(amount) # " to " # debug_show(to));
+                ignore queueMint(to, Nat64.fromNat(amount));
+            };
 
 
             return {
                 timestamp = now;
                 supply = {
-                    before = { e8s = Nat64.fromNat(beforeSupply) };
-                    after = { e8s = Nat64.fromNat(beforeSupply+applied+affiliatePayouts) };
+                    before = { e8s = Nat64.fromNat(totalIcp - interest) };
+                    after = { e8s = Nat64.fromNat(totalIcp) };
                 };
-                applied = { e8s = Nat64.fromNat(applied) };
+                applied = { e8s = Nat64.fromNat(interest) };
                 remainder = { e8s = Nat64.fromNat(remainder) };
                 totalHolders = holders.size();
                 affiliatePayouts = affiliatePayouts;
@@ -310,8 +330,7 @@ module {
                 if (interest.timestamp < start) {
                     break range;
                 };
-                let after : Nat = interest.affiliatePayouts + Nat64.toNat(interest.applied.e8s + interest.remainder.e8s + interest.supply.before.e8s);
-                sum := sum + ((microbips * after) / Nat64.toNat(interest.supply.before.e8s)) - microbips;
+                sum := sum + ((microbips * Nat64.toNat(interest.supply.after.e8s)) / Nat64.toNat(interest.supply.before.e8s)) - microbips;
                 earliest := interest.timestamp;
             };
             // truncate to start of first day where we found an application.

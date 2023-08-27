@@ -1,15 +1,15 @@
 import React from 'react';
-import {
-    Flex,
-} from '../index';
 import { styled } from '../../stitches.config';
+import { ExchangeRate } from "../../hooks";
+import { Flex } from '../index';
 import { StakePanel } from "./StakePanel";
 import { UnstakePanel } from "./UnstakePanel";
 
 type Panels = 'stake' | 'delayed-unstake' | 'fast-unstake';
 
-export function StakeForm() {
+export function StakeForm({rate}: {rate: ExchangeRate|null}) {
     const [active, setActive] = React.useState<Panels>('stake');
+
     return (
         <Flex css={{ flexDirection: "column", justifyContent: "stretch" }}>
             <Flex css={{ flexDirection: "row", justifyContent: "center" }}>
@@ -19,7 +19,7 @@ export function StakeForm() {
                     <Item title="Fast Unstake (Coming Soon)" active={false} disabled={true}>Fast Unstake (Coming Soon)</Item>
                 </Nav>
             </Flex>
-            {active === 'stake' ? <StakePanel /> : <UnstakePanel />}
+            {active === 'stake' ? <StakePanel rate={rate} /> : <UnstakePanel rate={rate} />}
             <Attribution>Data from CoinGecko</Attribution>
         </Flex>
     );

@@ -169,8 +169,8 @@ module {
 
         // Record a touch event for this referred user. If they already have a
         // touch within the last 30 days, this is a no-op.
-        public func touch(user: Principal, code: ?Text) {
-            let now = Time.now();
+        public func touch(user: Principal, code: ?Text, at: ?Time.Time) {
+            let now = Option.get(at, Time.now());
 
             // Do we recognize the code?
             var newAffiliate : Principal = switch (Option.chain(code, principalsByCode.get)) {
@@ -220,8 +220,8 @@ module {
         // Record a conversion event for this referred user. This permanently
         // associates them with their affiliate if it is still within the
         // conversion lookback window.
-        public func convert(user: Principal) {
-            let now = Time.now();
+        public func convert(user: Principal, at: ?Time.Time) {
+            let now = Option.get(at, Time.now());
 
             // Look up the lead
             let lead = Option.get(leads.get(user), {
@@ -269,7 +269,10 @@ module {
 
         // Record a payout event for this referred user. e.g. the user earning
         // interest. This calculates how much the affiliate is owed.
-        public func payout(user: Principal, conversionValue: Nat): ?(Principal, Nat) {
+        // conversionValue should be the amount earned by the protocol from
+        // this user.
+        public func payout(user: Principal, conversionValue: Nat, at: ?Time.Time): ?(Principal, Nat) {
+            let now = Option.get(at, Time.now());
             // Look up the lead
             let lead = switch (leads.get(user)) {
                 case (null) { return null; };
@@ -283,19 +286,18 @@ module {
 
             // figure out how much the affiliate gets
             // 1/4 of conversion value goes to affiliate
-            // conversionValue is the user's 90% cut, so figure out 2.5%.
-            // amount = (conversionValue / 0.9) * 0.025
-            //        = (conversionValue * 10) / (9 * 40)
-            //        = conversionValue / (9*4)
-            //        = conversionValue / 36
-            let amount = conversionValue / 36;
+            // conversionValue is the protocol's 10% cut, so figure out 2.5%.
+            let amount = conversionValue / 4;
 
             switch (lead.affiliate) {
                 case (null) { return null; };
                 case (?affiliate) {
                     // Add the payout
                     let p = Option.get(payouts.get(affiliate), Buffer.Buffer<Payout>(0));
-                    p.add({ createdAt = Time.now(); amount = amount });
+                    // See if we can merge this into their latest payout (if the timestamp is the same)
+                    let record = Option.get(p.removeLast(), { createdAt = now; amount = 0 });
+                    p.add({ createdAt = now; amount = record.amount + amount});
+
                     payouts.put(affiliate, p);
 
                     // Update their affiliate's total

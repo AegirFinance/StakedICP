@@ -20,35 +20,38 @@ import {
   STICPLogo,
 } from '../../components';
 import * as format from "../../format";
-import { useAsyncEffect } from "../../hooks";
+import { ExchangeRate, useAsyncEffect } from "../../hooks";
 import { styled } from '../../stitches.config';
 import { ConnectButton, useAccount, useBalance, useCanister, useContext } from "../../wallet";
 import { Price } from "./Price";
 
 function parseFloat(str: string): number {
-    str = str.trim();
-    if (str == "") {
+    try {
+        str = str.trim();
+        if (str == "") {
+            return NaN;
+        }
+        return +str;
+    } catch (err) {
         return NaN;
     }
-    return +str;
 }
 
-export function UnstakePanel() {
+export function UnstakePanel({rate}: {rate: ExchangeRate|null}) {
   const { state: { cacheBuster } } = useContext();
   const [{ data: account }] = useAccount();
   const principal = account?.principal;
   const [{data: sticp}] = useBalance({ token: token.canisterId });
   const [amount, setAmount] = React.useState("");
-  const parsedAmount = React.useMemo(() => {
+  const parsedAmount : bigint = React.useMemo(() => {
     if (!amount) {
-        return 0;
+        return BigInt(0);
     }
     const parsed = parseFloat(amount);
-    if (parsed === NaN || parsed === -NaN || parsed === +Infinity || parsed === -Infinity || parsed < 0) {
-        return 0;
+    if (isNaN(parsed) || !isFinite(parsed) || parsed < 0) {
+        return BigInt(0);
     }
-    // TODO: Enforce max decimals here
-    return parsed;
+    return BigInt(Math.floor(parsed*100_000_000));
   }, [amount]);
   const [showConfirmationDialog, setShowConfirmationDialog] = React.useState(false);
 
@@ -69,8 +72,10 @@ export function UnstakePanel() {
 
   const delay: bigint | undefined = React.useMemo(() => {
       if (!liquidityGraph) return undefined;
-      if (parsedAmount === NaN || parsedAmount === -NaN || parsedAmount === +Infinity || parsedAmount === -Infinity || parsedAmount < 0) return undefined;
-      let remaining: bigint = BigInt(Math.floor(parsedAmount*100_000_000));
+      if (!rate) return undefined;
+      // convert the user's chosen amount of stICP to unlocked ICP.
+      let remaining: bigint = (parsedAmount * rate.totalIcp) / rate.stIcp;
+      // Figure out the delay to unlock that amount of ICP
       let maxDelay: bigint = BigInt(60); // At least 1 minute
       for (let [d, available] of liquidityGraph) {
           if (remaining <= 0) return maxDelay;
@@ -115,10 +120,10 @@ export function UnstakePanel() {
         onChange={(e) => {
           setAmount(e.currentTarget.value);
         }} />
-      <Price amount={parsedAmount ?? 0} />
+      <Price amount={parsedAmount} />
       <StyledSlider
         disabled={!principal || sticp === undefined}
-        value={[Math.min(Number((parsedAmount ?? 0) * 100_000_000), Number(sticp?.value ?? BigInt(0)))]}
+        value={[Math.min(Number(parsedAmount), Number(sticp?.value ?? BigInt(0)))]}
         min={0}
         max={Number(sticp?.value ?? BigInt(100))}
         step={1}
@@ -146,7 +151,7 @@ export function UnstakePanel() {
               </DataTableRow>
               <DataTableRow>
                   <DataTableLabel>Exchange rate</DataTableLabel>
-                  <DataTableValue>1 stICP = 1 ICP</DataTableValue>
+                  <DataTableValue>1 stICP = {rate ? format.units(rate.totalIcp*BigInt(100_000_000)/rate.stIcp, 8) : '...'} ICP</DataTableValue>
               </DataTableRow>
               <DataTableRow>
                   <DataTableLabel>Transaction cost</DataTableLabel>
@@ -256,8 +261,8 @@ const StyledThumb = styled(SliderPrimitive.Thumb, {
   },
 });
 
-function DelayStat({amount, delay}: {amount: number; delay: bigint | undefined}) {
-    if (amount === 0 || delay === undefined) {
+function DelayStat({amount, delay}: {amount: bigint; delay: bigint | undefined}) {
+    if (amount === BigInt(0) || delay === undefined) {
         return <ActivityIndicator />;
     }
 
@@ -306,14 +311,14 @@ function PendingWithdrawalsList({items}: {items: Withdrawal[] | null | undefined
 }
 
 interface UnstakeDialogParams {
-  amount: number;
+  amount: bigint;
   delay?: bigint;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   rawAmount: string;
 }
 
-const MINIMUM_WITHDRAWAL = 0.001;
+const MINIMUM_WITHDRAWAL = BigInt(100_000);
 
 function UnstakeDialog({
   amount,
@@ -343,7 +348,7 @@ function UnstakeDialog({
       throw new Error("Wallet not connected");
     }
     if (rawAmount && amount < MINIMUM_WITHDRAWAL) {
-      throw new Error(`Minimum withdrawal is ${MINIMUM_WITHDRAWAL} ICP`);
+      throw new Error(`Minimum withdrawal is ${format.units(MINIMUM_WITHDRAWAL, 8)} ICP`);
     }
     if (!amount) {
       throw new Error("Amount missing");
@@ -353,7 +358,7 @@ function UnstakeDialog({
     }
 
     // TODO: Support subaccount from wallet here.
-    const result = await depositsCanister.createWithdrawal({owner:Principal.fromText(principal), subaccount: []}, BigInt(amount*100000000));
+    const result = await depositsCanister.createWithdrawal({owner:Principal.fromText(principal), subaccount: []}, amount*BigInt(100000000));
     if ('err' in result && result.err) {
       throw new Error(format.withdrawalsError(result.err));
     } else if (!('ok' in result) || !result.ok) {
@@ -445,7 +450,7 @@ function CompleteUnstakeButton({
     if (!principal) {
       throw new Error("Wallet not connected");
     }
-    if (amount < BigInt(MINIMUM_WITHDRAWAL*100_000_000)) {
+    if (amount < MINIMUM_WITHDRAWAL*BigInt(100_000_000)) {
       throw new Error(`Minimum withdrawal is ${MINIMUM_WITHDRAWAL} ICP`);
     }
     if (!depositsCanister) {

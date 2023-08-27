@@ -142,6 +142,7 @@ shared(init_msg) actor class Deposits(args: {
     private stable var stablePendingMints : ?[(Account.Account, Nat64)] = null;
 
     private stable var cachedLedgerBalanceE8s : Nat64 = 0;
+    private stable var cachedTokenTotalSupply : Nat64 = 0;
 
     // ===== OWNER FUNCTIONS =====
 
@@ -204,12 +205,7 @@ shared(init_msg) actor class Deposits(args: {
         switch (await neurons.refresh(id)) {
             case (#err(err)) { #err(err) };
             case (#ok(neuron)) {
-                let isNew = staking.addOrRefresh(neuron);
-                if isNew {
-                    let canister = {owner = Principal.fromActor(this); subaccount = null};
-                    ignore queueMint(canister, neuron.cachedNeuronStakeE8s);
-                    ignore flushMint(canister);
-                };
+                ignore staking.addOrRefresh(neuron);
                 #ok(neuron)
             };
         }
@@ -217,7 +213,7 @@ shared(init_msg) actor class Deposits(args: {
 
     public shared(msg) func flushPendingDeposits(): async ?FlushPendingDeposits.FlushPendingDepositsResult {
         owners.require(msg.caller);
-        await daily.flushPendingDeposits(refreshAvailableBalance)
+        await daily.flushPendingDeposits(Time.now(), refreshAvailableBalance)
     };
 
     public shared(msg) func proposalNeuron(): async ?Neurons.Neuron {
@@ -267,6 +263,7 @@ shared(init_msg) actor class Deposits(args: {
         };
 
         let neuronsMetrics = await neurons.metrics();
+        let exchange_rate = _exchangeRate();
 
         let ms = Buffer.Buffer<Metrics.Metric>(0);
         ms.add({
@@ -296,6 +293,27 @@ shared(init_msg) actor class Deposits(args: {
             help = ?"deposits canister available ICP balance";
             labels = [];
             value = Nat64.toText(_availableBalance());
+        });
+        ms.add({
+            name = "cached_token_total_supply";
+            t = "gauge";
+            help = ?"cached token total supply";
+            labels = [("token", "stICP"), ("canister", "deposits")];
+            value = Nat64.toText(cachedTokenTotalSupply);
+        });
+        ms.add({
+            name = "exchange_rate";
+            t = "gauge";
+            help = ?"total amounts used to calculate exchange rate";
+            labels = [("token", "stICP")];
+            value = Nat64.toText(exchange_rate.0);
+        });
+        ms.add({
+            name = "exchange_rate";
+            t = "gauge";
+            help = ?"total amounts used to calculate exchange rate";
+            labels = [("token", "ICP")];
+            value = Nat64.toText(exchange_rate.1);
         });
         ms.add({
             name = "pending_mint_count";
@@ -381,7 +399,7 @@ shared(init_msg) actor class Deposits(args: {
     // address where the user should transfer their deposit ICP.
     public shared(msg) func getDepositAddress(code: ?Text): async Text {
         Debug.print("[Referrals.touch] user: " # debug_show(msg.caller) # ", code: " # debug_show(code));
-        referralTracker.touch(msg.caller, code);
+        referralTracker.touch(msg.caller, code, null);
         NNS.accountIdToText(NNS.accountIdFromPrincipal(Principal.fromActor(this), NNS.principalToSubaccount(msg.caller)));
     };
 
@@ -423,19 +441,28 @@ shared(init_msg) actor class Deposits(args: {
         // Check ledger for value
         let balance = await ledger.account_balance({ account = Blob.toArray(sourceAccount) });
 
+        // Cache the exchange rate before we do the transfer, so the transfer
+        // doesn't impact the result.
+        let (stIcp64, totalIcp64) = _exchangeRate();
+        let stIcp = Nat64.toNat(stIcp64);
+        let totalIcp = Nat64.toNat(totalIcp64);
+        assert(stIcp > 0);
+        assert(totalIcp > 0);
+
         // Transfer to staking neuron
         if (Nat64.toNat(balance.e8s) <= minimumDeposit) {
             return #Err(#BalanceLow);
         };
         let fee = { e8s = Nat64.fromNat(icpFee) };
         let amount = { e8s = balance.e8s - fee.e8s };
+        let now = Time.now();
         let icpReceipt = await ledger.transfer({
             memo : Nat64    = 0;
             from_subaccount = ?Blob.toArray(subaccount);
             to              = Blob.toArray(NNS.accountIdFromPrincipal(Principal.fromActor(this), NNS.defaultSubaccount()));
             amount          = amount;
             fee             = fee;
-            created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(Time.now())) };
+            created_at_time = ?{ timestamp_nanos = Nat64.fromNat(Int.abs(now)) };
         });
 
         switch icpReceipt {
@@ -446,16 +473,28 @@ shared(init_msg) actor class Deposits(args: {
         };
 
         // Use this to fulfill any pending withdrawals.
-        ignore withdrawals.depositIcp(amount.e8s);
+        ignore withdrawals.depositIcp(amount.e8s, ?now);
+
+        // Calculate how much stIcp to mint
+        let depositAmount = Nat64.toNat(amount.e8s);
+        // Formula to maintain the exchange rate:
+        //   stIcp / totalIcp = toMintE8s / depositAmount
+        //
+        // And solve for toMintE8s:
+        //   toMintE8s = (stIcp * depositAmount) / totalIcp
+        //
+        // Because we are working with Nats which have no decimals, we need to
+        // do the multiplication first, to retain precision.
+        let toMintE8s = Nat64.fromNat((stIcp * depositAmount) / totalIcp);
 
         // Mint the new tokens
         Debug.print("[Referrals.convert] user: " # debug_show(user));
-        referralTracker.convert(user);
+        referralTracker.convert(user, ?now);
         let userAccount = {owner=user; subaccount=null};
-        ignore queueMint(userAccount, amount.e8s);
+        ignore queueMint(userAccount, toMintE8s);
         ignore flushMint(userAccount);
 
-        return #Ok(Nat64.toNat(amount.e8s));
+        return #Ok(Nat64.toNat(toMintE8s));
     };
 
     // For safety, minting tokens is a two-step process. First we queue them
@@ -540,6 +579,30 @@ shared(init_msg) actor class Deposits(args: {
         }
     };
 
+    // ===== EXCHANGE RATE FUNCTIONS =====
+
+    // exchangeRate returns (stICP, totalICP), so the client can calculate the
+    // exchange rate
+    public query func exchangeRate() : async (Nat64, Nat64) {
+        _exchangeRate()
+    };
+
+    // _exchangeRate returns (stICP, totalICP) synchronously, so this contract
+    // can calculate the exchange rate
+    private func _exchangeRate() : (Nat64, Nat64) {
+        let stIcp = cachedTokenTotalSupply;
+        var totalIcp = _availableBalance();
+        for ((id, b) in staking.balances().vals()) {
+            totalIcp += b;
+        };
+        (stIcp, totalIcp)
+    };
+
+    private func refreshTokenTotalSupply() : async Nat64 {
+        cachedTokenTotalSupply := Nat64.fromNat(await token.totalSupply());
+        cachedTokenTotalSupply
+    };
+
     // ===== WITHDRAWAL FUNCTIONS =====
 
     // Show currently available ICP in this canister. Minus ICP retained for
@@ -595,7 +658,7 @@ shared(init_msg) actor class Deposits(args: {
 
         // See if we can fulfill any pending withdrawals. We do this atomically
         // immediately so that the availableBalance doesn't fluctuate.
-        ignore withdrawals.depositIcp(_availableBalance());
+        ignore withdrawals.depositIcp(_availableBalance(), null);
 
         _availableBalance()
     };
@@ -616,6 +679,7 @@ shared(init_msg) actor class Deposits(args: {
         b.toArray();
     };
 
+    // amount is in ICP e8s
     private func availableLiquidity(amount: Nat64): (Int, Nat64) {
         var maxDelay: Int = 0;
         var sum: Nat64 = 0;
@@ -637,6 +701,24 @@ shared(init_msg) actor class Deposits(args: {
     public shared(msg) func createWithdrawal(user: Account.Account, amount: Nat64) : async Result.Result<Withdrawals.Withdrawal, Withdrawals.WithdrawalsError> {
         assert(msg.caller == user.owner);
 
+        // Calculate how much icp to pay out
+        let (stIcp64, totalIcp64) = _exchangeRate();
+        let stIcp = Nat64.toNat(stIcp64);
+        let totalIcp = Nat64.toNat(totalIcp64);
+        let burnAmount = Nat64.toNat(amount);
+        assert(burnAmount <= stIcp);
+        // Convert with the exchange rate:
+        //   totalIcp / stIcp = toUnlockE8s / burnAmount
+        //
+        // And solve for toUnlockE8s:
+        //   toUnlockE8s = burnAmount * (totalIcp / stIcp)
+        //
+        // Because we are working with Nats which have no decimals, we need to
+        // do the multiplication first, to retain precision.
+        assert(stIcp > 0);
+        let toUnlockE8s = Nat64.fromNat((burnAmount * totalIcp) / stIcp);
+        assert(toUnlockE8s > 0);
+
         // Burn the tokens from the user. This makes sure there is enough
         // balance for the user.
         // TODO: Figure out how to do this with ICRC1. Approve &
@@ -654,12 +736,12 @@ shared(init_msg) actor class Deposits(args: {
         // Minimum, 1 minute until withdrawals.depositIcp runs again.
         var delay: Int = 60;
         var availableNeurons: Nat64 = 0;
-        if (amount > availableCash) {
-            let (d, a) = availableLiquidity(amount - availableCash);
+        if (toUnlockE8s > availableCash) {
+            let (d, a) = availableLiquidity(toUnlockE8s - availableCash);
             delay := d;
             availableNeurons := a;
         };
-        if (availableCash+availableNeurons < amount) {
+        if (availableCash+availableNeurons < toUnlockE8s) {
             // Refund the user's burnt tokens. In practice, this should never
             // happen, as cash+neurons should be >= totalTokens.
             ignore queueMint(user, amount);
@@ -667,7 +749,7 @@ shared(init_msg) actor class Deposits(args: {
             return #err(#InsufficientLiquidity);
         };
 
-        return #ok(withdrawals.createWithdrawal(user.owner, amount, delay));
+        return #ok(withdrawals.createWithdrawal(user.owner, toUnlockE8s, delay));
     };
 
     // Complete withdrawal(s), transferring the ready amount to the
@@ -865,6 +947,13 @@ shared(init_msg) actor class Deposits(args: {
                 interval = 1 * minute;
                 function = func(now: Time.Time): async Result.Result<Any, Text> {
                     #ok(await refreshAvailableBalance())
+                };
+            },
+            {
+                name = "refreshTokenTotalSupply";
+                interval = 1 * minute;
+                function = func(now: Time.Time): async Result.Result<Any, Text> {
+                    #ok(await refreshTokenTotalSupply())
                 };
             }
         ]);

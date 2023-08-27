@@ -6,13 +6,13 @@ import * as token from '../../../declarations/token';
 import { Token, TokenInfo } from "../../../declarations/token/token.did.d.js";
 import { getBackendActor }  from '../agent';
 import * as format from "../format";
-import { useAsyncEffect } from "../hooks";
+import { ExchangeRate, useAsyncEffect } from "../hooks";
 import { styled } from '../stitches.config';
 import { ActivityIndicator } from "./ActivityIndicator";
 import { Flex } from "./Flex";
 import { HelpDialog } from "./HelpDialog";
 
-export function Statistics({neurons}: {neurons: string[]|null}) {
+export function Statistics({neurons, rate}: {neurons: string[]|null, rate: ExchangeRate|null}) {
   const [stats, setStats] = React.useState<TokenInfo|null>(null);
   const [apy, setAPY] = React.useState<bigint|null>(null);
 
@@ -44,8 +44,8 @@ export function Statistics({neurons}: {neurons: string[]|null}) {
         <Item>
           <h5>Total ICP Staked</h5>
           <h2>
-            {stats !== null
-              ? `${formatSupply(stats.metadata.totalSupply)} ICP`
+            {rate?.totalIcp
+              ? `${formatSupply(rate.totalIcp)} ICP`
               : <ActivityIndicator />}
           </h2>
         </Item>
@@ -72,8 +72,7 @@ export function Statistics({neurons}: {neurons: string[]|null}) {
               </p>
 
               <p>
-                Rewards are distributed daily. There can be up to 48 hours between
-                when you deposit, and when you receive your first rewards.
+                Rewards accrue directly to the stICP token value by increasing the ICP:stICP exchange rate.
               </p>
             </HelpDialog>
           </h5>
