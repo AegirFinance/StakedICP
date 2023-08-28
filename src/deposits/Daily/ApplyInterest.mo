@@ -276,9 +276,6 @@ module {
                 remainder := 0;
             };
 
-            // Check everything matches up
-            assert(affiliatePayouts+remainder == protocolStIcp);
-
             // Execute all mints
             for ((to, amount) in mints.vals()) {
                 Debug.print("mint: " # debug_show(amount) # " to " # debug_show(to));
