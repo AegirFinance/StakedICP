@@ -107,7 +107,7 @@ echo
 echo == Install token.
 echo
 
-LOGO="data:image/jpeg;base64,$(base64 -w0 src/website/public/logo.png)"
+LOGO="data:image/jpeg;base64,$(cat src/website/public/logo.png | base64 | tr -d '\n')"
 canister install token --mode="$MODE" --argument "$(cat << EOM
 ("${LOGO}", "Staked ICP", "stICP", 8, 100_000_000, principal "$(canister id deposits)", 10_000)
 EOM
