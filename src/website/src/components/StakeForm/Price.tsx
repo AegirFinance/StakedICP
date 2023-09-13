@@ -6,7 +6,7 @@ import {
 import * as format from "../../format";
 import { useInterval } from "../../hooks";
 
-export function Price({amount}: {amount: bigint}) {
+export function Price({amount}: {amount: bigint | undefined}) {
     const price = BigInt(Math.floor((usePrice() ?? 0) * 100));
     const total = price && amount && (amount * price)/BigInt(100_000_000);
     return (

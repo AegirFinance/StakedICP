@@ -70,11 +70,18 @@ export function UnstakePanel({rate}: {rate: ExchangeRate|null}) {
       setLiquidityGraph(result);
   }, []);
 
+  const icpAmount: bigint | undefined = React.useMemo(() => {
+      if (!rate) return undefined;
+      // convert the user's chosen amount of stICP to unlocked ICP.
+      return (parsedAmount * rate.totalIcp) / rate.stIcp;
+  }, [parsedAmount, rate]);
+
   const delay: bigint | undefined = React.useMemo(() => {
       if (!liquidityGraph) return undefined;
       if (!rate) return undefined;
       // convert the user's chosen amount of stICP to unlocked ICP.
-      let remaining: bigint = (parsedAmount * rate.totalIcp) / rate.stIcp;
+      let remaining = icpAmount;
+      if (!remaining) return undefined;
       // Figure out the delay to unlock that amount of ICP
       let maxDelay: bigint = BigInt(60); // At least 1 minute
       for (let [d, available] of liquidityGraph) {
@@ -83,7 +90,7 @@ export function UnstakePanel({rate}: {rate: ExchangeRate|null}) {
           remaining -= available;
       };
       return maxDelay;
-  }, [liquidityGraph, parsedAmount]);
+  }, [liquidityGraph, icpAmount, rate]);
 
     const depositsCanister = useCanister<Deposits>({
         // TODO: handle missing canister id better
@@ -120,7 +127,7 @@ export function UnstakePanel({rate}: {rate: ExchangeRate|null}) {
         onChange={(e) => {
           setAmount(e.currentTarget.value);
         }} />
-      <Price amount={parsedAmount} />
+      <Price amount={icpAmount} />
       <StyledSlider
         disabled={!principal || sticp === undefined}
         value={[Math.min(Number(parsedAmount), Number(sticp?.value ?? BigInt(0)))]}
