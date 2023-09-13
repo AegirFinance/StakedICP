@@ -591,10 +591,34 @@ shared(init_msg) actor class Deposits(args: {
     // can calculate the exchange rate
     private func _exchangeRate() : (Nat64, Nat64) {
         let stIcp = cachedTokenTotalSupply;
-        var totalIcp = _availableBalance();
+
+        // This already excludes availableWithdrawals and pendingTransfers.
+        var icpAssets = _availableBalance();
+        // Add all the staking neurons
         for ((id, b) in staking.balances().vals()) {
-            totalIcp += b;
+            icpAssets += b;
         };
+        // Add all the dissolving withdrawal neurons. They will eventually
+        // become part of the pool of available ICP, so are still an asset
+        // (minus any pendingWithdrawals).
+        icpAssets += withdrawals.totalDissolving();
+
+        // Deduct the pending withdrawals. pendingWithdrawals represent
+        // existing claims against the dissolving withdrawal neurons. They may
+        // be `totalPending <= totalDissolving` because the withdrawals may
+        // have been fulfilled early by incoming deposits, leaving the
+        // pre-split neurons to dissolve eventually, or be re-used for future
+        // withdrawals.
+        //
+        // Liabilities should also include pendingTransfers, and
+        // availableWithdrawals, *but* because the ICP for these is held by
+        // this canister, these are already included in _availableBalance(), so
+        // we can omit them here.
+        let icpLiabilities = withdrawals.totalPending();
+
+        // Final balance of protocol ICP
+        let totalIcp = icpAssets - icpLiabilities;
+
         (stIcp, totalIcp)
     };
 
