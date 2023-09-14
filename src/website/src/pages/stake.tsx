@@ -134,6 +134,18 @@ function FAQ({neurons}: {neurons: string[]|null}) {
           </p>
 
           <p>
+          Since the NNS voting rewards will constantly accumulate, this means that stICP's value effectively always increases relative to ICP. The ICP/stICP exchange rate is updated approximately every 24 hours based on the NNS voting rewards earned by the staking neurons.
+          </p>
+
+          <p>
+          To illustrate this point, here is a chart of stICP's value (relative to ICP) over time - as expected, it demonstrates slow but steady growth:
+          </p>
+
+          <p>
+          <img src="/exchange-rate-example.png" style={{width: "100%"}} />
+          </p>
+
+          <p>
           Let's do a simple example as a demonstration.
           </p>
 
