@@ -593,11 +593,7 @@ shared(init_msg) actor class Deposits(args: {
         let stIcp = cachedTokenTotalSupply;
 
         // This already excludes availableWithdrawals and pendingTransfers.
-        var icpAssets = _availableBalance();
-        // Add all the staking neurons
-        for ((id, b) in staking.balances().vals()) {
-            icpAssets += b;
-        };
+        var icpAssets = _availableBalance() + staking.totalStaking();
         // Add all the dissolving withdrawal neurons. They will eventually
         // become part of the pool of available ICP, so are still an asset
         // (minus any pendingWithdrawals).

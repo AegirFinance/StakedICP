@@ -53,11 +53,6 @@ module {
         private var stakingNeurons = TrieMap.TrieMap<Text, Neurons.Neuron>(Text.equal, Text.hash);
 
         public func metrics(): Buffer.Buffer<Metrics.Metric> {
-            var sum : Nat64 = 0;
-            for ((id, balance) in balances().vals()) {
-                sum += balance;
-            };
-
             let ms = Buffer.Buffer<Metrics.Metric>(2);
             ms.add({
                 name = "neuron_count";
@@ -71,7 +66,7 @@ module {
                 t = "gauge";
                 help = ?"e8s balance of the neuron(s)";
                 labels = [("type", "staking")];
-                value = Nat64.toText(sum);
+                value = Nat64.toText(totalStaking());
             });
             ms
         };
@@ -92,6 +87,15 @@ module {
                 b.add((neuron.id, Neurons.balance(neuron)));
             };
             return b.toArray();
+        };
+
+        // Sum the balances of all staking neurons
+        public func totalStaking(): Nat64 {
+          var sum: Nat64 = 0;
+          for (neuron in stakingNeurons.vals()) {
+              sum += Neurons.balance(neuron);
+          };
+          sum
         };
 
         // Returns array of delays (seconds) and the amount (e8s) becoming

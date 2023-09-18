@@ -36,8 +36,8 @@ module {
             // Note, this races with the queued mints in ApplyInterest. Once
             // ApplyInterest's flushes are finished, the total supply might be
             // higher than what we see here. So we run this after the ApplyInterest.
-            let tokenE8s = Nat64.fromNat((await args.token.getMetadata()).totalSupply);
             var canisterE8s = await refreshAvailableBalance();
+            let totalIcpE8s = args.staking.totalStaking() + canisterE8s;
 
             if (canisterE8s == 0) {
                 return #ok([]);
@@ -50,7 +50,7 @@ module {
             };
 
             // Spread the remainder between staking neurons (retaining some in the canister).
-            let transfers = args.staking.depositIcp(tokenE8s, canisterE8s, null);
+            let transfers = args.staking.depositIcp(totalIcpE8s, canisterE8s, null);
             let results = Buffer.Buffer<Ledger.TransferResult>(transfers.size());
             for (transfer in transfers.vals()) {
                 // Start the transfer. Best effort here. If the transfer fails,
