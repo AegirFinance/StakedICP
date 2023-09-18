@@ -15,15 +15,15 @@ import {
   DialogTitle,
   Flex,
   HelpDialog,
+  ICPLogo,
   Input,
   STICPLogo,
 } from '../../components';
 import * as format from "../../format";
 import { ExchangeRate, useAsyncEffect } from "../../hooks";
 import { styled } from '../../stitches.config';
-import { ConnectButton, useAccount, useBalance, useCanister, useContext } from "../../wallet";
+import { ConnectButton, useAccount, useCanister, useContext } from "../../wallet";
 import { Price } from "./Price";
-import { Slider } from "./Slider";
 
 function parseFloat(str: string): number {
     try {
@@ -41,7 +41,6 @@ export function DelayedUnstakePanel({rate}: {rate: ExchangeRate|null}) {
   const { state: { cacheBuster } } = useContext();
   const [{ data: account }] = useAccount();
   const principal = account?.principal;
-  const [{data: sticp}] = useBalance({ token: token.canisterId });
   const [amount, setAmount] = React.useState("");
   const parsedAmount : bigint = React.useMemo(() => {
     if (!amount) {
@@ -118,7 +117,10 @@ export function DelayedUnstakePanel({rate}: {rate: ExchangeRate|null}) {
       <h3>Start Withdrawal</h3>
       <Input
         prefix={
-          <Flex css={{flexDirection: "row", alignItems: "center", "* + *": { marginLeft: '$2' }}}><STICPLogo height="24px" /><span>stICP</span></Flex>
+          <Flex css={{flexDirection: "row", alignItems: "center", "* + *": { marginLeft: '$2' }}}>
+            <STICPLogo height="24px" />
+            <span>stICP</span>
+          </Flex>
         }
         type="text"
         name="amount" 
@@ -128,49 +130,48 @@ export function DelayedUnstakePanel({rate}: {rate: ExchangeRate|null}) {
           setAmount(e.currentTarget.value);
         }} />
       <Price amount={icpAmount} />
-      <Slider
-        disabled={!principal || sticp === undefined}
-        value={[Math.min(Number(parsedAmount), Number(sticp?.value ?? BigInt(0)))]}
-        min={0}
-        max={Number(sticp?.value ?? BigInt(100))}
-        step={1}
-        onValueChange={ns => {
-            setAmount((ns[0] / 100_000_000).toFixed(sticp?.decimals ?? 8));
-        }}
-        aria-label="Amount" />
+      <h5 style={{ marginBottom: '0.75rem' }}>You will receive</h5>
+      <Input
+          disabled
+          prefix={
+              <Flex css={{ flexDirection: "row", alignItems: "center", "* + *": { marginLeft: '$2' } }}><ICPLogo height="24px" /><span>ICP</span></Flex>
+          }
+          type="text"
+          name="receive"
+          value={format.units(icpAmount ?? BigInt(0), 8)} 
+      />
+      <Price amount={icpAmount} />
+      <DataTable>
+          <DataTableRow>
+              <DataTableLabel>Exchange rate</DataTableLabel>
+              <DataTableValue>1 stICP = {rate ? format.units(rate.totalIcp*BigInt(100_000_000)/rate.stIcp, 8) : '...'} ICP</DataTableValue>
+          </DataTableRow>
+          <DataTableRow>
+              <DataTableLabel>Transaction cost</DataTableLabel>
+              <DataTableValue>0 ICP</DataTableValue>
+          </DataTableRow>
+          <DataTableRow>
+              <DataTableLabel>Estimated Delay <HelpDialog aria-label="Estimated Delay Details">
+                {/* TODO: Fill in a better explanation here */}
+                  <p>
+                      This is the maximum time it may take for your withdrawal to be processed.
+                  </p>
+              </HelpDialog></DataTableLabel>
+              {/* TODO: Fetch the delay for the amount */}
+              <DataTableValue><DelayStat amount={parsedAmount} delay={delay} /></DataTableValue>
+          </DataTableRow>
+      </DataTable>
       {principal ? (
-        <>
-          <DataTable>
-              <DataTableRow>
-                  <DataTableLabel>Estimated Delay <HelpDialog aria-label="Estimated Delay Details">
-                    {/* TODO: Fill in a better explanation here */}
-                      <p>
-                          This is the maximum time it may take for your withdrawal to be processed.
-                      </p>
-                  </HelpDialog></DataTableLabel>
-                  {/* TODO: Fetch the delay for the amount */}
-                  <DataTableValue><DelayStat amount={parsedAmount} delay={delay} /></DataTableValue>
-              </DataTableRow>
-              <DataTableRow>
-                  <DataTableLabel>Exchange rate</DataTableLabel>
-                  <DataTableValue>1 stICP = {rate ? format.units(rate.totalIcp*BigInt(100_000_000)/rate.stIcp, 8) : '...'} ICP</DataTableValue>
-              </DataTableRow>
-              <DataTableRow>
-                  <DataTableLabel>Transaction cost</DataTableLabel>
-                  <DataTableValue>0 ICP</DataTableValue>
-              </DataTableRow>
-          </DataTable>
-          <UnstakeDialog
-            amount={parsedAmount}
-            disbursed={icpAmount ?? BigInt(0)}
-            delay={delay}
-            onOpenChange={(open: boolean) => {
-              setShowConfirmationDialog(!!(principal && parsedAmount && open)); }
-            }
-            open={showConfirmationDialog}
-            rawAmount={amount}
-            />
-        </>
+        <UnstakeDialog
+          amount={parsedAmount}
+          disbursed={icpAmount ?? BigInt(0)}
+          delay={delay}
+          onOpenChange={(open: boolean) => {
+            setShowConfirmationDialog(!!(principal && parsedAmount && open)); }
+          }
+          open={showConfirmationDialog}
+          rawAmount={amount}
+          />
       ) : (
         <ConnectButton />
       )}

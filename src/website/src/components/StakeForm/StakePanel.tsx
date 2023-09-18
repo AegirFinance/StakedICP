@@ -59,9 +59,13 @@ export function StakePanel({ rate }: { rate: ExchangeRate | null }) {
             e.preventDefault();
             setShowTransferDialog(!!(principal && stake >= MINIMUM_DEPOSIT));
         }}>
+            <h3>Stake ICP</h3>
             <Input
                 prefix={
-                    <Flex css={{ flexDirection: "row", alignItems: "center", "* + *": { marginLeft: '$2' } }}><ICPLogo height="24px" /><span>ICP</span></Flex>
+                    <Flex css={{ flexDirection: "row", alignItems: "center", "* + *": { marginLeft: '$2' } }}>
+                        <ICPLogo height="24px" />
+                        <span>ICP</span>
+                    </Flex>
                 }
                 type="text"
                 name="amount"
@@ -82,20 +86,6 @@ export function StakePanel({ rate }: { rate: ExchangeRate | null }) {
                 value={format.units(receivedAmount, 8)}
             />
             <Price amount={stake > FEE ? stake - FEE : BigInt(0)} />
-            {principal ? (
-                <TransferDialog
-                    open={showTransferDialog}
-                    rawAmount={amount}
-                    sentAmount={stake}
-                    receivedAmount={receivedAmount}
-                    onOpenChange={(open: boolean) => {
-                        setShowTransferDialog(!!(principal && stake && open));
-                    }}
-                    referralCode={referralCode}
-                />
-            ) : (
-                <ConnectButton />
-            )}
             <DataTable>
                 <DataTableRow>
                     <DataTableLabel>Exchange rate</DataTableLabel>
@@ -115,6 +105,20 @@ export function StakePanel({ rate }: { rate: ExchangeRate | null }) {
                     <DataTableValue>10%</DataTableValue>
                 </DataTableRow>
             </DataTable>
+            {principal ? (
+                <TransferDialog
+                    open={showTransferDialog}
+                    rawAmount={amount}
+                    sentAmount={stake}
+                    receivedAmount={receivedAmount}
+                    onOpenChange={(open: boolean) => {
+                        setShowTransferDialog(!!(principal && stake && open));
+                    }}
+                    referralCode={referralCode}
+                />
+            ) : (
+                <ConnectButton />
+            )}
         </FormWrapper>
     );
 }
