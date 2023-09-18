@@ -24,6 +24,7 @@ import { ExchangeRate, useAsyncEffect } from "../../hooks";
 import { styled } from '../../stitches.config';
 import { ConnectButton, useAccount, useBalance, useCanister, useContext } from "../../wallet";
 import { Price } from "./Price";
+import { Slider } from "./Slider";
 
 function parseFloat(str: string): number {
     try {
@@ -37,7 +38,7 @@ function parseFloat(str: string): number {
     }
 }
 
-export function UnstakePanel({rate}: {rate: ExchangeRate|null}) {
+export function DelayedUnstakePanel({rate}: {rate: ExchangeRate|null}) {
   const { state: { cacheBuster } } = useContext();
   const [{ data: account }] = useAccount();
   const principal = account?.principal;
@@ -128,7 +129,7 @@ export function UnstakePanel({rate}: {rate: ExchangeRate|null}) {
           setAmount(e.currentTarget.value);
         }} />
       <Price amount={icpAmount} />
-      <StyledSlider
+      <Slider
         disabled={!principal || sticp === undefined}
         value={[Math.min(Number(parsedAmount), Number(sticp?.value ?? BigInt(0)))]}
         min={0}
@@ -137,12 +138,7 @@ export function UnstakePanel({rate}: {rate: ExchangeRate|null}) {
         onValueChange={ns => {
             setAmount((ns[0] / 100_000_000).toFixed(sticp?.decimals ?? 8));
         }}
-        aria-label="Amount">
-        <StyledTrack>
-          <StyledRange />
-        </StyledTrack>
-        <StyledThumb disabled={!principal || sticp === undefined} />
-      </StyledSlider>
+        aria-label="Amount" />
       {principal ? (
         <>
           <DataTable>
@@ -167,6 +163,7 @@ export function UnstakePanel({rate}: {rate: ExchangeRate|null}) {
           </DataTable>
           <UnstakeDialog
             amount={parsedAmount}
+            disbursed={icpAmount ?? BigInt(0)}
             delay={delay}
             onOpenChange={(open: boolean) => {
               setShowConfirmationDialog(!!(principal && parsedAmount && open)); }
@@ -208,63 +205,6 @@ const FormWrapper = styled('form', {
   boxShadow: '$large',
   '& > * + *': {
     marginTop: '$2',
-  },
-});
-
-const StyledSlider = styled(SliderPrimitive.Root, {
-  position: 'relative',
-  display: 'flex',
-  alignItems: 'center',
-  userSelect: 'none',
-  touchAction: 'none',
-
-  '&[data-orientation="horizontal"]': {
-    height: 20,
-  },
-
-  '&[data-orientation="vertical"]': {
-    flexDirection: 'column',
-    width: 20,
-    height: 100,
-  },
-});
-
-const StyledTrack = styled(SliderPrimitive.Track, {
-  backgroundColor: '$slate10',
-  position: 'relative',
-  flexGrow: 1,
-  borderRadius: '9999px',
-
-  '&[data-orientation="horizontal"]': { height: 3 },
-  '&[data-orientation="vertical"]': { width: 3 },
-});
-
-const StyledRange = styled(SliderPrimitive.Range, {
-  position: 'absolute',
-  backgroundColor: '$slate10',
-  borderRadius: '9999px',
-  height: '100%',
-});
-
-const StyledThumb = styled(SliderPrimitive.Thumb, {
-  all: 'unset',
-  display: 'block',
-  width: 20,
-  height: 20,
-  backgroundColor: '$blue9',
-  boxShadow: `0 2px 10px $slate7`,
-  borderRadius: 10,
-  variants: {
-    disabled: {
-      true: {
-        backgroundColor: '$slate10',
-        cursor: 'default',
-      },
-      false: {
-        '&:hover': { backgroundColor: '$blue10', cursor: 'pointer' },
-        '&:focus': { boxShadow: `0 0 0 5px $slate8` },
-      },
-    },
   },
 });
 
@@ -319,6 +259,7 @@ function PendingWithdrawalsList({items}: {items: Withdrawal[] | null | undefined
 
 interface UnstakeDialogParams {
   amount: bigint;
+  disbursed: bigint;
   delay?: bigint;
   onOpenChange: (open: boolean) => void;
   open: boolean;
@@ -329,6 +270,7 @@ const MINIMUM_WITHDRAWAL = BigInt(100_000);
 
 function UnstakeDialog({
   amount,
+  disbursed,
   delay,
   onOpenChange,
   open,
@@ -354,7 +296,7 @@ function UnstakeDialog({
     if (!principal) {
       throw new Error("Wallet not connected");
     }
-    if (rawAmount && amount < MINIMUM_WITHDRAWAL) {
+    if (rawAmount && disbursed < MINIMUM_WITHDRAWAL) {
       throw new Error(`Minimum withdrawal is ${format.units(MINIMUM_WITHDRAWAL, 8)} ICP`);
     }
     if (!amount) {
@@ -391,7 +333,7 @@ function UnstakeDialog({
         <>
           <DialogTitle>Are you sure?</DialogTitle>
           <DialogDescription>
-            This action cannot be undone. Your {amount} stICP will be converted to {amount} ICP.
+            This action cannot be undone. Your {amount} stICP will be converted to {format.units(disbursed, 8)} ICP.
           </DialogDescription>
           <DialogDescription>
             {delay === undefined ? (

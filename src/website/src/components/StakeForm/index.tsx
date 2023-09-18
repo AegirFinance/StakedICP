@@ -3,7 +3,7 @@ import { styled } from '../../stitches.config';
 import { ExchangeRate } from "../../hooks";
 import { Flex } from '../index';
 import { StakePanel } from "./StakePanel";
-import { UnstakePanel } from "./UnstakePanel";
+import { DelayedUnstakePanel } from "./DelayedUnstakePanel";
 
 type Panels = 'stake' | 'delayed-unstake' | 'fast-unstake';
 
@@ -19,7 +19,9 @@ export function StakeForm({rate}: {rate: ExchangeRate|null}) {
                     <Item title="Fast Unstake (Coming Soon)" active={false} disabled={true}>Fast Unstake (Coming Soon)</Item>
                 </Nav>
             </Flex>
-            {active === 'stake' ? <StakePanel rate={rate} /> : <UnstakePanel rate={rate} />}
+            {active === 'stake'
+              ? <StakePanel rate={rate} />
+              : <DelayedUnstakePanel rate={rate} />}
             <Attribution>Data from CoinGecko</Attribution>
         </Flex>
     );
