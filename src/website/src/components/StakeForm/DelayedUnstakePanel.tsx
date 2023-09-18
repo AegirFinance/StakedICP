@@ -1,5 +1,4 @@
 import { Principal } from '@dfinity/principal';
-import * as SliderPrimitive from '@radix-ui/react-slider';
 import React from 'react';
 import * as deposits from '../../../../declarations/deposits';
 import { AvailableLiquidityGraph, Deposits, Withdrawal } from "../../../../declarations/deposits/deposits.did.d.js";
