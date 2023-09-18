@@ -149,11 +149,6 @@ module {
             };
             let interest: Nat64 = sumAfter - totalMaturity;
 
-            // See how much maturity we have pending
-            if (interest <= 10_000) {
-                return #err(#InsufficientMaturity);
-            };
-
             // Pay out the protocol cut and affiliate fees
             let apply = payProtocolAndAffiliates(
                 now,
@@ -281,7 +276,6 @@ module {
                 Debug.print("mint: " # debug_show(amount) # " to " # debug_show(to));
                 ignore queueMint(to, Nat64.fromNat(amount));
             };
-
 
             return {
                 timestamp = now;
