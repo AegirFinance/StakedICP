@@ -15,21 +15,23 @@ const BANNED_COUNTRIES: Record<string, string> = {
     "BY": "Belarus",
     "BI": "Burundi",
     // Crimea and Sevastopol
-    "CU": "Cuba",
     "CD": "the Democratic Republic of Congo",
-    "IR": "Iran",
+    "CU": "Cuba",
     "IQ": "Iraq",
-    "LY": "Libya",
+    "IR": "Iran",
     "KP": "North Korea",
-    "SO": "Somalia",
+    "LY": "Libya",
+    "RU": "Russia",
     "SD": "Sudan",
+    "SO": "Somalia",
     "SY": "Syria",
     "VE": "Venezuela",
     "ZW": "Zimbabwe",
 
     // Other Exclusions:
-    "US": "the United States",
     "CN": "China",
+    "GB": "the United Kingdom",
+    "US": "the United States",
 };
 
 export function GeoipModal() {
