@@ -931,7 +931,7 @@ shared(init_msg) actor class Deposits(args: {
     //       neurons. This will make it idempotent.
     //    a. Query dissolving neurons total & pending total, to calculate dissolving target
     //    b. Return a list of which staking neurons to split and how much
-    public shared(msg) func refreshNeuronsAndApplyInterest(): async [(Nat64, Nat64)] {
+    public shared(msg) func refreshNeuronsAndApplyInterest(): async [(Nat64, Nat64, Bool)] {
         owners.require(msg.caller);
         let now = Time.now();
         let root = {owner = Principal.fromActor(this); subaccount = null};

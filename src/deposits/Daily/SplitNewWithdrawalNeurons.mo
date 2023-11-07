@@ -10,21 +10,36 @@ import Withdrawals "../Withdrawals";
 
 module {
     public type SplitNewWithdrawalNeuronsResultV1 = Result.Result<[Neurons.NeuronResultV1], Neurons.NeuronsError>;
-    public type SplitNewWithdrawalNeuronsResult = Result.Result<[(Nat64, Nat64)], Neurons.NeuronsError>;
+    public type SplitNewWithdrawalNeuronsResultV2 = Result.Result<[(Nat64, Nat64)], Neurons.NeuronsError>;
+    public type SplitNewWithdrawalNeuronsResult = Result.Result<[(Nat64, Nat64, Bool)], Neurons.NeuronsError>;
 
     public func upgradeResultV1(r: ?SplitNewWithdrawalNeuronsResultV1): ?SplitNewWithdrawalNeuronsResult {
         switch (r) {
             case (null) { null };
             case (?#err(err)) { ?#err(err) };
             case (?#ok(resultV1s)) {
-                let tuples = Buffer.Buffer<(Nat64, Nat64)>(resultV1s.size());
+                let tuples = Buffer.Buffer<(Nat64, Nat64, Bool)>(resultV1s.size());
                 for (result in Iter.fromArray(resultV1s)) {
                     switch (result) {
                         case (#err(err)) { /* no-op, just drop the errors */ };
                         case (#ok(neuron)) {
-                            tuples.add((neuron.id, neuron.cachedNeuronStakeE8s));
+                            tuples.add((neuron.id, neuron.cachedNeuronStakeE8s, false));
                         };
                     };
+                };
+                ?#ok(tuples.toArray())
+            };
+        };
+    };
+
+    public func upgradeResultV2(r: ?SplitNewWithdrawalNeuronsResultV2): ?SplitNewWithdrawalNeuronsResult {
+        switch (r) {
+            case (null) { null };
+            case (?#err(err)) { ?#err(err) };
+            case (?#ok(resultV2s)) {
+                let tuples = Buffer.Buffer<(Nat64, Nat64, Bool)>(resultV2s.size());
+                for ((id, stake) in Iter.fromArray(resultV2s)) {
+                    tuples.add((id, stake, false));
                 };
                 ?#ok(tuples.toArray())
             };

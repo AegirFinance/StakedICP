@@ -229,7 +229,7 @@ module {
         // split. This means that occasionally we may want to keep the newly
         // split neuron, and start dissolving the original to reify the earned
         // maturity.
-        public func splitNeurons(e8s: Nat64): Result.Result<[(Nat64, Nat64)], Neurons.NeuronsError> {
+        public func splitNeurons(e8s: Nat64): Result.Result<[(Nat64, Nat64, Bool)], Neurons.NeuronsError> {
             if (e8s == 0) {
                 return #ok([]);
             };
@@ -244,13 +244,13 @@ module {
             // To ensure at minimum e8s liquidity will be split, we must do at
             // least one split. The smallest split we can do it "minimumStake".
             var remaining = Nat64.max(e8s, minimumStake);
-            let toSplit = Buffer.Buffer<(Nat64, Nat64)>(0);
+            let toSplit = Buffer.Buffer<(Nat64, Nat64, Bool)>(0);
             for (n in neurons.vals()) {
                 // Filter out any we can't split (balance < 2icp+fee)
                 if (remaining > 0 and n.cachedNeuronStakeE8s >= (minimumStake*2)+icpFee) {
                     let amountToSplit = Nat64.min(remaining, n.cachedNeuronStakeE8s - minimumStake - icpFee);
                     remaining -= amountToSplit;
-                    toSplit.add((n.id, amountToSplit+icpFee));
+                    toSplit.add((n.id, amountToSplit+icpFee, false));
                 };
             };
 
