@@ -1,6 +1,3 @@
-import * as deposits from "../../declarations/deposits";
-import * as token from "../../declarations/token";
-import * as nnsLedger from "./nns-ledger";
 import React from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { GeoipModal, Maintenance } from './components';
@@ -36,7 +33,7 @@ export default function App() {
 
   return (
     <div>
-      <WalletProvider whitelist={[deposits.canisterId, nnsLedger.canisterId, token.canisterId].filter(x => !!x) as string[]} host={process.env.NETWORK} dev={process.env.NODE_ENV === "development"}>
+      <WalletProvider>
         {maintenance ? (
           <Maintenance />
         ) : (

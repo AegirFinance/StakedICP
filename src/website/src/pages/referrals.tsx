@@ -1,30 +1,25 @@
+import type { ActorSubclass } from "@dfinity/agent";
 import { ClipboardCopyIcon } from '@radix-ui/react-icons'
 import React from 'react';
-import * as deposits from "../../../declarations/deposits";
-import { Deposits, ReferralStats } from "../../../declarations/deposits/deposits.did";
+import { ReferralStats } from "../../../declarations/deposits/deposits.did";
 import { ActivityIndicator, Code, CopyOnClick, Flex, Header, HelpDialog, Layout } from '../components';
 import * as format from "../format";
 import { useAsyncEffect } from '../hooks';
 import { styled } from '../stitches.config';
-import { ConnectButton, useAccount, useCanister } from "../wallet";
+import { ConnectButton, useWallet, useCanister } from "../wallet";
+import { Deposits } from '../../../declarations/deposits/deposits.did';
 
 export function Referrals() {
   const [stats, setStats] = React.useState<ReferralStats|null>(null);
-  const [{ data: account }] = useAccount();
-  const principal = account?.principal;
-  const depositsCanister = useCanister<Deposits>({
-    // TODO: handle missing canister id better
-    canisterId: deposits.canisterId ?? "",
-    interfaceFactory: deposits.idlFactory,
-  });
+  const [wallet] = useWallet();
+  const principal = wallet?.principal;
+  const [depositsCanister, { loading: depositsCanisterLoading }] = useCanister<Deposits>("deposits");
 
   useAsyncEffect(async () => {
       setStats(null);
-      if (!principal || !depositsCanister) {
-          return;
-      }
+      if (!principal || !depositsCanister || depositsCanisterLoading) return;
       setStats(await depositsCanister.getReferralStats());
-  }, [principal, !!depositsCanister, setStats]);
+  }, [principal, !!depositsCanister, depositsCanisterLoading, setStats]);
 
   const referralUrl = stats && `https://stakedicp.com/?r=${encodeURIComponent(stats.code)}`;
 

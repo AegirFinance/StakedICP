@@ -410,6 +410,17 @@ shared(init_msg) actor class Deposits(args: {
         NNS.accountIdToText(NNS.accountIdFromPrincipal(Principal.fromActor(this), NNS.principalToSubaccount(user)));
     };
 
+    public shared(msg) func getDepositSubaccount(code: ?Text): async Blob {
+        Debug.print("[Referrals.touch] user: " # debug_show(msg.caller) # ", code: " # debug_show(code));
+        referralTracker.touch(msg.caller, code, null);
+        NNS.principalToSubaccount(msg.caller);
+    };
+
+    public shared(msg) func getDepositSubaccountFor(user: Principal): async Blob {
+        owners.require(msg.caller);
+        NNS.principalToSubaccount(user);
+    };
+
     public type DepositErr = {
         #BalanceLow;
         #TransferFailure;

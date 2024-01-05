@@ -1,9 +1,8 @@
 import * as Accordion from '@radix-ui/react-accordion';
 import { ChevronDownIcon, GitHubLogoIcon, TwitterLogoIcon } from '@radix-ui/react-icons';
 import React from 'react';
-import * as deposits from '../../../declarations/deposits';
 import { Deposits } from "../../../declarations/deposits/deposits.did.d.js";
-import { getBackendActor }  from '../agent';
+import { useCanister } from "../wallet";
 import {
   ActivityIndicator,
   Code,
@@ -20,15 +19,13 @@ export function Stake() {
   const [neurons, setNeurons] = React.useState<string[]|null>(null);
   const rate = useExchangeRate();
 
+  const [contract, { loading }] = useCanister<Deposits>("deposits", { mode: "anonymous" });
   useAsyncEffect(async () => {
-    // TODO: Have to use dfinity agent here, as we dont need the user's plug wallet connected.
-    if (!deposits.canisterId) throw new Error("Canister not deployed");
-    const contract = await getBackendActor<Deposits>({canisterId: deposits.canisterId, interfaceFactory: deposits.idlFactory});
-
+    if (!contract || loading) return;
     // TODO: Do this with bigint all the way through for more precision.
     const neurons = await contract.stakingNeurons();
     setNeurons(neurons.map(n => `${n.id.id}`));
-  }, []);
+  }, [!!contract, loading]);
 
   return (
     <Wrapper>

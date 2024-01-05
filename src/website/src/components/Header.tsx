@@ -2,9 +2,10 @@ import React, { SVGProps } from 'react';
 import { Link } from "react-router-dom";
 import * as token from "../../../declarations/token";
 import { styled } from '../stitches.config';
-import { ConnectButton, useAccount, useBalance } from "../wallet";
+import { ConnectButton, ConnectDialog, useBalance, useWallet } from "../wallet";
 import { ActivityIndicator } from "./ActivityIndicator"
 import { Button } from "./Button";
+import * as format from "../format";
 
 // TODO: do some media queries here
 const Wrapper = styled('header', {
@@ -38,8 +39,11 @@ const Balance = styled('span', {
 });
 
 export function Header() {
-  const [{data: account}] = useAccount();
-  const [{data: sticp}] = useBalance({ token: token.canisterId });
+  const [wallet] = useWallet();
+  const [assets] = useBalance();
+  const sticp = assets?.find((asset) => asset.canisterId === token.canisterId);
+  // TODO: Check the amount is in e8s here.
+  const formatted = sticp && format.units(sticp.amount || 0, sticp.decimals);
 
   return (
     <Wrapper>
@@ -48,13 +52,14 @@ export function Header() {
         <Logo style={{height: "2.5rem"}} />
       </Link>
 
-      {account && (
-        <Balance>{sticp ? sticp.formatted : <ActivityIndicator css={{marginRight: "1ch"}} /> } stICP</Balance>
+      {wallet && (
+        <Balance>{formatted ? formatted : <ActivityIndicator css={{marginRight: "1ch"}} /> } stICP</Balance>
       )}
       <Link to="/referrals" style={{marginRight: "0.75rem"}}>
         <Button variant="cancel">Referrals</Button>
       </Link>
       <ConnectButton />
+      <ConnectDialog />
     </Wrapper>
   );
 }

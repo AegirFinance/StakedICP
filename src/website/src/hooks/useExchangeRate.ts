@@ -1,7 +1,6 @@
 import React from 'react';
-import * as deposits from '../../../declarations/deposits';
 import { Deposits } from '../../../declarations/deposits/deposits.did.d.js';
-import { getBackendActor }  from '../agent';
+import { useCanister } from '../wallet';
 import { useInterval } from './index';
 
 export type ExchangeRate = {
@@ -11,11 +10,10 @@ export type ExchangeRate = {
 
 export function useExchangeRate(): ExchangeRate|null {
     const [rate, setRate] = React.useState<ExchangeRate|null>(null);
+    const [contract, { loading }] = useCanister<Deposits>("deposits", { mode: "anonymous" });
     const request = React.useCallback(async () => {
+      if (!contract || loading) return;
       try {
-        // TODO: Have to use dfinity agent here, as we dont need the user's plug wallet connected.
-        if (!deposits.canisterId) throw new Error("Canister not deployed");
-        const contract = await getBackendActor<Deposits>({canisterId: deposits.canisterId, interfaceFactory: deposits.idlFactory});
         const [stIcp, totalIcp] : [bigint, bigint] = await contract.exchangeRate();
         if (stIcp === BigInt(0) || totalIcp === BigInt(0)) {
             console.error("Error fetching exchange rate", {stIcp, totalIcp});
@@ -25,7 +23,7 @@ export function useExchangeRate(): ExchangeRate|null {
       } catch (err) {
         console.error("Error fetching exchange rate", err);
       }
-    }, [setRate]);
+    }, [setRate, loading]);
     useInterval(request, 30000);
     React.useEffect(() => {
         request();

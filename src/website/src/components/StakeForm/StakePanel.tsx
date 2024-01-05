@@ -13,11 +13,10 @@ import {
     STICPLogo,
 } from '../index';
 import { styled } from '../../stitches.config';
-import * as deposits from "../../../../declarations/deposits";
-import { Deposits } from "../../../../declarations/deposits/deposits.did";
 import { ExchangeRate, useAsyncEffect, useReferralCode } from '../../hooks';
 import * as format from "../../format";
-import { ConnectButton, useAccount, useCanister, useContext, useTransaction } from "../../wallet";
+import { ConnectButton, useCanister, useWallet } from "../../wallet";
+import * as deposits from "../../../../declarations/deposits";
 import { Price } from "./Price";
 
 
@@ -34,8 +33,8 @@ function parseFloat(str: string): number {
 }
 
 export function StakePanel({ rate }: { rate: ExchangeRate | null }) {
-    const [{ data: account }] = useAccount();
-    const principal = account?.principal;
+    const [wallet] = useWallet();
+    const principal = wallet?.principal;
     const [amount, setAmount] = React.useState("");
     const stake: bigint = React.useMemo(() => {
         if (!amount) {
@@ -157,20 +156,15 @@ function TransferDialog({
     referralCode,
     onOpenChange,
 }: TransferDialogParams) {
-    const { setState: setGlobalState } = useContext();
-    const [_, sendTransaction] = useTransaction();
-    const depositsCanister = useCanister<Deposits>({
-        // TODO: handle missing canister id better
-        canisterId: deposits.canisterId ?? "",
-        interfaceFactory: deposits.idlFactory,
-    });
+    const [depositsCanister, {loading: depositsLoading}] = useCanister("deposits");
+    const [nnsLedger, {loading: nnsLedgerLoading}] = useCanister("nnsLedger");
 
     useAsyncEffect(async () => {
-        if (!depositsCanister) {
+        if (!depositsCanister || depositsLoading) {
             return;
         }
         await depositsCanister.depositIcp();
-    }, [!!depositsCanister]);
+    }, [!!depositsCanister, depositsLoading]);
 
     const onConfirm = React.useCallback(async () => {
         if (rawAmount && sentAmount < MINIMUM_DEPOSIT) {
@@ -179,20 +173,32 @@ function TransferDialog({
         if (!sentAmount) {
             throw new Error("Amount missing");
         }
-        if (!depositsCanister) {
-            throw new Error("Deposits canister missing");
+        if (!depositsCanister || depositsLoading) {
+            throw new Error("Deposits canister loading");
         }
-        let to = await depositsCanister.getDepositAddress(referralCode ? [referralCode] : []);
-        if (!to) {
+        let subaccount = await depositsCanister.getDepositSubaccount(referralCode ? [referralCode] : []);
+        if (!subaccount) {
             throw new Error("Failed to get the deposit address");
         }
 
-        const { data: block_height, error } = await sendTransaction({
-            request: {
-                to,
-                amount: sentAmount,
-            },
+        if (!nnsLedger || nnsLedgerLoading) {
+            throw new Error("NNS Ledger canister loading");
+        }
+
+        // TODO: Check this
+        // TODO: Handle errors here
+        const block_height = await nnsLedger.icrc1_transfer({
+          from_subaccount: null,
+          to: {
+            owner: deposits.canisterId,
+            subaccount,
+          },
+          amount: sentAmount,
+          fee: null,
+          memo: null,
+          created_at_time: null,
         });
+        const error = null;
         if (error) {
             throw error;
         } else if (block_height === undefined) {
@@ -200,9 +206,6 @@ function TransferDialog({
         }
 
         await depositsCanister.depositIcp();
-
-        // Bump the cachebuster to refresh balances
-        setGlobalState(x => ({ ...x, cacheBuster: x.cacheBuster + 1 }));
     }, [sentAmount, !!depositsCanister, referralCode]);
 
     return (

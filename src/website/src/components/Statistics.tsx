@@ -1,11 +1,9 @@
 import { BigNumber } from "@ethersproject/bignumber";
 import React from 'react';
-import * as deposits from '../../../declarations/deposits';
 import { Deposits } from "../../../declarations/deposits/deposits.did.d.js";
-import * as token from '../../../declarations/token';
 import { Token, TokenInfo } from "../../../declarations/token/token.did.d.js";
-import { getBackendActor }  from '../agent';
 import * as format from "../format";
+import { useCanister } from "../wallet";
 import { ExchangeRate, useAsyncEffect } from "../hooks";
 import { styled } from '../stitches.config';
 import { ActivityIndicator } from "./ActivityIndicator";
@@ -16,27 +14,23 @@ export function Statistics({neurons, rate}: {neurons: string[]|null, rate: Excha
   const [stats, setStats] = React.useState<TokenInfo|null>(null);
   const [apy, setAPY] = React.useState<bigint|null>(null);
 
+  const [tokenCanister, {loading: tokenCanisterLoading}] = useCanister<Token>("token", { mode: "anonymous" });
   useAsyncEffect(async () => {
-    // TODO: Have to use dfinity agent here, as we dont need the user's plug wallet connected.
-    if (!token.canisterId) throw new Error("Canister not deployed");
-    const contract = await getBackendActor<Token>({canisterId: token.canisterId, interfaceFactory: token.idlFactory});
-
-    const tokenInfo = await contract.getTokenInfo();
+    if (!tokenCanister || tokenCanisterLoading) return;
+    const tokenInfo = await tokenCanister.getTokenInfo();
     setStats(tokenInfo);
-  }, []);
+  }, [!!tokenCanister, tokenCanisterLoading]);
 
+  const [depositsCanister, {loading: depositsCanisterLoading}] = useCanister<Deposits>("deposits", { mode: "anonymous" });
   useAsyncEffect(async () => {
-    // TODO: Have to use dfinity agent here, as we dont need the user's plug wallet connected.
-    if (!deposits.canisterId) throw new Error("Canister not deployed");
-    const contract = await getBackendActor<Deposits>({canisterId: deposits.canisterId, interfaceFactory: deposits.idlFactory});
-
+    if (!depositsCanister || depositsCanisterLoading) return;
     // TODO: Do this with bigint all the way through for more precision.
-    const microbips : number = new Number(await contract.aprMicrobips()).valueOf();
+    const microbips : number = new Number(await depositsCanister.aprMicrobips()).valueOf();
     // apy = (((1+(microbips / 100_000_000))^365.25) - 1)
     const apy = Math.pow(1 + (microbips / 100_000_000), 365.25) - 1;
     // display it with two decimals, so 0.218 = 21.80%
     setAPY(BigNumber.from(Math.round(apy * 10_000)).toBigInt());
-  }, []);
+  }, [!!depositsCanister, depositsCanisterLoading]);
 
   return (
     <Wrapper>

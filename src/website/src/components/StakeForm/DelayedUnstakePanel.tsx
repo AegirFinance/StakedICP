@@ -1,9 +1,7 @@
+// TODO: Check this refreshes the header balance without the cacheBuster
 import { Principal } from '@dfinity/principal';
 import React from 'react';
-import * as deposits from '../../../../declarations/deposits';
 import { AvailableLiquidityGraph, Deposits, Withdrawal } from "../../../../declarations/deposits/deposits.did.d.js";
-import * as token from "../../../../declarations/token";
-import { getBackendActor }  from '../../agent';
 import {
   ActivityIndicator,
   ConfirmationDialog,
@@ -22,7 +20,7 @@ import {
 import * as format from "../../format";
 import { ExchangeRate, useAsyncEffect } from "../../hooks";
 import { styled } from '../../stitches.config';
-import { ConnectButton, useAccount, useCanister, useContext } from "../../wallet";
+import { ConnectButton, useCanister, useWallet } from "../../wallet";
 import { Price } from "./Price";
 
 function parseFloat(str: string): number {
@@ -38,9 +36,8 @@ function parseFloat(str: string): number {
 }
 
 export function DelayedUnstakePanel({rate}: {rate: ExchangeRate|null}) {
-  const { state: { cacheBuster } } = useContext();
-  const [{ data: account }] = useAccount();
-  const principal = account?.principal;
+  const [wallet] = useWallet();
+  const principal = wallet?.principal;
   const [amount, setAmount] = React.useState("");
   const parsedAmount : bigint = React.useMemo(() => {
     if (!amount) {
@@ -57,17 +54,12 @@ export function DelayedUnstakePanel({rate}: {rate: ExchangeRate|null}) {
   const [withdrawals, setWithdrawals] = React.useState<Withdrawal[]|null>(null);
   const [liquidityGraph, setLiquidityGraph] = React.useState<AvailableLiquidityGraph|null>(null);
 
+  const [depositsCanister, {loading: depositsCanisterLoading}] = useCanister<Deposits>("deposits");
   useAsyncEffect(async () => {
-      // TODO: Have to use dfinity agent here, as we dont need the user's plug wallet connected.
-      if (!deposits.canisterId) throw new Error("Canister not deployed");
-      const contract = await getBackendActor<Deposits>({
-        canisterId: deposits.canisterId,
-        interfaceFactory: deposits.idlFactory,
-      });
-
-      const result = await contract.availableLiquidityGraph();
-      setLiquidityGraph(result);
-  }, []);
+    if (!depositsCanister || depositsCanisterLoading) return;
+    const result = await depositsCanister.availableLiquidityGraph();
+    setLiquidityGraph(result);
+  }, [!!depositsCanister, depositsCanisterLoading]);
 
   const icpAmount: bigint | undefined = React.useMemo(() => {
       if (!rate) return undefined;
@@ -91,20 +83,15 @@ export function DelayedUnstakePanel({rate}: {rate: ExchangeRate|null}) {
       return maxDelay;
   }, [liquidityGraph, icpAmount, rate]);
 
-    const depositsCanister = useCanister<Deposits>({
-        // TODO: handle missing canister id better
-        canisterId: deposits.canisterId ?? "",
-        interfaceFactory: deposits.idlFactory,
-    });
-
     useAsyncEffect(async () => {
-        if (!depositsCanister || !principal) {
+        if (!depositsCanister || depositsCanisterLoading || !principal) {
             setWithdrawals(null);
             return;
         }
+        
         let ws = await depositsCanister.listWithdrawals(Principal.fromText(principal));
         setWithdrawals(ws);
-    }, [!!depositsCanister, principal, cacheBuster]);
+    }, [!!depositsCanister, depositsCanisterLoading, principal]);
 
 
   const available = withdrawals?.map(w => w.available).reduce((s, a) => s+a, BigInt(0));
@@ -276,21 +263,14 @@ function UnstakeDialog({
   open,
   rawAmount,
 }: UnstakeDialogParams) {
-  const { setState: setGlobalState } = useContext();
-  const [{ data: account }] = useAccount();
-  const principal = account?.principal;
-  const depositsCanister = useCanister<Deposits>({
-    // TODO: handle missing canister id better
-    canisterId: deposits.canisterId ?? "",
-    interfaceFactory: deposits.idlFactory,
-  });
+  const [wallet] = useWallet();
+  const principal = wallet?.principal;
+  const [depositsCanister, {loading: depositsCanisterLoading}] = useCanister("deposits");
 
   useAsyncEffect(async () => {
-      if (!depositsCanister) {
-          return;
-      }
+      if (!depositsCanister || depositsCanisterLoading) return;
       await depositsCanister.depositIcp();
-  }, [!!depositsCanister]);
+  }, [!!depositsCanister, depositsCanisterLoading]);
 
   const createWithdrawal = React.useCallback(async () => {
     if (!principal) {
@@ -313,9 +293,6 @@ function UnstakeDialog({
     } else if (!('ok' in result) || !result.ok) {
       throw new Error("Withdrawal failed");
     }
-
-    // Bump the cachebuster to refresh balances, and reload withdrawals list
-    setGlobalState(x => ({...x, cacheBuster: x.cacheBuster+1}));
   }, [amount, !!depositsCanister]);
 
   return (
@@ -378,22 +355,15 @@ function CompleteUnstakeButton({
     amount: bigint;
     disabled: boolean;
 }) {
-  const { setState: setGlobalState } = useContext();
-  const [{ data: account }] = useAccount();
-  const principal = account?.principal;
-  const depositsCanister = useCanister<Deposits>({
-    // TODO: handle missing canister id better
-    canisterId: deposits.canisterId ?? "",
-    interfaceFactory: deposits.idlFactory,
-  });
+  const [wallet] = useWallet();
+  const principal = wallet?.principal;
+  const [depositsCanister, { loading: depositsCanisterLoading }] = useCanister("deposits");
   const [to, setTo] = React.useState<string|null>(null);
 
   useAsyncEffect(async () => {
-      if (!depositsCanister) {
-          return;
-      }
+      if (!depositsCanister || depositsCanisterLoading || !principal) return;
       await depositsCanister.depositIcp();
-  }, [!!depositsCanister]);
+  }, [!!depositsCanister, depositsCanisterLoading, !!principal]);
 
   const completeUnstake = React.useCallback(async () => {
     if (!principal) {
@@ -412,9 +382,6 @@ function CompleteUnstakeButton({
     } else if (!('ok' in result) || !result.ok) {
       throw new Error("Unstaking failed");
     }
-
-    // Bump the cachebuster to refresh balances, and reload withdrawals list
-    setGlobalState(x => ({...x, cacheBuster: x.cacheBuster+1}));
   }, [principal, amount, !!depositsCanister, to]);
 
   return (
