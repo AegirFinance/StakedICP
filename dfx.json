@@ -146,7 +146,7 @@
       "subnet_type": "system"
     }
   },
-  "dfx": "0.13.1",
+  "dfx": "0.15.2",
   "networks": {
     "ic": {
       "providers": [

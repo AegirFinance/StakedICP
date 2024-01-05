@@ -4,7 +4,7 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const TerserPlugin = require("terser-webpack-plugin");
 const CopyPlugin = require("copy-webpack-plugin");
 
-let canisters;
+let canisters = {};
 
 function network() {
   return process.env.DFX_NETWORK ||
@@ -13,9 +13,24 @@ function network() {
 
 
 function initCanisterIds() {
-  canisters = require(path.resolve("canister_ids.json"));
+  const net = network();
+
+  const staticIds = require(path.resolve("canister_ids.json"));
+  for (const canister in staticIds) {
+    canisters[canister] = staticIds[canister][net];
+  }
+
+  var idsPath = net === "id" ? path.resolve("canister_ids.json") : path.resolve(".dfx", net, "canister_ids.json");
+  try {
+    const loadedIds = require(idsPath);
+    for (const canister in loadedIds) {
+      canisters[canister] = loadedIds[canister][net];
+    }
+  } catch (error) {
+    throw new Error(`Could not find ${idsPath}:`, error);
+  }
   for (const canister in canisters) {
-    canisters[canister] = canisters[canister][network()];
+    process.env[canister.toUpperCase() + "_CANISTER_ID"] = canisters[canister];
   }
 }
 initCanisterIds();

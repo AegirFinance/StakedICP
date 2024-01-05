@@ -42,7 +42,8 @@ echo
 if canister_exists "nns-governance"; then
     echo "nns-governance already exists skipping nns install" >&2
 else
-    dfx nns install --identity minter
+    dfx extension install nns || true
+    dfx nns --identity minter install
     dfx ledger transfer --identity minter --memo 0 --amount 10000 $(dfx ledger account-id)
 fi
 

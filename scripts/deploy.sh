@@ -147,19 +147,19 @@ canister install deposits --mode="$MODE" --argument "$(cat << EOM
   ledgerCandid           = principal "ockk2-xaaaa-aaaai-aaaua-cai";
   token                  = principal "$(canister id token)";
   owners                 = vec { $OWNERS };
-  stakingNeuron          = opt record {
-    id = record { id = ${ORIGINAL_STAKING_NEURON_ID} : nat64 };
-    accountId = "${ORIGINAL_STAKING_NEURON_ACCOUNT_ID}";
-  };
+  stakingNeuron          = null;
 })
 EOM
 )"
 
 canister start deposits
 
-if [ "$MODE" != "upgrade" ]; then
+if [[ "$MODE" != "upgrade" && "$PROPOSAL_NEURON_ID" != "" ]]; then
     echo "Setting proposal neuron: $PROPOSAL_NEURON_ID"
     canister call deposits setProposalNeuron "(${PROPOSAL_NEURON_ID} : nat64)"
+fi
+
+if [[ "$MODE" != "upgrade" && "$STAKING_NEURONS" != "" ]]; then
     for NEURON_ID in $STAKING_NEURONS; do
         echo "Adding staking neuron: $NEURON_ID"
         canister call deposits addStakingNeuron "(${NEURON_ID} : nat64)"

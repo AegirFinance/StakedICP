@@ -1,21 +1,17 @@
 {
   "deposits": {
-    "ic": "hnwvc-lyaaa-aaaal-aaf6q-cai",
-    "local": "q4eej-kyaaa-aaaaa-aaaha-cai"
+    "ic": "hnwvc-lyaaa-aaaal-aaf6q-cai"
   },
   "token": {
-    "ic": "qfr6e-biaaa-aaaak-qafuq-cai",
-    "local": "sbzkb-zqaaa-aaaaa-aaaiq-cai"
+    "ic": "qfr6e-biaaa-aaaak-qafuq-cai"
   },
   "signing": {
-    "ic": "onfif-zaaaa-aaaar-qaama-cai",
-    "local": "sgymv-uiaaa-aaaaa-aaaia-cai"
+    "ic": "onfif-zaaaa-aaaar-qaama-cai"
   },
   "website": {
-    "ic": "eig3e-ciaaa-aaaal-qaeyq-cai",
-    "local": "si2b5-pyaaa-aaaaa-aaaja-cai"
+    "ic": "eig3e-ciaaa-aaaal-qaeyq-cai"
   },
-  "governance": {
+  "nns-governance": {
     "ic": "rrkah-fqaaa-aaaaa-aaaaq-cai",
     "local": "rrkah-fqaaa-aaaaa-aaaaq-cai"
   },
@@ -27,7 +23,6 @@
     "ic": "gp6lu-paaaa-aaaap-qaatq-cai"
   },
   "metrics": {
-    "ic": "h6uvl-xiaaa-aaaap-qaawa-cai",
-    "local": "q3fc5-haaaa-aaaaa-aaahq-cai"
+    "ic": "h6uvl-xiaaa-aaaap-qaawa-cai"
   }
 }
