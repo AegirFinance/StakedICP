@@ -26,11 +26,10 @@ export {
   useConnect,
   useDialog,
   useWallet,
-  useBalance,
   useProviders,
   useTransfer
 } from "@connect2ic/react";
-export { useCanister } from "./hooks";
+export { useBalance, useCanister } from "./hooks";
 
 interface CanisterDefinition {
   canisterId: string;

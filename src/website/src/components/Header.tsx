@@ -40,10 +40,8 @@ const Balance = styled('span', {
 
 export function Header() {
   const [wallet] = useWallet();
-  const [assets] = useBalance();
-  const sticp = assets?.find((asset) => asset.canisterId === token.canisterId);
-  // TODO: Check the amount is in e8s here.
-  const formatted = sticp && format.units(sticp.amount || 0, sticp.decimals);
+  const [balance, _] = useBalance("token");
+  const formatted = wallet?.principal && balance?.formatted;
 
   return (
     <Wrapper>
