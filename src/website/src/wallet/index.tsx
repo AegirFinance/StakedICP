@@ -1,5 +1,5 @@
 // import React from "react";
-// export * from "./components";
+export * from "./components";
 // export * from "./connectors";
 // export * from "./hooks";
 // export * from "./context";
@@ -21,7 +21,6 @@ import * as nnsLedger from "../nns-ledger";
 // import * as nnsLedger from "../../../../.dfx/local/canisters/token";
 
 export {
-  ConnectButton,
   ConnectDialog,
   useConnect,
   useDialog,

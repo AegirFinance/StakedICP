@@ -1,89 +1,245 @@
 import React, { SVGProps } from "react";
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  DialogTrigger,
-  Flex,
-} from "../../components";
 import * as format from "../../format";
 import { styled } from '../../stitches.config';
-import { useAccount, useConnect } from "../hooks";
-import { useContext } from "../context";
+import "@connect2ic/core/style.css";
 
+import * as connect2ic from "@connect2ic/react";
 
-export function ConnectButton({
-  title = "Connect Wallet",
-}: {
-  title?: string,
-}) {
-  const {state} = useContext();
-  const [{ data: account }, disconnect] = useAccount();
-  const [_, connect] = useConnect();
+export type ConnectButtonProperties = Parameters<typeof connect2ic.ConnectButton>[0];
 
-  const switchAndConnect = (name: string) => {
-    let connector = (state.connectors ?? []).find(c => c.name === name);
-    if (!connector) {
-      throw new Error(`${name} not configured`);
-    }
-    connect(connector);
-  };
+export function ConnectButton(props: ConnectButtonProperties) {
+  return <connect2ic.ConnectButton {...props} />;
+  // const {state} = useContext();
+  // const [{ data: account }, disconnect] = useAccount();
+  // const [_, connect] = useConnect();
 
-  if (account?.principal) {
-    return (
-      <Flex css={{'> * + *': {
-        marginLeft: '0.75rem',
-      }}}>
-        <Button disabled>
-          {format.shortPrincipal(account?.principal)}
-        </Button>
+  // const switchAndConnect = (name: string) => {
+  //   let connector = (state.connectors ?? []).find(c => c.name === name);
+  //   if (!connector) {
+  //     throw new Error(`${name} not configured`);
+  //   }
+  //   connect(connector);
+  // };
 
-        <Button variant="error" onClick={() => {
-          disconnect()
-        }}>
-          Disconnect
-        </Button>
-      </Flex>
-    );
-  }
+  // if (account?.principal) {
+  //   return (
+  //     <Flex css={{'> * + *': {
+  //       marginLeft: '0.75rem',
+  //     }}}>
+  //       <Button disabled>
+  //         {format.shortPrincipal(account?.principal)}
+  //       </Button>
 
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button>{title}</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogTitle>Connect your wallet</DialogTitle>
-        <Flex css={{
-          flexDirection: "row",
-          justifyContent: "center",
-          alignItems: "stretch",
-          flexWrap: 'wrap',
-          paddingTop: '1rem',
-          '> *': {
-            marginLeft: '0.75rem',
-            marginRight: '0.75rem',
-          },
-          button: {
-            height: '144px',
-            width: '140px',
-          },
-        }}>
-          <WalletButton onClick={() => { switchAndConnect("Bitfinity") }}>
-            <BitfinityLogo />
-            <h3>Bitfinity Wallet</h3>
-          </WalletButton>
-          <WalletButton onClick={() => { switchAndConnect("Plug") }}>
-            <PlugLogo />
-            <h3>Plug Wallet</h3>
-          </WalletButton>
-        </Flex>
-      </DialogContent>
-    </Dialog>
-  );
+  //       <Button variant="error" onClick={() => {
+  //         disconnect()
+  //       }}>
+  //         Disconnect
+  //       </Button>
+  //     </Flex>
+  //   );
+  // }
+
+  // return (
+  //   <Dialog>
+  //     <DialogTrigger asChild>
+  //       <Button>{title}</Button>
+  //     </DialogTrigger>
+  //     <DialogContent>
+  //       <DialogTitle>Connect your wallet</DialogTitle>
+  //       <Flex css={{
+  //         flexDirection: "row",
+  //         justifyContent: "center",
+  //         alignItems: "stretch",
+  //         flexWrap: 'wrap',
+  //         paddingTop: '1rem',
+  //         '> *': {
+  //           marginLeft: '0.75rem',
+  //           marginRight: '0.75rem',
+  //         },
+  //         button: {
+  //           height: '144px',
+  //           width: '140px',
+  //         },
+  //       }}>
+  //         <WalletButton onClick={() => { switchAndConnect("Bitfinity") }}>
+  //           <BitfinityLogo />
+  //           <h3>Bitfinity Wallet</h3>
+  //         </WalletButton>
+  //         <WalletButton onClick={() => { switchAndConnect("Plug") }}>
+  //           <PlugLogo />
+  //           <h3>Plug Wallet</h3>
+  //         </WalletButton>
+  //       </Flex>
+  //     </DialogContent>
+  //   </Dialog>
+  // );
 }
+
+const StyledButton = styled('div', {
+  ".img-styles": {
+      height: 55,
+      width: 55,
+      padding: 10,
+      boxSizing: "content-box",
+  },
+
+  "@media all and (max-width: 300px)": {
+      ".img-styles": {
+          width: "11vw",
+          maxHeight: "11vw",
+          height: "auto",
+          padding: 0,
+          paddingRight: 5,
+      },
+
+      ".button-label": {
+          fontSize: "6vw",
+      },
+  },
+
+
+  ".dialog-styles": {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    zIndex: 999,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+    background: "rgb(0 0 0 / 60%)",
+    animation: "fade-in 0.18s",
+    backdropFilter: "blur(5px)",
+    cursor: "pointer",
+    overflow: "auto",
+    boxSizing: "border-box",
+    padding: "30px",
+
+    span: {
+      fontFamily: "-apple-system, BlinkMacSystemFont, \"Arial\", \"Helvetica Neue\", sans-serif",
+    },
+  },
+
+  ".dialog-container": {
+    display: "grid",
+    gridGap: "5px",
+    padding: "10px",
+    background: "#f4f4f4",
+    borderRadius: "15px",
+    overflow: "auto",
+    gridTemplateColumns: "1fr",
+    cursor: "initial",
+    animation: "move-in 0.18s",
+    maxWidth: "420px",
+    width: "100%",
+    boxSizing: "border-box",
+  },
+
+  ".dark .dialog-container": {
+    background: "rgb(35 35 39)",
+  },
+
+
+  "@keyframes fade-in": {
+    from: {
+      opacity: 0,
+    },
+    to: {
+      opacity: 1,
+    },
+  },
+
+  "@keyframes move-in": {
+    from: {
+      transform: "translateY(5%)",
+    },
+    to: {
+      transform: "translateY(0%)",
+    },
+  },
+
+  "@-webkit-keyframes fade-out": {
+    "0%": {
+      opacity: 1,
+    },
+    "100%": {
+      opacity: 0,
+    },
+  },
+
+  ".button-styles": {
+    background: "transparent",
+    maxWidth: "100%",
+    width: "100%",
+    height: 75,
+    padding: 10,
+    border: "none",
+    borderRadius: 11,
+    outline: 0,
+    cursor: "pointer",
+    transition: "transform 0.15s",
+    display: "flex",
+    alignItems: "center",
+
+    "&:hover": {
+      transform: "scale(1.02)",
+      fontWeight: "800!important",
+      transition: "all 0.2s",
+      background: "white",
+    },
+
+    "& > div": {
+      display: "flex",
+      padding: "0 15px",
+      borderRadius: 10,
+      fontWeight: 400,
+      height: "100%",
+      flexDirection: "column",
+      alignItems: "flex-start",
+      justifyContent: "center",
+    }
+  },
+
+  dark: {
+    ".button-styles": {
+      border: "none",
+      "&:hover": {
+        background: "#545454",
+      },
+    },
+    ".button-label": {
+      color: "white",
+    },
+  },
+
+  ".button-label": {
+      marginTop: 10,
+      marginBottom: 10,
+      fontSize: 21,
+      fontWeight: 300,
+      color: "#424242",
+      textAlign: "left",
+  },
+
+  ".connect-button": {
+    fontSize: 18,
+    background: "rgb(35 35 39)",
+    color: "white",
+    border: "none",
+    padding: "10px 20px",
+    display: "flex",
+    alignItems: "center",
+    borderRadius: 40,
+    cursor: "pointer",
+
+    "&:hover": {
+      transform: "scale(1.03)",
+      transition: "all 0.4s",
+    },
+  },
+});
 
 const WalletButton = styled('button', {
   display: 'flex',
