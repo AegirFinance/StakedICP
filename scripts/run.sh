@@ -34,6 +34,8 @@ EOF
     )
 fi
 
+dfx identity use minter
+
 echo
 echo == Install NNS.
 echo
