@@ -2,7 +2,7 @@ import { Principal } from "@dfinity/principal";
 import React from 'react';
 import { Token } from "../../../../declarations/token/token.did.js";
 import * as format from "../../format";
-import { useAsyncEffect } from "../../hooks";
+import { useAsyncEffect, useInterval } from "../../hooks";
 import { useWallet, useCanister } from "..";
 
 export type Config = {
@@ -10,6 +10,8 @@ export type Config = {
   principal?: string
   /** Units for formatting output */
   formatUnits?: number
+  /** Interval for polling balance in ms */
+  pollingInterval?: number
 }
 
 type State = {
@@ -31,6 +33,7 @@ export function useBalance(token: string, config?: Config) {
   const [state, setState] = React.useState<State>(initialState);
   const principal = config?.principal ?? wallet?.principal;
   const decimals = config?.formatUnits ?? 8;
+  const interval = config?.pollingInterval ?? 10000;
 
   const [canister, { loading: canisterLoading, error: canisterError }] = useCanister<Token>(token);
 
@@ -74,6 +77,10 @@ export function useBalance(token: string, config?: Config) {
     refetch();
   }, [principal, token, !!canister, canisterLoading, config?.formatUnits, refetch]);
   /* eslint-enable react-hooks/exhaustive-deps */
+
+  if (!!interval) {
+    useInterval(async () => { refetch() }, interval);
+  }
 
    return [
      state.balance,
