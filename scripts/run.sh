@@ -66,7 +66,7 @@ echo == Initial Data
 echo
 
 dfx canister call deposits setSchedulerPaused '(false)'
-dfx canister call deposits applyInterest "(58000: nat64, null)"
+dfx canister call deposits refreshNeuronsAndApplyInterest
 
 echo
 echo == Serve Website

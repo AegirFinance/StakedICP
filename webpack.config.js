@@ -20,7 +20,7 @@ function initCanisterIds() {
     canisters[canister] = staticIds[canister][net];
   }
 
-  var idsPath = net === "id" ? path.resolve("canister_ids.json") : path.resolve(".dfx", net, "canister_ids.json");
+  var idsPath = net === "ic" ? path.resolve("canister_ids.json") : path.resolve(".dfx", net, "canister_ids.json");
   try {
     const loadedIds = require(idsPath);
     for (const canister in loadedIds) {
