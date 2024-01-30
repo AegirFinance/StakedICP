@@ -1,8 +1,4 @@
-// import React from "react";
 export * from "./components";
-// export * from "./connectors";
-// export * from "./hooks";
-// export * from "./context";
 
 import { createClient } from "@connect2ic/core";
 import { InfinityWallet } from "@connect2ic/core/providers/infinity-wallet";
@@ -28,7 +24,8 @@ export {
   useProviders,
   useTransfer
 } from "@connect2ic/react";
-export { useBalance, useCanister } from "./hooks";
+export * from "./hooks/useBalance";
+export * from "./hooks/useCanister";
 
 interface CanisterDefinition {
   canisterId: string;

@@ -1,3 +1,4 @@
+import { Principal } from '@dfinity/principal';
 import React from 'react';
 import {
     ConfirmationDialog,
@@ -185,18 +186,17 @@ function TransferDialog({
             throw new Error("NNS Ledger canister loading");
         }
 
-        // TODO: Check this
         // TODO: Handle errors here
         const block_height = await nnsLedger.icrc1_transfer({
-          from_subaccount: null,
+          from_subaccount: [],
           to: {
-            owner: deposits.canisterId,
-            subaccount,
+            owner: Principal.fromText(deposits.canisterId),
+            subaccount: [subaccount],
           },
           amount: sentAmount,
-          fee: null,
-          memo: null,
-          created_at_time: null,
+          fee: [],
+          memo: [],
+          created_at_time: [],
         });
         const error = null;
         if (error) {
