@@ -16,7 +16,7 @@ import {
 import { styled } from '../../stitches.config';
 import { ExchangeRate, useAsyncEffect, useReferralCode } from '../../hooks';
 import * as format from "../../format";
-import { ConnectButton, useCanister, useWallet } from "../../wallet";
+import { ConnectButton, useCanister, useConnect } from "../../wallet";
 import * as deposits from "../../../../declarations/deposits";
 import { Price } from "./Price";
 
@@ -34,8 +34,7 @@ function parseFloat(str: string): number {
 }
 
 export function StakePanel({ rate }: { rate: ExchangeRate | null }) {
-    const [wallet] = useWallet();
-    const principal = wallet?.principal;
+    const { isConnected } = useConnect();
     const [amount, setAmount] = React.useState("");
     const stake: bigint = React.useMemo(() => {
         if (!amount) {
@@ -57,7 +56,7 @@ export function StakePanel({ rate }: { rate: ExchangeRate | null }) {
     return (
         <FormWrapper onSubmit={e => {
             e.preventDefault();
-            setShowTransferDialog(!!(principal && stake >= MINIMUM_DEPOSIT));
+            setShowTransferDialog(!!(isConnected && stake >= MINIMUM_DEPOSIT));
         }}>
             <h3>Stake ICP</h3>
             <Input
@@ -105,14 +104,14 @@ export function StakePanel({ rate }: { rate: ExchangeRate | null }) {
                     <DataTableValue>10%</DataTableValue>
                 </DataTableRow>
             </DataTable>
-            {principal ? (
+            {isConnected ? (
                 <TransferDialog
                     open={showTransferDialog}
                     rawAmount={amount}
                     sentAmount={stake}
                     receivedAmount={receivedAmount}
                     onOpenChange={(open: boolean) => {
-                        setShowTransferDialog(!!(principal && stake && open));
+                        setShowTransferDialog(!!(isConnected && stake && open));
                     }}
                     referralCode={referralCode}
                 />
