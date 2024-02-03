@@ -30,7 +30,7 @@ function initCanisterIds() {
     throw new Error(`Could not find ${idsPath}:`, error);
   }
   for (const canister in canisters) {
-    process.env[canister.toUpperCase() + "_CANISTER_ID"] = canisters[canister];
+    process.env["CANISTER_ID_"+canister.toUpperCase().replace("-", "_")] = canisters[canister];
   }
 }
 initCanisterIds();
@@ -97,9 +97,9 @@ module.exports = {
     }),
     new webpack.EnvironmentPlugin({
       NETWORK: network() == "local" ? "http://localhost:8080" : "https://icp-api.io",
-      DEPOSITS_CANISTER_ID: canisters["deposits"],
-      NNS_LEDGER_CANISTER_ID: canisters["nns-ledger"],
-      TOKEN_CANISTER_ID: canisters["token"],
+      CANISTER_ID_DEPOSITS: canisters["deposits"],
+      CANISTER_ID_NNS_LEDGER: canisters["nns-ledger"],
+      CANISTER_ID_TOKEN: canisters["token"],
     }),
     new webpack.ProvidePlugin({
       Buffer: [require.resolve("buffer/"), "Buffer"],

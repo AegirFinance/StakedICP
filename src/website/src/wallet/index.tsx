@@ -8,13 +8,9 @@ import "@connect2ic/core/style.css";
 import type { IDL } from "@dfinity/candid";
 
 // Import our canisters
-import * as deposits from "../../../declarations/deposits";
-import * as token from "../../../declarations/token";
+import * as deposits from "../deposits";
+import * as token from "../token";
 import * as nnsLedger from "../nns-ledger";
-// How the connect2ic docs say to do it, but... I doubt it actually works.
-// import * as deposits from "../../../../.dfx/local/canisters/deposits";
-// import * as token from "../../../../.dfx/local/canisters/token";
-// import * as nnsLedger from "../../../../.dfx/local/canisters/token";
 
 export {
   ConnectDialog,
@@ -33,8 +29,8 @@ interface CanisterDefinition {
 }
 
 const canisters: Record<string, CanisterDefinition> = {
-  deposits: {...deposits, canisterId: deposits.canisterId ?? ""},
-  token: {...token, canisterId: token.canisterId ?? ""},
+  deposits,
+  token,
   nnsLedger
 };
 
