@@ -176,6 +176,10 @@ function TransferDialog({
         if (!depositsCanister || depositsLoading) {
             throw new Error("Deposits canister loading");
         }
+        const owner = Principal.fromText(deposits.canisterId);
+        if (owner.isAnonymous()) {
+            throw new Error("Deposits canister loading");
+        }
         let subaccount = await depositsCanister.getDepositSubaccount(referralCode ? [referralCode] : []);
         if (!subaccount) {
             throw new Error("Failed to get the deposit address");
@@ -188,10 +192,7 @@ function TransferDialog({
         // TODO: Handle errors here
         const block_height = await nnsLedger.icrc1_transfer({
           from_subaccount: [],
-          to: {
-            owner: Principal.fromText(deposits.canisterId),
-            subaccount: [subaccount],
-          },
+          to: { owner, subaccount: [subaccount] },
           amount: sentAmount,
           fee: [],
           memo: [],
