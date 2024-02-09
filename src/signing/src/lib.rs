@@ -118,6 +118,24 @@ fn require_owner(user: &Principal) {
 }
 
 #[update]
+async fn add_owner(owner: Principal) {
+    require_owner(&api::caller());
+    OWNERS.with(|owners| {
+        let mut o = owners.borrow_mut();
+        o.push(owner);
+    });
+}
+
+#[update]
+async fn remove_owner(owner: Principal) {
+    require_owner(&api::caller());
+    OWNERS.with(|owners| {
+        let mut o = owners.borrow_mut();
+        o.retain(|p| p != &owner);
+    });
+}
+
+#[update]
 async fn get_principal() -> Result<PrincipalReply, String> {
     let public_key = get_public_key().await?;
     Ok(PrincipalReply {
