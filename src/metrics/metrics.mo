@@ -105,7 +105,7 @@ shared(init_msg) actor class Metrics(args: {
                     headers = [("Content-Type", "text/plain")];
                     body = Text.encodeUtf8("Not found");
                     streaming_strategy = null;
-                    upgrade = false;
+                    upgrade = true;
                 };
             };
         };
@@ -132,6 +132,7 @@ shared(init_msg) actor class Metrics(args: {
     };
 
     public shared func http_request_update(request : HttpRequest) : async HttpResponse {
+        errors.add((Time.now(), "logging", Error.reject(request.method # " " # request.url)));
         let resp = metrics(false);
         ignore refreshMetrics();
         return resp;
